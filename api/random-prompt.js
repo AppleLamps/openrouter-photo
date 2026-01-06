@@ -150,7 +150,7 @@ Now generate ONE creative, detailed prompt by randomly combining these elements 
                 'X-Title': 'AI Image Generator'
             },
             body: JSON.stringify({
-                model: 'x-ai/grok-4.1-fast-fast',
+                model: 'x-ai/grok-4.1-fast',
                 messages: [
                     {
                         role: 'system',
