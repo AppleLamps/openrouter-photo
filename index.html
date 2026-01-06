@@ -377,6 +377,38 @@
         </div>
     </div>
 
+    <!-- Folder Modal -->
+    <div id="folder-modal" class="openrouter-key-modal">
+        <div class="openrouter-key-modal__backdrop"></div>
+        <div class="openrouter-key-modal__card">
+            <div class="openrouter-key-modal__header">
+                <h3 id="folder-modal-title" class="openrouter-key-modal__title">New Folder</h3>
+                <button id="folder-modal-close" class="openrouter-key-modal__close" aria-label="Close">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="openrouter-key-modal__body">
+                <p class="openrouter-key-modal__message" id="folder-modal-description">
+                    Enter a name for the new folder.
+                </p>
+                <div class="settings-group">
+                    <input type="text" id="folder-modal-input" class="settings-input" placeholder="Folder Name"
+                        autocomplete="off">
+                </div>
+                <div class="openrouter-key-modal__actions" style="justify-content: flex-end; margin-top: 16px;">
+                    <button id="folder-modal-cancel" class="openrouter-key-modal__ok"
+                        style="background: transparent; border: 1px solid rgba(255,255,255,0.1);">Cancel</button>
+                    <button id="folder-modal-save" class="openrouter-key-modal__link"
+                        style="border: none; cursor: pointer;">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts (ES Modules) -->
     <script type="module" src="js/app.js"></script>
 

@@ -11,6 +11,19 @@ let sidebarElement = null;
 let expandButton = null;
 let appContainer = null;
 
+// Modal elements
+let folderModal = null;
+let folderModalTitle = null;
+let folderModalDesc = null;
+let folderModalInput = null;
+let folderModalSave = null;
+let folderModalCancel = null;
+let folderModalClose = null;
+
+// Modal state
+let currentFolderAction = null; // 'create' or 'rename'
+let currentFolderTarget = null; // folder object being renamed
+
 /**
  * Initialize the sidebar
  */
@@ -18,6 +31,8 @@ export function initSidebar() {
     sidebarElement = document.getElementById('sidebar');
     expandButton = document.getElementById('sidebar-expand');
     appContainer = document.querySelector('.app-container');
+
+    initFolderModal();
 
     if (!sidebarElement) return;
 
@@ -259,13 +274,147 @@ function updateEditModeUI(enabled) {
 }
 
 /**
+ * Initialize folder modal elements and events
+ */
+function initFolderModal() {
+    folderModal = document.getElementById('folder-modal');
+    folderModalTitle = document.getElementById('folder-modal-title');
+    folderModalDesc = document.getElementById('folder-modal-description');
+    folderModalInput = document.getElementById('folder-modal-input');
+    folderModalSave = document.getElementById('folder-modal-save');
+    folderModalCancel = document.getElementById('folder-modal-cancel');
+    folderModalClose = document.getElementById('folder-modal-close');
+
+    if (!folderModal) return;
+
+    // Close buttons
+    folderModalClose.addEventListener('click', closeFolderModal);
+    folderModalCancel.addEventListener('click', closeFolderModal);
+
+    // Click outside to close
+    folderModal.addEventListener('click', (e) => {
+        if (e.target === folderModal || e.target.classList.contains('openrouter-key-modal__backdrop')) {
+            closeFolderModal();
+        }
+    });
+
+    // Save button
+    folderModalSave.addEventListener('click', handleFolderSave);
+
+    // Enter key to save
+    folderModalInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleFolderSave();
+        }
+        if (e.key === 'Escape') {
+            closeFolderModal();
+        }
+    });
+}
+
+/**
+ * Open folder modal
+ * @param {'create'|'rename'|'delete'} action 
+ * @param {Object|null} folder 
+ */
+function openFolderModal(action, folder = null) {
+    if (!folderModal) return;
+
+    currentFolderAction = action;
+    currentFolderTarget = folder;
+
+    // Reset UI state
+    folderModalInput.value = '';
+    folderModalInput.classList.remove('input-error');
+    folderModalInput.parentElement.style.display = 'block'; // Show input by default
+    folderModalSave.className = 'openrouter-key-modal__link'; // Reset button style
+    folderModalSave.style.backgroundColor = ''; // Reset inline style if any
+
+    // Update UI based on action
+    if (action === 'create') {
+        folderModalTitle.textContent = 'New Folder';
+        folderModalDesc.textContent = 'Enter a name for the new folder.';
+        folderModalSave.textContent = 'Create';
+        setTimeout(() => folderModalInput.focus(), 100);
+    } else if (action === 'rename' && folder) {
+        folderModalTitle.textContent = 'Rename Folder';
+        folderModalDesc.textContent = `Enter a new name for "${folder.name}".`;
+        folderModalInput.value = folder.name;
+        folderModalSave.textContent = 'Save';
+        setTimeout(() => folderModalInput.focus(), 100);
+    } else if (action === 'delete' && folder) {
+        const count = state.getImageCountForFolder(folder.id);
+        folderModalTitle.textContent = 'Delete Folder';
+        folderModalDesc.textContent = count > 0
+            ? `Delete "${folder.name}"? ${count} image(s) will be moved to All Photos.`
+            : `Are you sure you want to delete "${folder.name}"?`;
+        
+        folderModalInput.parentElement.style.display = 'none'; // Hide input
+        folderModalSave.textContent = 'Delete';
+        folderModalSave.style.backgroundColor = '#ef4444'; // Red for danger
+        folderModalSave.style.color = 'white';
+    }
+
+    // Show modal
+    folderModal.classList.add('openrouter-key-modal--active');
+    document.body.classList.add('is-modal-open');
+}
+
+/**
+ * Close folder modal
+ */
+function closeFolderModal() {
+    if (!folderModal) return;
+
+    folderModal.classList.remove('openrouter-key-modal--active');
+    document.body.classList.remove('is-modal-open');
+    currentFolderAction = null;
+    currentFolderTarget = null;
+    
+    // Clean up inline styles
+    folderModalSave.style.backgroundColor = '';
+    folderModalSave.style.color = '';
+}
+
+/**
+ * Handle save action
+ */
+function handleFolderSave() {
+    if (currentFolderAction === 'delete' && currentFolderTarget) {
+        state.deleteFolder(currentFolderTarget.id);
+        closeFolderModal();
+        return;
+    }
+
+    const name = folderModalInput.value.trim();
+    
+    if (!name) {
+        // Simple validation visual cue
+        folderModalInput.style.borderColor = '#ef4444';
+        folderModalInput.focus();
+        return;
+    }
+
+    // Reset validation style
+    folderModalInput.style.borderColor = '';
+
+    if (currentFolderAction === 'create') {
+        state.addFolder(name);
+    } else if (currentFolderAction === 'rename' && currentFolderTarget) {
+        if (name !== currentFolderTarget.name) {
+            state.renameFolder(currentFolderTarget.id, name);
+        }
+    }
+
+    closeFolderModal();
+}
+
+/**
  * Show create folder modal
  */
 export function showCreateFolderModal() {
-    const name = prompt('Enter folder name:');
-    if (name && name.trim()) {
-        state.addFolder(name.trim());
-    }
+    openFolderModal('create');
 }
 
 /**
@@ -308,6 +457,11 @@ function showFolderContextMenu(folder, anchor) {
     menu.style.position = 'fixed';
     menu.style.top = `${rect.bottom + 4}px`;
     menu.style.left = `${rect.left}px`;
+    
+    // Adjust if menu goes off screen
+    if (rect.left + 150 > window.innerWidth) {
+        menu.style.left = `${window.innerWidth - 160}px`;
+    }
 
     document.body.appendChild(menu);
 
@@ -326,10 +480,7 @@ function showFolderContextMenu(folder, anchor) {
  * @param {Object} folder - Folder data
  */
 export function showRenameFolderModal(folder) {
-    const newName = prompt('Enter new folder name:', folder.name);
-    if (newName && newName.trim() && newName.trim() !== folder.name) {
-        state.renameFolder(folder.id, newName.trim());
-    }
+    openFolderModal('rename', folder);
 }
 
 /**
@@ -337,12 +488,5 @@ export function showRenameFolderModal(folder) {
  * @param {Object} folder - Folder data
  */
 export function showDeleteFolderConfirm(folder) {
-    const count = state.getImageCountForFolder(folder.id);
-    const message = count > 0
-        ? `Delete "${folder.name}"? ${count} image(s) will be moved to All Photos.`
-        : `Delete "${folder.name}"?`;
-
-    if (confirm(message)) {
-        state.deleteFolder(folder.id);
-    }
+    openFolderModal('delete', folder);
 }
