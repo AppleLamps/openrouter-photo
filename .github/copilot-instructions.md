@@ -13,7 +13,7 @@ User Input → js/app.js → js/api.js → /api/generate or /api/enhance → Ext
 
 ### Key External APIs
 - **Fal.ai** (`fal-ai/z-image/turbo`): Image generation - requires `FAL_KEY` env var
-- **OpenRouter** (`x-ai/grok-4-fast`): Prompt enhancement - requires `OPENROUTER_API_KEY` env var
+- **OpenRouter** (`x-ai/grok-4.1-fast-fast`): Prompt enhancement - requires `OPENROUTER_API_KEY` env var
 
 ## Project Structure & Conventions
 

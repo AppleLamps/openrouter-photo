@@ -2,11 +2,10 @@
  * Main application entry point
  */
 
-import { generateImage, enhancePrompt, testOpenRouterKey } from './api.js';
+import { generateImage, enhancePrompt, testOpenRouterKey, getRandomPromptFromAI } from './api.js';
 import { state } from './state.js';
 import { generateId } from './utils.js';
 import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, initLightbox, closeLightbox } from './gallery.js';
-import { getRandomPrompt } from './prompts.js';
 import { formatBytes } from './image-utils.js';
 import { initSidebar } from './sidebar.js';
 
@@ -1389,33 +1388,76 @@ function showOpenRouterApiKeyPopup(help) {
 }
 
 /**
- * Handle "Surprise Me" button - fill input with random creative prompt
+ * Handle "Surprise Me" button - fill input with AI-generated random creative prompt
  * @param {HTMLTextAreaElement} input - Prompt input element
  */
 async function handleSurpriseMe(input) {
-    const randomPrompt = getRandomPrompt();
+    const surpriseBtn = document.getElementById('surprise-btn');
 
-    // Clear existing text
-    input.value = '';
+    // Set loading state
+    if (surpriseBtn) {
+        setSurpriseLoading(surpriseBtn, true);
+    }
+    input.disabled = true;
 
-    // Typing animation effect
-    let index = 0;
-    const typingSpeed = 15; // ms per character
+    try {
+        // Get AI-generated random prompt
+        const randomPrompt = await getRandomPromptFromAI();
 
-    const typeNextChar = () => {
-        if (index < randomPrompt.length) {
-            input.value += randomPrompt[index];
-            index++;
-            autoResizeTextarea(input);
-            setTimeout(typeNextChar, typingSpeed);
+        // Clear existing text
+        input.value = '';
+
+        // Typing animation effect
+        let index = 0;
+        const typingSpeed = 15; // ms per character
+
+        const typeNextChar = () => {
+            if (index < randomPrompt.length) {
+                input.value += randomPrompt[index];
+                index++;
+                autoResizeTextarea(input);
+                setTimeout(typeNextChar, typingSpeed);
+            } else {
+                // Done typing - flash and focus
+                flashInput(input);
+                input.focus();
+            }
+        };
+
+        typeNextChar();
+    } catch (error) {
+        console.error('Failed to get random prompt:', error);
+        if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
+            showOpenRouterApiKeyPopup(error?.help);
         } else {
-            // Done typing - flash and focus
-            flashInput(input);
-            input.focus();
+            showError(error.message || 'Failed to generate random prompt. Please try again.');
         }
-    };
+    } finally {
+        if (surpriseBtn) {
+            setSurpriseLoading(surpriseBtn, false);
+        }
+        input.disabled = false;
+    }
+}
 
-    typeNextChar();
+/**
+ * Set loading state for surprise button
+ * @param {HTMLButtonElement} button
+ * @param {boolean} isLoading
+ */
+function setSurpriseLoading(button, isLoading) {
+    button.disabled = isLoading;
+
+    const diceIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="12" height="12" x="2" y="10" rx="2" ry="2"/><path d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6"/><path d="M6 18h.01"/><path d="M10 14h.01"/><path d="M15 6h.01"/><path d="M18 9h.01"/></svg>`;
+    const loadingIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin-icon"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+
+    if (isLoading) {
+        button.classList.add('input-bar__icon-btn--loading');
+        button.innerHTML = loadingIcon;
+    } else {
+        button.classList.remove('input-bar__icon-btn--loading');
+        button.innerHTML = diceIcon;
+    }
 }
 
 /**

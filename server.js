@@ -4,6 +4,7 @@ const express = require('express');
 const generateHandler = require('./api/generate');
 const enhanceHandler = require('./api/enhance');
 const testKeyHandler = require('./api/test-key');
+const randomPromptHandler = require('./api/random-prompt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,6 +42,10 @@ app.post('/api/enhance', (req, res) => {
 
 app.post('/api/test-key', (req, res) => {
     return testKeyHandler(req, res);
+});
+
+app.post('/api/random-prompt', (req, res) => {
+    return randomPromptHandler(req, res);
 });
 
 app.listen(PORT, () => {

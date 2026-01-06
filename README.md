@@ -22,7 +22,7 @@ A modern, lightweight AI image generator powered by OpenRouter. Built with vanil
 
 ### Prompt Tools
 - **AI Enhancement** - Improve prompts with one click using Grok-4
-- **Surprise Me** - 68 creative prompt templates across 13 artistic styles
+- **Surprise Me** - AI-generated random prompts combining subjects, styles, moods, settings, and lighting
 
 ### Gallery & Organization
 - **Responsive Grid** - Thumbnail gallery with shimmer loading animations
@@ -72,6 +72,7 @@ A modern, lightweight AI image generator powered by OpenRouter. Built with vanil
 ├── api/
 │   ├── generate.js       # Image generation endpoint (OpenRouter proxy)
 │   ├── enhance.js        # Prompt enhancement endpoint
+│   ├── random-prompt.js  # AI-generated random prompt endpoint
 │   └── test-key.js       # API key validation endpoint
 ├── css/
 │   ├── base.css          # Reset, CSS variables, colors

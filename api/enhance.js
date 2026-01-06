@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
                 'X-Title': 'AI Image Generator'
             },
             body: JSON.stringify({
-                model: 'x-ai/grok-4-fast',
+                model: 'x-ai/grok-4.1-fast-fast',
                 messages: [
                     {
                         role: 'system',

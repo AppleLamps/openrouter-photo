@@ -45,7 +45,7 @@ User Input → js/app.js → js/api.js → /api/generate or /api/enhance → Ope
 - Handlers export `module.exports = async function handler(req, res)` (CommonJS for Vercel compatibility)
 - Both handlers follow identical patterns: CORS setup → method check → validation → external API call → response
 - `generate.js`: Image generation via OpenRouter (supports Gemini models with aspect ratio config)
-- `enhance.js`: Prompt enhancement via OpenRouter using `x-ai/grok-4-fast`
+- `enhance.js`: Prompt enhancement via OpenRouter using `x-ai/grok-4.1-fast-fast`
 
 ### CSS (`css/`)
 - CSS Custom Properties defined in `base.css` `:root` - use these variables, don't hardcode colors
