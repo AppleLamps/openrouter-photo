@@ -23,6 +23,9 @@ let pendingDeletions = new Set();
 /** @type {HTMLElement|null} */
 let lastFocusedElement = null;
 
+/** @type {string|null} */
+let currentLightboxImageId = null;
+
 /** @type {HTMLElement|null} */
 let lightboxModalContentElement = null;
 
@@ -557,6 +560,9 @@ async function openLightbox(image) {
 
     lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
+    // Track current image for memory cleanup on close
+    currentLightboxImageId = image.id;
+
     // Defensive: ensure any previous swipe/drag state is cleared before opening.
     resetLightboxSwipeState();
 
@@ -676,6 +682,12 @@ export function closeLightbox() {
 
     // Reset swipe-to-close state in case the modal is closed mid-gesture (e.g. ESC/backdrop).
     resetLightboxSwipeState();
+
+    // Clean up full-resolution blob URL to free memory
+    if (currentLightboxImageId) {
+        state.revokeFullImageUrl(currentLightboxImageId);
+        currentLightboxImageId = null;
+    }
 
     unlockBodyScroll();
 

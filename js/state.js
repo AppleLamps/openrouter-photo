@@ -54,6 +54,8 @@ class State {
         this.storage = null;
         /** @type {boolean} */
         this.useFallback = false;
+        /** @type {'all'|'folder-only'} - Cached photo visibility mode */
+        this._photoVisibilityMode = null;
 
         // Ready promise for async initialization
         this.ready = this.init();
@@ -302,6 +304,30 @@ class State {
     }
 
     /**
+     * Revoke full-resolution blob URL to free memory (call when lightbox closes)
+     * @param {string} id - Image ID
+     */
+    revokeFullImageUrl(id) {
+        const fullUrl = this.blobUrls.get(`${id}-full`);
+        if (fullUrl) {
+            revokeBlobUrl(fullUrl);
+            this.blobUrls.delete(`${id}-full`);
+        }
+    }
+
+    /**
+     * Revoke all cached full-resolution blob URLs (memory cleanup)
+     */
+    revokeAllFullImageUrls() {
+        for (const [key, url] of this.blobUrls.entries()) {
+            if (key.endsWith('-full')) {
+                revokeBlobUrl(url);
+                this.blobUrls.delete(key);
+            }
+        }
+    }
+
+    /**
      * Remove an image by ID
      * @param {string} id
      */
@@ -537,11 +563,17 @@ class State {
     }
 
     /**
-     * Get the photo visibility mode setting
+     * Get the photo visibility mode setting (cached in memory)
      * @returns {'all'|'folder-only'}
      */
     getPhotoVisibilityMode() {
-        return localStorage.getItem(PHOTO_VISIBILITY_KEY) || 'all';
+        // Return cached value if available
+        if (this._photoVisibilityMode !== null) {
+            return this._photoVisibilityMode;
+        }
+        // Load from localStorage once and cache
+        this._photoVisibilityMode = localStorage.getItem(PHOTO_VISIBILITY_KEY) || 'all';
+        return this._photoVisibilityMode;
     }
 
     /**
@@ -549,6 +581,7 @@ class State {
      * @param {'all'|'folder-only'} mode
      */
     setPhotoVisibilityMode(mode) {
+        this._photoVisibilityMode = mode;
         localStorage.setItem(PHOTO_VISIBILITY_KEY, mode);
         this.notifyListeners('settings-changed', { photoVisibility: mode });
     }

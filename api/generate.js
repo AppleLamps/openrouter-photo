@@ -138,11 +138,8 @@ module.exports = async function handler(req, res) {
         return 0;
     };
 
-    const fetchGenerationCost = async (generationId, retries = 3) => {
+    const fetchGenerationCost = async (generationId, retries = 2) => {
         if (!generationId) return 0;
-
-        // Small delay to allow OpenRouter to calculate cost
-        await new Promise((resolve) => setTimeout(resolve, 500));
 
         for (let attempt = 0; attempt < retries; attempt++) {
             try {
@@ -155,19 +152,17 @@ module.exports = async function handler(req, res) {
                 if (!response.ok) {
                     console.error(`Generation cost fetch failed (attempt ${attempt + 1}):`, response.status);
                     if (attempt < retries - 1) {
-                        await new Promise((resolve) => setTimeout(resolve, 500));
+                        await new Promise((resolve) => setTimeout(resolve, 200));
                         continue;
                     }
                     return 0;
                 }
 
                 const stats = await response.json();
-                console.log(`Generation stats for ${generationId}:`, JSON.stringify(stats, null, 2));
 
                 // OpenRouter returns cost in the `usage` field (in USD) - check both wrapped and unwrapped
                 const data = stats?.data || stats;
                 const cost = data?.usage ?? data?.total_cost ?? data?.cost ?? 0;
-                console.log(`Extracted cost: ${cost}`);
 
                 if (typeof cost === 'number' && cost > 0) {
                     return cost;
@@ -175,7 +170,7 @@ module.exports = async function handler(req, res) {
 
                 // If cost is still 0, might need to wait for calculation
                 if (attempt < retries - 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    await new Promise((resolve) => setTimeout(resolve, 200));
                     continue;
                 }
 
@@ -183,7 +178,7 @@ module.exports = async function handler(req, res) {
             } catch (e) {
                 console.error(`Error fetching generation cost (attempt ${attempt + 1}):`, e);
                 if (attempt < retries - 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    await new Promise((resolve) => setTimeout(resolve, 200));
                     continue;
                 }
                 return 0;
@@ -225,11 +220,10 @@ module.exports = async function handler(req, res) {
     };
 
     try {
-        /** @type {Array<{url: string, model: string, cost: number, provider: string|null}>} */
+        /** @type {Array<{url: string, model: string, cost: number, provider: string|null, metaIndex: number}>} */
         const imageResults = [];
-        /** @type {Array<{model: string, provider_name: (string|null), generation_id: (string|number|null), created_at: (string|null), usage: number}>} */
+        /** @type {Array<{model: string, provider_name: (string|null), generation_id: (string|number|null), created_at: (string|null), usage: number, imageCount: number}>} */
         const usageRequests = [];
-        let totalUsage = 0;
 
         // First call: some models may return multiple images in one response.
         const first = await requestSingle();
@@ -243,67 +237,49 @@ module.exports = async function handler(req, res) {
 
         const firstUrls = extractImageUrls(first.data);
         const firstMeta = extractUsageMeta(first.data);
-        console.log('Completion response id:', first.data?.id, 'generation_id:', first.data?.generation_id);
-        console.log('Extracted generation_id:', firstMeta.generation_id);
-
-        // Always fetch cost from generation endpoint for image generation
-        // (completion response only has token counts, not actual USD cost)
-        if (firstMeta.generation_id) {
-            const fetchedCost = await fetchGenerationCost(firstMeta.generation_id);
-            if (fetchedCost > 0) {
-                firstMeta.usage = fetchedCost;
-            }
-        }
-
+        firstMeta.imageCount = firstUrls.length;
         usageRequests.push(firstMeta);
-        totalUsage += firstMeta.usage;
 
-        // Pro-rate cost per image from this request
-        const firstCostPerImage = firstUrls.length > 0 ? firstMeta.usage / firstUrls.length : 0;
+        // Store images with reference to their meta index for cost assignment later
         firstUrls.forEach((url) => {
             imageResults.push({
                 url,
                 model: firstMeta.model,
-                cost: firstCostPerImage,
-                provider: firstMeta.provider_name
+                cost: 0, // Will be filled in after parallel cost fetch
+                provider: firstMeta.provider_name,
+                metaIndex: 0
             });
         });
 
-        // Fallback: if the provider only returns 1 image, loop up to num_images.
-        while (imageResults.length < parsedNumImages) {
-            const next = await requestSingle();
-            if (!next.ok) {
-                console.error('OpenRouter API error:', next.errorText);
-                return res.status(next.status).json({
-                    error: 'Failed to generate image',
-                    details: next.errorText,
-                });
-            }
+        // Fallback: if the provider only returns 1 image, make remaining requests in parallel.
+        const remaining = parsedNumImages - imageResults.length;
+        if (remaining > 0) {
+            const parallelResults = await Promise.all(
+                Array(remaining).fill().map(() => requestSingle())
+            );
 
-            const nextUrls = extractImageUrls(next.data);
-            const nextMeta = extractUsageMeta(next.data);
-
-            // Always fetch cost from generation endpoint for image generation
-            if (nextMeta.generation_id) {
-                const fetchedCost = await fetchGenerationCost(nextMeta.generation_id);
-                if (fetchedCost > 0) {
-                    nextMeta.usage = fetchedCost;
+            for (const next of parallelResults) {
+                if (!next.ok) {
+                    console.error('OpenRouter API error:', next.errorText);
+                    continue;
                 }
-            }
 
-            usageRequests.push(nextMeta);
-            totalUsage += nextMeta.usage;
+                const nextUrls = extractImageUrls(next.data);
+                const nextMeta = extractUsageMeta(next.data);
+                nextMeta.imageCount = nextUrls.length;
+                const metaIndex = usageRequests.length;
+                usageRequests.push(nextMeta);
 
-            // Pro-rate cost per image from this request
-            const nextCostPerImage = nextUrls.length > 0 ? nextMeta.usage / nextUrls.length : 0;
-            nextUrls.forEach((url) => {
-                imageResults.push({
-                    url,
-                    model: nextMeta.model,
-                    cost: nextCostPerImage,
-                    provider: nextMeta.provider_name
+                nextUrls.forEach((url) => {
+                    imageResults.push({
+                        url,
+                        model: nextMeta.model,
+                        cost: 0,
+                        provider: nextMeta.provider_name,
+                        metaIndex
+                    });
                 });
-            });
+            }
         }
 
         // Trim to requested count
@@ -312,6 +288,35 @@ module.exports = async function handler(req, res) {
             return res.status(502).json({
                 error: 'No images returned from OpenRouter',
             });
+        }
+
+        // Fetch all costs in parallel (non-blocking for image delivery)
+        // Small initial delay to allow OpenRouter to calculate costs
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const costPromises = usageRequests.map(async (meta) => {
+            if (meta.generation_id) {
+                const cost = await fetchGenerationCost(meta.generation_id);
+                if (cost > 0) {
+                    meta.usage = cost;
+                }
+            }
+            return meta.usage;
+        });
+
+        await Promise.all(costPromises);
+
+        // Calculate total usage and assign pro-rated costs to images
+        let totalUsage = 0;
+        for (const meta of usageRequests) {
+            totalUsage += meta.usage;
+        }
+
+        // Assign pro-rated costs to each image
+        for (const img of limited) {
+            const meta = usageRequests[img.metaIndex];
+            img.cost = meta.imageCount > 0 ? meta.usage / meta.imageCount : 0;
+            delete img.metaIndex; // Clean up internal property
         }
 
         return res.status(200).json({
