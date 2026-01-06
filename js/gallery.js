@@ -631,7 +631,7 @@ async function openLightbox(image) {
             onClick: () => {
                 window.dispatchEvent(new CustomEvent('remix-image', { detail: image }));
             }
-        }, 'Remix ♻️');
+        }, 'Remix');
 
         // Insert before download button
         actionsContainer.insertBefore(remixBtn, downloadBtn);
