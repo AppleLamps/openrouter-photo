@@ -1297,3 +1297,130 @@ body.is-modal-open .spend-tracker {
     filter: blur(2px);
     transition: filter 0.3s ease;
 }
+
+/* OpenRouter Key Modal / Spend Breakdown Modal */
+.openrouter-key-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+}
+
+.openrouter-key-modal--active {
+    display: block;
+}
+
+.openrouter-key-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.openrouter-key-modal__card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100% - 32px);
+    max-width: 560px;
+    max-height: calc(100vh - 64px);
+    overflow: auto;
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    color: white;
+}
+
+.openrouter-key-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.openrouter-key-modal__title {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.openrouter-key-modal__close {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.openrouter-key-modal__close:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: white;
+}
+
+.openrouter-key-modal__body {
+    margin-top: 10px;
+}
+
+.openrouter-key-modal__message {
+    margin: 0 0 12px 0;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.openrouter-key-modal__actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.openrouter-key-modal__link {
+    display: inline-block;
+    padding: 10px 16px;
+    background: #6366f1;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: background 0.15s ease;
+}
+
+.openrouter-key-modal__link:hover {
+    background: #4f46e5;
+}
+
+.openrouter-key-modal__ok {
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.openrouter-key-modal__ok:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.openrouter-key-modal__hint {
+    margin: 12px 0 0 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.openrouter-key-modal__hint code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+}
