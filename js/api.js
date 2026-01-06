@@ -4,6 +4,24 @@
 
 const API_ENDPOINT = '/api/generate';
 const ENHANCE_ENDPOINT = '/api/enhance';
+const TEST_KEY_ENDPOINT = '/api/test-key';
+const OPENROUTER_API_KEY_STORAGE_KEY = 'openrouter_api_key';
+
+/**
+ * Read the user's OpenRouter API key from localStorage (if set).
+ * We keep this optional so deployments can still use server-side env var fallback.
+ * @returns {string | null}
+ */
+function getOpenRouterApiKey() {
+    try {
+        const raw = localStorage.getItem(OPENROUTER_API_KEY_STORAGE_KEY);
+        if (!raw) return null;
+        const trimmed = raw.trim();
+        return trimmed.length > 0 ? trimmed : null;
+    } catch {
+        return null;
+    }
+}
 
 /**
  * @typedef {Object} GenerateOptions
@@ -31,8 +49,19 @@ const ENHANCE_ENDPOINT = '/api/enhance';
  */
 
 /**
+ * @typedef {Object} GeneratedImage
+ * @property {string} url - Image data URL
+ * @property {string} model - Model used for generation
+ * @property {number} cost - Cost in USD for this image
+ * @property {string|null} provider - Provider name
+ */
+
+/**
  * @typedef {Object} GenerateResponse
- * @property {Array<{url: string}>} images - Generated images
+ * @property {GeneratedImage[]} images - Generated images with metadata
+ * @property {Object} meta - Generation metadata
+ * @property {number} meta.total_usage - Total cost in USD
+ * @property {Array} meta.requests - Per-request usage data
  */
 
 /**
@@ -59,17 +88,24 @@ export async function generateImage(prompt, options = {}) {
     };
 
     try {
+        const openRouterApiKey = getOpenRouterApiKey();
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
             },
             body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
+                err.code = errorData.code;
+                err.help = errorData.help;
+            }
+            throw err;
         }
 
         const data = await response.json();
@@ -105,17 +141,24 @@ export async function enhancePrompt(currentPrompt) {
     }
 
     try {
+        const openRouterApiKey = getOpenRouterApiKey();
         const response = await fetch(ENHANCE_ENDPOINT, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
             },
             body: JSON.stringify({ prompt: trimmedPrompt }),
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
+                err.code = errorData.code;
+                err.help = errorData.help;
+            }
+            throw err;
         }
 
         const data = await response.json();
@@ -130,5 +173,38 @@ export async function enhancePrompt(currentPrompt) {
             throw new Error('Network error: please check your connection');
         }
         throw error;
+    }
+}
+
+/**
+ * Test the user's OpenRouter API key.
+ * @returns {Promise<void>}
+ */
+export async function testOpenRouterKey() {
+    const openRouterApiKey = getOpenRouterApiKey();
+    if (!openRouterApiKey) {
+        const err = new Error('OpenRouter API key required');
+        err.code = 'OPENROUTER_API_KEY_REQUIRED';
+        err.help = { url: 'https://openrouter.ai/keys' };
+        throw err;
+    }
+
+    const response = await fetch(TEST_KEY_ENDPOINT, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-OpenRouter-Api-Key': openRouterApiKey,
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
+            err.code = errorData.code;
+            err.help = errorData.help;
+        }
+        throw err;
     }
 }

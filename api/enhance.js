@@ -2,7 +2,7 @@ module.exports = async function handler(req, res) {
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key');
 
     // Handle preflight request
     if (req.method === 'OPTIONS') {
@@ -20,10 +20,19 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+    const OPENROUTER_API_KEY =
+        req.headers['x-openrouter-api-key'] ||
+        req.headers['x-openrouter-api_key'];
 
     if (!OPENROUTER_API_KEY) {
-        return res.status(500).json({ error: 'OPENROUTER_API_KEY environment variable is not configured' });
+        return res.status(401).json({
+            code: 'OPENROUTER_API_KEY_REQUIRED',
+            error: 'OpenRouter API key required',
+            help: {
+                message: 'Open Settings → paste your OpenRouter API key. Create one at openrouter.ai/keys.',
+                url: 'https://openrouter.ai/keys'
+            }
+        });
     }
 
     try {

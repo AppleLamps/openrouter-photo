@@ -2,11 +2,564 @@
  * Main application entry point
  */
 
-import { generateImage, enhancePrompt } from './api.js';
+import { generateImage, enhancePrompt, testOpenRouterKey } from './api.js';
 import { state } from './state.js';
 import { generateId } from './utils.js';
 import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, initLightbox, closeLightbox } from './gallery.js';
 import { getRandomPrompt } from './prompts.js';
+import { formatBytes } from './image-utils.js';
+import { initSidebar } from './sidebar.js';
+
+const SPEND_STORAGE_KEY = 'openrouter_spend_v1';
+const PROMPT_ATTACHMENTS_MAX = 3;
+const PROMPT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024; // 8MB
+
+/** @type {string[]} */
+let promptImageDataUrls = [];
+
+function renderPromptAttachments() {
+    const container = document.getElementById('prompt-attachments');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    promptImageDataUrls.forEach((url, index) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'input-bar__attachment';
+
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = `Attached image ${index + 1}`;
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'input-bar__attachment-remove';
+        remove.setAttribute('aria-label', 'Remove attached image');
+        remove.textContent = '✕';
+        remove.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            promptImageDataUrls.splice(index, 1);
+            renderPromptAttachments();
+        });
+
+        wrap.appendChild(img);
+        wrap.appendChild(remove);
+        container.appendChild(wrap);
+    });
+}
+
+async function fileToDataUrl(file) {
+    return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Failed to read image file'));
+        reader.readAsDataURL(file);
+    });
+}
+
+/**
+ * Compress an image file for API submission (max 1024px, JPEG 85% quality)
+ * This keeps payloads under Vercel's 4.5MB limit
+ * @param {File} file - Original image file
+ * @returns {Promise<string>} - Compressed data URL
+ */
+async function compressImageForUpload(file) {
+    const MAX_SIZE = 1024; // Max dimension
+    const QUALITY = 0.85;
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+
+            let { width, height } = img;
+
+            // Only resize if larger than MAX_SIZE
+            if (width > MAX_SIZE || height > MAX_SIZE) {
+                if (width > height) {
+                    height = Math.round((height * MAX_SIZE) / width);
+                    width = MAX_SIZE;
+                } else {
+                    width = Math.round((width * MAX_SIZE) / height);
+                    height = MAX_SIZE;
+                }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Use JPEG for best compression ratio
+            const dataUrl = canvas.toDataURL('image/jpeg', QUALITY);
+            resolve(dataUrl);
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Failed to load image for compression'));
+        };
+
+        img.src = url;
+    });
+}
+
+async function addPromptImageFiles(files) {
+    const list = Array.from(files || []).filter((f) => f && f.type && f.type.startsWith('image/'));
+    if (list.length === 0) return;
+
+    for (const file of list) {
+        if (promptImageDataUrls.length >= PROMPT_ATTACHMENTS_MAX) {
+            showError(`Maximum ${PROMPT_ATTACHMENTS_MAX} images can be attached.`);
+            break;
+        }
+        if (file.size > PROMPT_ATTACHMENT_MAX_BYTES) {
+            showError(`Image "${file.name}" is too large (max 8MB).`);
+            continue;
+        }
+
+        try {
+            // Compress image to reduce payload size (Vercel limit: 4.5MB)
+            const dataUrl = await compressImageForUpload(file);
+            if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+                promptImageDataUrls.push(dataUrl);
+                renderPromptAttachments();
+            }
+        } catch (error) {
+            console.error('Failed to compress image:', error);
+            showError(`Failed to process "${file.name}".`);
+        }
+    }
+}
+
+function clearPromptAttachments() {
+    promptImageDataUrls = [];
+    const input = document.getElementById('prompt-image-input');
+    if (input instanceof HTMLInputElement) input.value = '';
+    renderPromptAttachments();
+}
+
+function safeParseJson(text) {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
+
+function loadSpendState() {
+    const raw = (() => {
+        try {
+            return localStorage.getItem(SPEND_STORAGE_KEY);
+        } catch {
+            return null;
+        }
+    })();
+
+    const parsed = raw ? safeParseJson(raw) : null;
+    if (!parsed || typeof parsed !== 'object') {
+        return { total: 0, byModel: {} };
+    }
+
+    const total = typeof parsed.total === 'number' && Number.isFinite(parsed.total) ? parsed.total : 0;
+    const byModel = parsed.byModel && typeof parsed.byModel === 'object' ? parsed.byModel : {};
+    return { total, byModel };
+}
+
+function saveSpendState(state) {
+    try {
+        localStorage.setItem(SPEND_STORAGE_KEY, JSON.stringify(state));
+    } catch {
+        // ignore storage failures
+    }
+}
+
+function formatUsd(amount) {
+    const safe = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(safe);
+}
+
+function updateSpendTrackerUI() {
+    const pill = document.getElementById('spend-tracker');
+    if (!pill) return;
+    const spend = loadSpendState();
+    pill.textContent = `Spent: ${formatUsd(spend.total)}`;
+}
+
+function syncNumImagesDropdownUI() {
+    const hidden = document.getElementById('setting-num-images');
+    const trigger = document.getElementById('num-images-trigger');
+    const menu = document.getElementById('num-images-menu');
+    if (!(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) return;
+
+    const v = hidden.value || '2';
+    trigger.textContent = v;
+    menu.querySelectorAll('.input-bar__dropdown-item').forEach((btn) => {
+        const selected = btn.getAttribute('data-value') === v;
+        btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+}
+
+function syncModelDropdownUI() {
+    const hidden = document.getElementById('setting-model');
+    const trigger = document.getElementById('model-trigger');
+    const menu = document.getElementById('model-menu');
+    if (!(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) return;
+
+    const v = hidden.value || '';
+    trigger.textContent = v || 'Select model';
+    trigger.title = v || 'Model';
+    menu.querySelectorAll('.input-bar__dropdown-item').forEach((btn) => {
+        const selected = btn.getAttribute('data-value') === v;
+        btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+}
+
+function initModelDropdown() {
+    const dropdown = document.getElementById('model-dropdown');
+    const hidden = document.getElementById('setting-model');
+    const trigger = document.getElementById('model-trigger');
+    const menu = document.getElementById('model-menu');
+
+    if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) {
+        return;
+    }
+
+    const close = () => {
+        dropdown.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const open = () => {
+        dropdown.classList.add('is-open');
+        trigger.setAttribute('aria-expanded', 'true');
+    };
+
+    const setValue = (value) => {
+        hidden.value = String(value);
+        syncModelDropdownUI();
+        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    // Ensure a default selection exists.
+    if (!hidden.value) {
+        const first = menu.querySelector('.input-bar__dropdown-item[data-value]');
+        const firstVal = first?.getAttribute?.('data-value');
+        if (firstVal) hidden.value = firstVal;
+    }
+
+    syncModelDropdownUI();
+
+    trigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropdown.classList.contains('is-open')) {
+            close();
+        } else {
+            open();
+        }
+    });
+
+    menu.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+        const item = target.closest('.input-bar__dropdown-item');
+        if (!(item instanceof HTMLButtonElement)) return;
+        const value = item.getAttribute('data-value');
+        if (!value) return;
+        setValue(value);
+        close();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!dropdown.classList.contains('is-open')) return;
+        if (e.target instanceof Node && dropdown.contains(e.target)) return;
+        close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!dropdown.classList.contains('is-open')) return;
+        close();
+    });
+}
+
+function initNumImagesDropdown() {
+    const dropdown = document.getElementById('num-images-dropdown');
+    const hidden = document.getElementById('setting-num-images');
+    const trigger = document.getElementById('num-images-trigger');
+    const menu = document.getElementById('num-images-menu');
+
+    if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) {
+        return;
+    }
+
+    const close = () => {
+        dropdown.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const open = () => {
+        dropdown.classList.add('is-open');
+        trigger.setAttribute('aria-expanded', 'true');
+    };
+
+    const setValue = (value) => {
+        hidden.value = String(value);
+        syncNumImagesDropdownUI();
+    };
+
+    // Initial sync
+    syncNumImagesDropdownUI();
+
+    trigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropdown.classList.contains('is-open')) {
+            close();
+        } else {
+            open();
+        }
+    });
+
+    menu.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+        const item = target.closest('.input-bar__dropdown-item');
+        if (!(item instanceof HTMLButtonElement)) return;
+        const value = item.getAttribute('data-value');
+        if (!value) return;
+        setValue(value);
+        close();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!dropdown.classList.contains('is-open')) return;
+        if (e.target instanceof Node && dropdown.contains(e.target)) return;
+        close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!dropdown.classList.contains('is-open')) return;
+        close();
+    });
+}
+
+/**
+ * Initialize folder selector dropdown
+ */
+function initFolderSelectorDropdown() {
+    const dropdown = document.getElementById('folder-selector-dropdown');
+    const hidden = document.getElementById('selected-folder');
+    const trigger = document.getElementById('folder-selector-trigger');
+    const menu = document.getElementById('folder-selector-menu');
+    const nameSpan = trigger?.querySelector('.folder-selector__name');
+
+    if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) {
+        return;
+    }
+
+    const close = () => {
+        dropdown.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const open = () => {
+        dropdown.classList.add('is-open');
+        trigger.setAttribute('aria-expanded', 'true');
+    };
+
+    const setValue = (folderId, folderName) => {
+        hidden.value = folderId || '';
+        if (nameSpan) {
+            nameSpan.textContent = folderName || 'All Photos';
+        }
+        close();
+    };
+
+    const renderMenu = () => {
+        menu.innerHTML = '';
+
+        // "All Photos" option
+        const allOption = document.createElement('button');
+        allOption.type = 'button';
+        allOption.className = 'input-bar__dropdown-item';
+        allOption.setAttribute('role', 'option');
+        allOption.setAttribute('data-value', '');
+        allOption.setAttribute('aria-selected', hidden.value === '' ? 'true' : 'false');
+        allOption.textContent = 'All Photos';
+        allOption.addEventListener('click', () => setValue('', 'All Photos'));
+        menu.appendChild(allOption);
+
+        // Folder options
+        const folders = state.getFolders();
+        folders.forEach(folder => {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'input-bar__dropdown-item';
+            option.setAttribute('role', 'option');
+            option.setAttribute('data-value', folder.id);
+            option.setAttribute('aria-selected', hidden.value === folder.id ? 'true' : 'false');
+            option.textContent = folder.name;
+            option.addEventListener('click', () => setValue(folder.id, folder.name));
+            menu.appendChild(option);
+        });
+
+        // "New Folder" option
+        const newFolderOption = document.createElement('button');
+        newFolderOption.type = 'button';
+        newFolderOption.className = 'input-bar__dropdown-item input-bar__dropdown-item--action';
+        newFolderOption.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Folder`;
+        newFolderOption.addEventListener('click', async () => {
+            close();
+            const name = prompt('Enter folder name:');
+            if (name && name.trim()) {
+                const folder = await state.addFolder(name.trim());
+                setValue(folder.id, folder.name);
+            }
+        });
+        menu.appendChild(newFolderOption);
+    };
+
+    // Initial render
+    renderMenu();
+
+    // Re-render menu when folders change
+    state.subscribe((action) => {
+        if (action === 'folder-add' || action === 'folder-rename' || action === 'folder-delete') {
+            renderMenu();
+        }
+    });
+
+    trigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropdown.classList.contains('is-open')) {
+            close();
+        } else {
+            renderMenu(); // Refresh options before opening
+            open();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!dropdown.classList.contains('is-open')) return;
+        if (e.target instanceof Node && dropdown.contains(e.target)) return;
+        close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!dropdown.classList.contains('is-open')) return;
+        close();
+    });
+}
+
+function recordSpend(meta, imagesReturned) {
+    if (!meta || typeof meta !== 'object') return;
+    const requests = Array.isArray(meta.requests) ? meta.requests : [];
+    if (requests.length === 0) return;
+
+    const spend = loadSpendState();
+
+    const images = typeof imagesReturned === 'number' && Number.isFinite(imagesReturned) ? imagesReturned : 0;
+    const imagesPerGeneration = requests.length > 0 ? images / requests.length : 0;
+
+    for (const req of requests) {
+        const model = typeof req?.model === 'string' ? req.model : 'unknown';
+        const usage = typeof req?.usage === 'number' && Number.isFinite(req.usage) ? req.usage : 0;
+
+        if (!spend.byModel[model]) {
+            spend.byModel[model] = { cost: 0, generations: 0, images: 0 };
+        }
+
+        spend.byModel[model].cost += usage;
+        spend.byModel[model].generations += 1;
+        spend.byModel[model].images += imagesPerGeneration;
+        spend.total += usage;
+    }
+
+    saveSpendState(spend);
+    updateSpendTrackerUI();
+}
+
+function openSpendBreakdownModal() {
+    const spend = loadSpendState();
+    const entries = Object.entries(spend.byModel)
+        .map(([model, v]) => ({
+            model,
+            cost: typeof v?.cost === 'number' ? v.cost : 0,
+            generations: typeof v?.generations === 'number' ? v.generations : 0,
+            images: typeof v?.images === 'number' ? v.images : 0,
+        }))
+        .sort((a, b) => b.cost - a.cost);
+
+    const existing = document.getElementById('spend-breakdown-modal');
+    if (existing) {
+        existing.remove();
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'spend-breakdown-modal';
+    overlay.className = 'openrouter-key-modal openrouter-key-modal--active';
+
+    const rowsHtml = entries.length
+        ? entries
+            .map((e) => {
+                const imgCount = Number.isFinite(e.images) ? Math.round(e.images) : 0;
+                return `
+                    <tr>
+                        <td style="padding: 10px 8px; vertical-align: top; color: rgba(255,255,255,0.92); font-weight: 600; word-break: break-word;">${e.model}</td>
+                        <td style="padding: 10px 8px; white-space: nowrap; color: rgba(255,255,255,0.85); text-align: right;">${formatUsd(e.cost)}</td>
+                        <td style="padding: 10px 8px; white-space: nowrap; color: rgba(255,255,255,0.75); text-align: right;">${e.generations}</td>
+                        <td style="padding: 10px 8px; white-space: nowrap; color: rgba(255,255,255,0.75); text-align: right;">${imgCount}</td>
+                    </tr>
+                `;
+            })
+            .join('')
+        : `<tr><td colspan="4" style="padding: 14px 8px; color: rgba(255,255,255,0.75);">No spend recorded yet.</td></tr>`;
+
+    overlay.innerHTML = `
+        <div class="openrouter-key-modal__backdrop" role="presentation"></div>
+        <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="Spend breakdown">
+            <div class="openrouter-key-modal__header">
+                <div class="openrouter-key-modal__title">Spend breakdown</div>
+                <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
+            </div>
+            <div class="openrouter-key-modal__body">
+                <p class="openrouter-key-modal__message" style="margin-bottom: 10px;">Total spent: <strong>${formatUsd(spend.total)}</strong></p>
+                <div style="overflow: auto; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;">
+                    <table style="width: 100%; border-collapse: collapse; min-width: 520px;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding: 10px 8px; color: rgba(255,255,255,0.65); font-weight: 600;">Model</th>
+                                <th style="text-align: right; padding: 10px 8px; color: rgba(255,255,255,0.65); font-weight: 600;">Cost</th>
+                                <th style="text-align: right; padding: 10px 8px; color: rgba(255,255,255,0.65); font-weight: 600;">Generations</th>
+                                <th style="text-align: right; padding: 10px 8px; color: rgba(255,255,255,0.65); font-weight: 600;">Images</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="openrouter-key-modal__hint">Costs are recorded from the OpenRouter response field <code>usage</code> (USD) when present.</p>
+            </div>
+        </div>
+    `;
+
+    const close = () => overlay.classList.remove('openrouter-key-modal--active');
+    overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
+    overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
+
+    document.body.appendChild(overlay);
+}
 
 /**
  * Get current generation settings from the UI
@@ -14,160 +567,19 @@ import { getRandomPrompt } from './prompts.js';
  */
 function getGenerationSettings() {
     const modelSelect = document.getElementById('setting-model');
-    const imageSizeSelect = document.getElementById('setting-image-size');
-    const stepsInput = document.getElementById('setting-steps');
     const numImagesSelect = document.getElementById('setting-num-images');
-    const formatSelect = document.getElementById('setting-format');
-    const accelerationSelect = document.getElementById('setting-acceleration');
-    const seedInput = document.getElementById('setting-seed');
-    const safetyCheckbox = document.getElementById('setting-safety');
-    const syncCheckbox = document.getElementById('setting-sync');
-    const widthInput = document.getElementById('setting-width');
-    const heightInput = document.getElementById('setting-height');
-    // Qwen-specific elements
-    const guidanceInput = document.getElementById('setting-guidance');
-    const negativePromptInput = document.getElementById('setting-negative-prompt');
-    const turboCheckbox = document.getElementById('setting-turbo');
-    // FLUX Kontext elements
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
-    const enhancePromptCheckbox = document.getElementById('setting-enhance-prompt');
+    const resolutionSelect = document.getElementById('setting-resolution');
 
-    const model = modelSelect?.value || 'z-image-turbo';
-
-    // Get input image data URI if available (stored globally)
-    const inputImageDataUri = window.__inputImageDataUri || null;
-    const multiImageDataUris = window.__multiImageDataUris || [];
+    const model = modelSelect?.value || 'black-forest-labs/flux.2-pro';
 
     const settings = {
         model,
-        num_inference_steps: parseInt(stepsInput?.value || 30, 10),
         num_images: parseInt(numImagesSelect?.value || 2, 10),
-        output_format: formatSelect?.value || 'webp',
-        enable_safety_checker: safetyCheckbox?.checked ?? false,
-        sync_mode: syncCheckbox?.checked ?? false,
+        // OpenRouter image generation (used for Gemini via `image_config` in the backend)
+        aspect_ratio: aspectRatioSelect?.value || '1:1',
+        resolution: resolutionSelect?.value || '1K',
     };
-
-    // Model-specific settings
-    if (model === 'nano-banana-pro-edit') {
-        // Nano Banana Pro Edit - requires at least one image
-        if (multiImageDataUris.length > 0) {
-            settings.image_urls = multiImageDataUris;
-        } else if (inputImageDataUri) {
-            settings.image_urls = [inputImageDataUri];
-        }
-        settings.resolution = document.getElementById('setting-resolution')?.value || '1K';
-        settings.limit_generations = document.getElementById('setting-limit-generations')?.checked ?? false;
-        settings.enable_web_search = document.getElementById('setting-enable-web-search')?.checked ?? false;
-    } else if (model === 'fibo') {
-        // Fibo Text-to-Image settings
-        settings.guidance_scale = parseFloat(guidanceInput?.value || 5);
-        const negativePrompt = negativePromptInput?.value?.trim();
-        if (negativePrompt) {
-            settings.negative_prompt = negativePrompt;
-        }
-        // Optional reference image
-        if (inputImageDataUri) {
-            settings.image_url = inputImageDataUri;
-        }
-    } else if (model === 'wan-26-text-to-image') {
-        // Wan v2.6 Text-to-Image settings
-        const negativePrompt = negativePromptInput?.value?.trim();
-        if (negativePrompt) {
-            settings.negative_prompt = negativePrompt;
-        }
-        // Optional single reference image
-        if (inputImageDataUri) {
-            settings.image_url = inputImageDataUri;
-        }
-    } else if (model === 'wan-26-image-to-image') {
-        // Wan v2.6 Image-to-Image settings - requires 1-3 images
-        if (multiImageDataUris.length > 0) {
-            settings.image_urls = multiImageDataUris.slice(0, 3);
-        }
-        const negativePrompt = negativePromptInput?.value?.trim();
-        if (negativePrompt) {
-            settings.negative_prompt = negativePrompt;
-        }
-        settings.enhance_prompt = enhancePromptCheckbox?.checked ?? true;
-    } else if (model === 'qwen-image') {
-        // Qwen-specific settings
-        settings.guidance_scale = parseFloat(guidanceInput?.value || 2.5);
-        settings.use_turbo = turboCheckbox?.checked ?? false;
-        const negativePrompt = negativePromptInput?.value?.trim();
-        if (negativePrompt) {
-            settings.negative_prompt = negativePrompt;
-        }
-        // Qwen also supports acceleration
-        settings.acceleration = accelerationSelect?.value || 'none';
-        // Add input image if available
-        if (inputImageDataUri) {
-            settings.image_url = inputImageDataUri;
-        }
-    } else if (model === 'flux-kontext') {
-        // FLUX Kontext settings
-        settings.guidance_scale = parseFloat(guidanceInput?.value || 3.5);
-        settings.aspect_ratio = aspectRatioSelect?.value || '1:1';
-        settings.enhance_prompt = enhancePromptCheckbox?.checked ?? false;
-        settings.safety_tolerance = '5'; // More permissive safety level
-        // Input image is required for Kontext
-        if (inputImageDataUri) {
-            settings.image_url = inputImageDataUri;
-        }
-    } else if (model === 'seedream-45-edit') {
-        // Seedream 4.5 Edit settings - requires at least one image
-        if (inputImageDataUri) {
-            settings.image_urls = [inputImageDataUri];
-        } else {
-            settings.image_urls = [];
-        }
-    } else if (model === 'hidream-i1-fast') {
-        // HiDream I1 Fast settings
-        const negativePrompt = negativePromptInput?.value?.trim();
-        if (negativePrompt) {
-            settings.negative_prompt = negativePrompt;
-        }
-    } else if (model === 'hunyuan-image') {
-        // Hunyuan Image 3.0 settings
-        settings.guidance_scale = parseFloat(guidanceInput?.value || 7.5);
-        settings.enable_prompt_expansion = enhancePromptCheckbox?.checked ?? false;
-        const negativePrompt = negativePromptInput?.value?.trim();
-        if (negativePrompt) {
-            settings.negative_prompt = negativePrompt;
-        }
-    } else if (model === 'flux-dev') {
-        // FLUX.1 [dev] settings
-        settings.guidance_scale = parseFloat(guidanceInput?.value || 3.5);
-        settings.acceleration = accelerationSelect?.value || 'none';
-    } else if (model === 'flux-kontext-lora-t2i') {
-        // FLUX Kontext LoRA Text-to-Image settings
-        settings.guidance_scale = parseFloat(guidanceInput?.value || 2.5);
-        settings.acceleration = accelerationSelect?.value || 'none';
-    } else if (model === 'piflow') {
-        // Piflow settings - simple model with minimal params
-    } else if (model === 'reve') {
-        // Reve settings - uses aspect_ratio instead of image_size
-        settings.aspect_ratio = aspectRatioSelect?.value || '3:2';
-    } else {
-        // Z-Image Turbo settings
-        settings.acceleration = accelerationSelect?.value || 'none';
-    }
-
-    // Handle image size
-    const imageSizeValue = imageSizeSelect?.value || 'square_hd';
-    if (imageSizeValue === 'custom') {
-        settings.image_size = {
-            width: parseInt(widthInput?.value || 1024, 10),
-            height: parseInt(heightInput?.value || 768, 10)
-        };
-    } else {
-        settings.image_size = imageSizeValue;
-    }
-
-    // Handle seed (only include if provided)
-    const seedValue = seedInput?.value;
-    if (seedValue && seedValue.trim() !== '') {
-        settings.seed = parseInt(seedValue, 10);
-    }
 
     return settings;
 }
@@ -175,17 +587,23 @@ function getGenerationSettings() {
 /**
  * Initialize the application
  */
-function init() {
+async function init() {
+    // Wait for state to be ready (IndexedDB initialization)
+    await state.ready;
+
     // Get DOM elements
     const galleryContainer = document.getElementById('gallery');
     const emptyState = document.getElementById('empty-state');
     const promptInput = document.getElementById('prompt-input');
+    const promptImageBtn = document.getElementById('prompt-image-btn');
+    const promptImageInput = document.getElementById('prompt-image-input');
     const generateBtn = document.getElementById('generate-btn');
     const enhanceBtn = document.getElementById('enhance-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const settingsPanel = document.getElementById('settings-panel');
     const settingsClose = document.getElementById('settings-close');
     const surpriseBtn = document.getElementById('surprise-btn');
+    const clearAllBtn = document.getElementById('clear-all-btn');
 
     // Initialize gallery
     if (galleryContainer && emptyState) {
@@ -194,6 +612,9 @@ function init() {
 
     // Initialize lightbox
     initLightbox();
+
+    // Initialize sidebar
+    initSidebar();
 
     // Set up event listeners
     if (generateBtn && promptInput) {
@@ -209,6 +630,31 @@ function init() {
 
         // Auto-resize textarea
         promptInput.addEventListener('input', () => autoResizeTextarea(promptInput));
+
+        // Paste-to-attach images (clipboard)
+        promptInput.addEventListener('paste', async (e) => {
+            const items = Array.from(e.clipboardData?.items || []);
+            const imageFiles = items
+                .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+                .map((it) => it.getAsFile())
+                .filter(Boolean);
+            if (imageFiles.length > 0) {
+                e.preventDefault();
+                await addPromptImageFiles(imageFiles);
+            }
+        });
+    }
+
+    // Attach images from file picker
+    if (promptImageBtn && promptImageInput) {
+        promptImageBtn.addEventListener('click', () => {
+            promptImageInput.click();
+        });
+
+        promptImageInput.addEventListener('change', async (e) => {
+            const files = e.target?.files;
+            await addPromptImageFiles(files);
+        });
     }
 
     // Set up enhance button listener
@@ -239,13 +685,94 @@ function init() {
         });
     }
 
+    // Set up clear all button
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', handleClearAll);
+    }
+
     // Initialize settings UI interactions
     initSettingsUI();
+    initModelDropdown();
+    initNumImagesDropdown();
+    initFolderSelectorDropdown();
+
+    // Spend tracker
+    updateSpendTrackerUI();
+    const spendTracker = document.getElementById('spend-tracker');
+    if (spendTracker) {
+        spendTracker.addEventListener('click', () => openSpendBreakdownModal());
+    }
 
     // Listen for remix-image event from lightbox
     window.addEventListener('remix-image', handleRemixImage);
 
+    // Subscribe to state changes to update storage indicator
+    state.subscribe(() => updateStorageIndicator());
+
+    // Initial storage indicator update
+    updateStorageIndicator();
+
     console.log('AI Image Generator initialized');
+}
+
+/**
+ * Update the storage indicator UI
+ */
+async function updateStorageIndicator() {
+    const storageBar = document.getElementById('storage-used');
+    const storageText = document.getElementById('storage-text');
+    const imageCount = document.getElementById('image-count');
+
+    if (!storageBar && !storageText) return;
+
+    try {
+        const estimate = await state.getStorageEstimate();
+        const images = state.getImages();
+
+        if (imageCount) {
+            imageCount.textContent = `${images.length} image${images.length !== 1 ? 's' : ''}`;
+        }
+
+        if (estimate.quota > 0) {
+            const percentage = Math.min((estimate.used / estimate.quota) * 100, 100);
+
+            if (storageBar) {
+                storageBar.style.width = `${percentage}%`;
+                // Change color when storage is getting full
+                if (percentage > 80) {
+                    storageBar.classList.add('storage-indicator__used--warning');
+                } else {
+                    storageBar.classList.remove('storage-indicator__used--warning');
+                }
+            }
+
+            if (storageText) {
+                storageText.textContent = `${formatBytes(estimate.used)} / ${formatBytes(estimate.quota)}`;
+            }
+        } else if (storageText) {
+            storageText.textContent = `${images.length} image${images.length !== 1 ? 's' : ''} stored`;
+        }
+    } catch (error) {
+        console.error('Failed to update storage indicator:', error);
+        if (storageText) {
+            const images = state.getImages();
+            storageText.textContent = `${images.length} image${images.length !== 1 ? 's' : ''} stored`;
+        }
+    }
+}
+
+/**
+ * Handle clear all images button
+ */
+async function handleClearAll() {
+    const images = state.getImages();
+    if (images.length === 0) return;
+
+    const confirmed = confirm(`Are you sure you want to delete all ${images.length} images? This cannot be undone.`);
+    if (!confirmed) return;
+
+    await state.clearAll();
+    updateStorageIndicator();
 }
 
 /**
@@ -253,19 +780,11 @@ function init() {
  */
 function initSettingsUI() {
     const modelSelect = document.getElementById('setting-model');
-    const imageSizeSelect = document.getElementById('setting-image-size');
-    const customSizeGroup = document.getElementById('custom-size-group');
-    const stepsInput = document.getElementById('setting-steps');
-    const stepsValue = document.getElementById('steps-value');
-    const guidanceInput = document.getElementById('setting-guidance');
-    const guidanceValue = document.getElementById('guidance-value');
-
-    // Model-specific settings groups
-    const stepsGroup = document.getElementById('steps-group');
-    const guidanceGroup = document.getElementById('guidance-group');
-    const negativePromptGroup = document.getElementById('negative-prompt-group');
-    const turboGroup = document.getElementById('turbo-group');
-    const accelerationGroup = document.getElementById('acceleration-group');
+    const openRouterKeyInput = document.getElementById('setting-openrouter-key');
+    const openRouterKeyShow = document.getElementById('setting-openrouter-key-show');
+    const openRouterSaveBtn = document.getElementById('setting-openrouter-save');
+    const openRouterTestBtn = document.getElementById('setting-openrouter-test');
+    const openRouterTestStatus = document.getElementById('setting-openrouter-test-status');
 
     // Toggle settings based on model selection
     if (modelSelect) {
@@ -274,36 +793,83 @@ function initSettingsUI() {
         });
     }
 
-    // Toggle custom size fields
-    if (imageSizeSelect && customSizeGroup) {
-        imageSizeSelect.addEventListener('change', () => {
-            if (imageSizeSelect.value === 'custom') {
-                customSizeGroup.classList.remove('settings-group--hidden');
-            } else {
-                customSizeGroup.classList.add('settings-group--hidden');
+    // Load OpenRouter key into the settings input and persist changes to localStorage
+    if (openRouterKeyInput) {
+        try {
+            openRouterKeyInput.value = localStorage.getItem('openrouter_api_key') || '';
+        } catch {
+            openRouterKeyInput.value = '';
+        }
+
+        openRouterKeyInput.addEventListener('input', () => {
+            try {
+                localStorage.setItem('openrouter_api_key', openRouterKeyInput.value.trim());
+            } catch {
+                // ignore storage failures (private mode, disabled storage, etc.)
             }
         });
     }
 
-    // Update steps value display
-    if (stepsInput && stepsValue) {
-        stepsInput.addEventListener('input', () => {
-            stepsValue.textContent = stepsInput.value;
+    if (openRouterKeyShow && openRouterKeyInput) {
+        openRouterKeyShow.addEventListener('change', () => {
+            openRouterKeyInput.type = openRouterKeyShow.checked ? 'text' : 'password';
         });
     }
 
-    // Update guidance value display
-    if (guidanceInput && guidanceValue) {
-        guidanceInput.addEventListener('input', () => {
-            guidanceValue.textContent = guidanceInput.value;
+    // Save API key button (even though we also auto-save on input, users expect an explicit action)
+    if (openRouterSaveBtn && openRouterKeyInput) {
+        openRouterSaveBtn.addEventListener('click', () => {
+            try {
+                localStorage.setItem('openrouter_api_key', openRouterKeyInput.value.trim());
+                if (openRouterTestStatus) openRouterTestStatus.textContent = 'Saved';
+                showSuccess('API key saved.');
+            } catch {
+                showError('Failed to save API key (storage unavailable).');
+            }
         });
     }
 
-    // Initialize image upload handlers
-    initImageUpload();
+    // Test API key button
+    if (openRouterTestBtn) {
+        openRouterTestBtn.addEventListener('click', async () => {
+            if (openRouterTestBtn.disabled) return;
 
-    // Initialize multi-image upload handlers for Wan v2.6 image-to-image
-    initMultiImageUpload();
+            if (openRouterTestStatus) openRouterTestStatus.textContent = 'Testing...';
+            openRouterTestBtn.disabled = true;
+
+            try {
+                await testOpenRouterKey();
+                if (openRouterTestStatus) openRouterTestStatus.textContent = 'Key works';
+                showSuccess('OpenRouter API key is valid.');
+            } catch (error) {
+                if (openRouterTestStatus) openRouterTestStatus.textContent = '';
+                if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
+                    showOpenRouterApiKeyPopup(error?.help);
+                    return;
+                }
+                showError(error?.message || 'API key test failed.');
+            } finally {
+                openRouterTestBtn.disabled = false;
+            }
+        });
+    }
+
+    // Apply initial visibility state for the currently selected model
+    if (modelSelect) {
+        updateSettingsForModel(modelSelect.value);
+    }
+
+    // Photo visibility mode
+    const photoVisibilitySelect = document.getElementById('setting-photo-visibility');
+    if (photoVisibilitySelect) {
+        // Load saved value
+        photoVisibilitySelect.value = state.getPhotoVisibilityMode();
+
+        // Save on change
+        photoVisibilitySelect.addEventListener('change', () => {
+            state.setPhotoVisibilityMode(photoVisibilitySelect.value);
+        });
+    }
 }
 
 /**
@@ -571,568 +1137,16 @@ function removeMultiImagePreview(index, container) {
  * @param {string} model - The selected model ID
  */
 function updateSettingsForModel(model) {
-    const stepsGroup = document.getElementById('steps-group');
-    const stepsInput = document.getElementById('setting-steps');
-    const stepsValue = document.getElementById('steps-value');
-    const guidanceGroup = document.getElementById('guidance-group');
-    const guidanceInput = document.getElementById('setting-guidance');
-    const guidanceValue = document.getElementById('guidance-value');
-    const negativePromptGroup = document.getElementById('negative-prompt-group');
-    const turboGroup = document.getElementById('turbo-group');
-    const accelerationGroup = document.getElementById('acceleration-group');
-    const formatSelect = document.getElementById('setting-format');
-    const inputImageGroup = document.getElementById('input-image-group');
-    const multiImageGroup = document.getElementById('multi-image-group');
-    const inputImageHint = document.getElementById('input-image-hint');
-    const imageSizeGroup = document.getElementById('image-size-group');
-    const aspectRatioGroup = document.getElementById('aspect-ratio-group');
-    const enhancePromptGroup = document.getElementById('enhance-prompt-group');
-    const safetyCheckbox = document.getElementById('setting-safety');
     const resolutionGroup = document.getElementById('resolution-group');
-    const webSearchGroup = document.getElementById('web-search-group');
-    const limitGenerationsGroup = document.getElementById('limit-generations-group');
+    const aspectRatioGroup = document.getElementById('aspect-ratio-group');
 
-    if (model === 'wan-26-text-to-image') {
-        // Wan v2.6 Text-to-Image settings
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.remove('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.remove('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.add('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update hint for optional single reference image
-        if (inputImageHint) {
-            inputImageHint.textContent = 'Optional: Upload 0-1 reference image for style guidance (max 10MB, 384-5000px)';
-        }
-
-        // Update format options (Wan outputs PNG)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'png';
-                }
-            }
-        }
-
-        // Default to lowest safety
-        if (safetyCheckbox) {
-            safetyCheckbox.checked = false;
-        }
-    } else if (model === 'nano-banana-pro-edit') {
-        // Nano Banana Pro Edit - image editing model
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.remove('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.add('settings-group--hidden');
+    const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
+    if (isGemini) {
         aspectRatioGroup?.classList.remove('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.add('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
         resolutionGroup?.classList.remove('settings-group--hidden');
-        webSearchGroup?.classList.remove('settings-group--hidden');
-        limitGenerationsGroup?.classList.remove('settings-group--hidden');
-
-        // Update format options (supports jpeg, png, webp)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) webpOption.disabled = false;
-        }
-
-        // Default to lowest safety
-        if (safetyCheckbox) {
-            safetyCheckbox.checked = false;
-        }
-    } else if (model === 'fibo') {
-        // Fibo - text-to-image with licensed data
-        guidanceGroup?.classList.remove('settings-group--hidden');
-        negativePromptGroup?.classList.remove('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.remove('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.add('settings-group--hidden');
-        aspectRatioGroup?.classList.remove('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update hint for optional reference image
-        if (inputImageHint) {
-            inputImageHint.textContent = 'Optional: Upload a reference image for style guidance';
-        }
-
-        // Update guidance scale for Fibo (default 5)
-        if (guidanceInput && guidanceValue) {
-            guidanceInput.value = '5';
-            guidanceValue.textContent = '5';
-        }
-
-        // Update steps range for Fibo (default 50)
-        if (stepsInput) {
-            stepsInput.max = '100';
-            stepsInput.value = '50';
-            if (stepsValue) stepsValue.textContent = '50';
-        }
-
-        // Update format options (supports all)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) webpOption.disabled = false;
-        }
-
-        // Default to lowest safety
-        if (safetyCheckbox) {
-            safetyCheckbox.checked = false;
-        }
-    } else if (model === 'wan-26-image-to-image') {
-        // Wan v2.6 Image-to-Image settings
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.remove('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.remove('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.remove('settings-group--hidden');
-        stepsGroup?.classList.add('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update format options (Wan outputs PNG)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'png';
-                }
-            }
-        }
-
-        // Default to lowest safety and enable prompt expansion
-        if (safetyCheckbox) {
-            safetyCheckbox.checked = false;
-        }
-        const enhancePromptCheckbox = document.getElementById('setting-enhance-prompt');
-        if (enhancePromptCheckbox) {
-            enhancePromptCheckbox.checked = true;
-        }
-    } else if (model === 'qwen-image') {
-        // Show Qwen-specific settings
-        guidanceGroup?.classList.remove('settings-group--hidden');
-        negativePromptGroup?.classList.remove('settings-group--hidden');
-        turboGroup?.classList.remove('settings-group--hidden');
-        inputImageGroup?.classList.remove('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.remove('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update hint for optional image
-        if (inputImageHint) {
-            inputImageHint.textContent = 'Optional: Upload an image to edit with your prompt';
-        }
-
-        // Update guidance scale for Qwen (default 2.5)
-        if (guidanceInput && guidanceValue) {
-            guidanceInput.value = '2.5';
-            guidanceValue.textContent = '2.5';
-        }
-
-        // Update steps range for Qwen (default 30, max higher)
-        if (stepsInput) {
-            stepsInput.max = '50';
-            if (parseInt(stepsInput.value) > 50) {
-                stepsInput.value = '30';
-                if (stepsValue) stepsValue.textContent = '30';
-            }
-        }
-
-        // Update format options (Qwen only supports png/jpeg)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'png';
-                }
-            }
-        }
-    } else if (model === 'flux-kontext') {
-        // Show FLUX Kontext settings
-        guidanceGroup?.classList.remove('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.remove('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.add('settings-group--hidden');
-        aspectRatioGroup?.classList.remove('settings-group--hidden');
-        enhancePromptGroup?.classList.remove('settings-group--hidden');
-        stepsGroup?.classList.add('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update hint for required image
-        if (inputImageHint) {
-            inputImageHint.textContent = 'Required: Upload an image to edit';
-        }
-
-        // Update guidance scale for Kontext (default 3.5)
-        if (guidanceInput && guidanceValue) {
-            guidanceInput.value = '3.5';
-            guidanceValue.textContent = '3.5';
-        }
-
-        // Update format options (Kontext only supports jpeg/png)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'jpeg';
-                }
-            }
-        }
-    } else if (model === 'hidream-i1-fast') {
-        // Show HiDream I1 Fast settings
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.remove('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update steps range for HiDream (default 50 for best quality)
-        if (stepsInput) {
-            stepsInput.max = '50';
-            stepsInput.value = '50';
-            if (stepsValue) stepsValue.textContent = '50';
-        }
-
-        // Update format options (HiDream only supports jpeg/png)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'jpeg';
-                }
-            }
-        }
-    } else if (model === 'hunyuan-image') {
-        // Show Hunyuan Image 3.0 settings
-        guidanceGroup?.classList.remove('settings-group--hidden');
-        negativePromptGroup?.classList.remove('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.remove('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update guidance scale for Hunyuan (default 7.5)
-        if (guidanceInput && guidanceValue) {
-            guidanceInput.value = '7.5';
-            guidanceValue.textContent = '7.5';
-        }
-
-        // Update steps range for Hunyuan (default 28)
-        if (stepsInput) {
-            stepsInput.max = '50';
-            stepsInput.value = '28';
-            if (stepsValue) stepsValue.textContent = '28';
-        }
-
-        // Update format options (Hunyuan only supports jpeg/png)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'png';
-                }
-            }
-        }
-    } else if (model === 'flux-dev') {
-        // Show FLUX.1 [dev] settings
-        guidanceGroup?.classList.remove('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.remove('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update guidance scale for FLUX.1 [dev] (default 3.5)
-        if (guidanceInput && guidanceValue) {
-            guidanceInput.value = '3.5';
-            guidanceValue.textContent = '3.5';
-        }
-
-        // Update steps range for FLUX.1 [dev] (default 28, max 50)
-        if (stepsInput) {
-            stepsInput.max = '50';
-            stepsInput.value = '50';
-            if (stepsValue) stepsValue.textContent = '50';
-        }
-
-        // Update format options (FLUX.1 [dev] only supports jpeg/png)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'jpeg';
-                }
-            }
-        }
-    } else if (model === 'flux-kontext-lora-t2i') {
-        // Show FLUX Kontext LoRA Text-to-Image settings
-        guidanceGroup?.classList.remove('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.remove('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update guidance scale for FLUX Kontext LoRA T2I (default 2.5)
-        if (guidanceInput && guidanceValue) {
-            guidanceInput.value = '2.5';
-            guidanceValue.textContent = '2.5';
-        }
-
-        // Update steps range for FLUX Kontext LoRA T2I (default 30, max 30)
-        if (stepsInput) {
-            stepsInput.max = '30';
-            stepsInput.value = '30';
-            if (stepsValue) stepsValue.textContent = '30';
-        }
-
-        // Update format options (FLUX Kontext LoRA T2I only supports jpeg/png)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'png';
-                }
-            }
-        }
-    } else if (model === 'piflow') {
-        // Show Piflow settings - minimal options
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update steps range for Piflow (default 8, max 8)
-        if (stepsInput) {
-            stepsInput.max = '8';
-            stepsInput.value = '8';
-            if (stepsValue) stepsValue.textContent = '8';
-        }
-
-        // Update format options (Piflow only supports jpeg/png)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = true;
-                if (formatSelect.value === 'webp') {
-                    formatSelect.value = 'jpeg';
-                }
-            }
-        }
-    } else if (model === 'reve') {
-        // Show Reve settings - uses aspect ratio, no steps
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.add('settings-group--hidden');
-        aspectRatioGroup?.classList.remove('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.add('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Update format options (Reve supports all formats including webp)
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = false;
-            }
-        }
-    } else if (model === 'seedream-45') {
-        // Show Seedream 4.5 settings - simple text-to-image
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Keep steps within default range
-        if (stepsInput) {
-            stepsInput.max = '30';
-            if (parseInt(stepsInput.value, 10) > 30) {
-                stepsInput.value = '30';
-                if (stepsValue) stepsValue.textContent = '30';
-            }
-        }
-
-        // Allow all formats
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = false;
-            }
-        }
-
-        // Default to lowest safety for this model
-        if (safetyCheckbox) {
-            safetyCheckbox.checked = false;
-        }
-    } else if (model === 'seedream-45-edit') {
-        // Show Seedream 4.5 Edit settings - image-to-image editing
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.remove('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.add('settings-group--hidden');
-        resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Require at least one image; update hint
-        if (inputImageHint) {
-            inputImageHint.textContent = 'Required: Upload at least one image (supports 1-10)';
-        }
-
-        // Keep steps within default range
-        if (stepsInput) {
-            stepsInput.max = '30';
-            if (parseInt(stepsInput.value, 10) > 30) {
-                stepsInput.value = '30';
-                if (stepsValue) stepsValue.textContent = '30';
-            }
-        }
-
-        // Allow all formats
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = false;
-            }
-        }
-
-        // Default to lowest safety for this model
-        if (safetyCheckbox) {
-            safetyCheckbox.checked = false;
-        }
     } else {
-        // Show Z-Image Turbo settings (default)
-        guidanceGroup?.classList.add('settings-group--hidden');
-        negativePromptGroup?.classList.add('settings-group--hidden');
-        turboGroup?.classList.add('settings-group--hidden');
-        inputImageGroup?.classList.add('settings-group--hidden');
-        multiImageGroup?.classList.add('settings-group--hidden');
-        imageSizeGroup?.classList.remove('settings-group--hidden');
         aspectRatioGroup?.classList.add('settings-group--hidden');
-        enhancePromptGroup?.classList.add('settings-group--hidden');
-        stepsGroup?.classList.remove('settings-group--hidden');
-        accelerationGroup?.classList.remove('settings-group--hidden');
         resolutionGroup?.classList.add('settings-group--hidden');
-        webSearchGroup?.classList.add('settings-group--hidden');
-        limitGenerationsGroup?.classList.add('settings-group--hidden');
-
-        // Reset steps range for Z-Image Turbo
-        if (stepsInput) {
-            stepsInput.max = '30';
-            if (parseInt(stepsInput.value) > 30) {
-                stepsInput.value = '30';
-                if (stepsValue) stepsValue.textContent = '30';
-            }
-        }
-
-        // Re-enable webp format
-        if (formatSelect) {
-            const webpOption = formatSelect.querySelector('option[value="webp"]');
-            if (webpOption) {
-                webpOption.disabled = false;
-            }
-        }
     }
 }
 
@@ -1185,16 +1199,6 @@ async function handleGenerate(input, button) {
     const settings = getGenerationSettings();
     const numImages = settings.num_images;
 
-    // Validate required inputs for specific models
-    if (settings.model === 'flux-kontext' && !settings.image_url) {
-        showError('FLUX Kontext requires an input image.');
-        return;
-    }
-    if (settings.model === 'seedream-45-edit' && (!settings.image_urls || settings.image_urls.length === 0)) {
-        showError('Seedream 4.5 Edit requires at least one input image.');
-        return;
-    }
-
     // Disable input while generating
     setLoading(input, button, true);
 
@@ -1204,16 +1208,28 @@ async function handleGenerate(input, button) {
     }
 
     try {
-        const response = await generateImage(prompt, settings);
+        const requestSettings = {
+            ...settings,
+            ...(promptImageDataUrls.length > 0
+                ? { image_urls: promptImageDataUrls.slice(0, PROMPT_ATTACHMENTS_MAX) }
+                : {}),
+        };
+
+        const response = await generateImage(prompt, requestSettings);
 
         // Always remove all placeholders first
         removeAllPlaceholders();
 
         if (response.images && response.images.length > 0) {
+            recordSpend(response.meta, response.images.length);
             // Create storable settings (exclude large data URIs to prevent localStorage overflow)
             const storableSettings = { ...settings };
             delete storableSettings.image_url;
             delete storableSettings.image_urls;
+
+            // Get selected folder from folder selector (if available)
+            const selectedFolderInput = document.getElementById('selected-folder');
+            const folderId = selectedFolderInput?.value || null;
 
             // Add each generated image to state with settings for remix
             response.images.forEach((image) => {
@@ -1222,7 +1238,13 @@ async function handleGenerate(input, button) {
                     url: image.url,
                     prompt: prompt,
                     createdAt: Date.now(),
-                    settings: storableSettings
+                    settings: storableSettings,
+                    folderId: folderId,
+                    generation: {
+                        model: image.model || null,
+                        cost: image.cost || 0,
+                        provider: image.provider || null
+                    }
                 });
             });
 
@@ -1230,18 +1252,18 @@ async function handleGenerate(input, button) {
             input.value = '';
             autoResizeTextarea(input);
 
-            // Clear the image upload preview
-            clearImageUpload(
-                document.getElementById('setting-input-image'),
-                document.getElementById('image-upload-label'),
-                document.getElementById('image-preview'),
-                document.getElementById('image-preview-img')
-            );
+            // Clear prompt attachments after a successful generation
+            clearPromptAttachments();
+
         }
     } catch (error) {
         console.error('Generation failed:', error);
         // Remove all placeholders on error
         removeAllPlaceholders();
+        if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
+            showOpenRouterApiKeyPopup(error?.help);
+            return;
+        }
         showError(error.message || 'Failed to generate image. Please try again.');
     } finally {
         setLoading(input, button, false);
@@ -1279,11 +1301,137 @@ async function handleEnhance(input, button) {
         input.focus();
     } catch (error) {
         console.error('Enhancement failed:', error);
+        if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
+            showOpenRouterApiKeyPopup(error?.help);
+            return;
+        }
         showError(error.message || 'Failed to enhance prompt. Please try again.');
     } finally {
         setEnhanceLoading(button, false);
         input.disabled = false;
     }
+}
+
+/**
+ * Show a popup explaining how to get an OpenRouter API key, and focus the Settings key input.
+ * @param {{ message?: string, url?: string } | undefined} help
+ */
+function showOpenRouterApiKeyPopup(help) {
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsPanel = document.getElementById('settings-panel');
+
+    if (settingsBtn && settingsPanel) {
+        openSettings(settingsBtn, settingsPanel);
+    }
+
+    const keyInput = document.getElementById('setting-openrouter-key');
+    if (keyInput) {
+        keyInput.focus();
+        keyInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
+    const url = help?.url || 'https://openrouter.ai/keys';
+    const message =
+        help?.message ||
+        'You need an OpenRouter API key to use this app. Create one at openrouter.ai/keys, then paste it into Settings.';
+
+    // Create a lightweight modal overlay (only one instance).
+    const existing = document.getElementById('openrouter-key-modal');
+    if (existing) {
+        existing.querySelector('.openrouter-key-modal__message').textContent = message;
+        existing.querySelector('.openrouter-key-modal__link').href = url;
+        existing.classList.add('openrouter-key-modal--active');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'openrouter-key-modal';
+    overlay.className = 'openrouter-key-modal openrouter-key-modal--active';
+    overlay.innerHTML = `
+        <div class="openrouter-key-modal__backdrop" role="presentation"></div>
+        <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="OpenRouter API key required">
+            <div class="openrouter-key-modal__header">
+                <div class="openrouter-key-modal__title">OpenRouter API key required</div>
+                <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
+            </div>
+            <div class="openrouter-key-modal__body">
+                <p class="openrouter-key-modal__message"></p>
+                <div class="openrouter-key-modal__actions">
+                    <a class="openrouter-key-modal__link" target="_blank" rel="noopener noreferrer">Get API key</a>
+                    <button type="button" class="openrouter-key-modal__ok">I pasted it</button>
+                </div>
+                <p class="openrouter-key-modal__hint">Your key is stored locally in your browser and sent with each request.</p>
+            </div>
+        </div>
+    `;
+
+    const style = document.createElement('style');
+    style.textContent = `
+        .openrouter-key-modal { position: fixed; inset: 0; z-index: 10000; display: none; }
+        .openrouter-key-modal--active { display: block; }
+        .openrouter-key-modal__backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+        .openrouter-key-modal__card {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: min(520px, calc(100vw - 32px));
+            background: #0f0f12;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+            color: rgba(255,255,255,0.92);
+            padding: 16px;
+        }
+        .openrouter-key-modal__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .openrouter-key-modal__title { font-weight: 700; font-size: 16px; }
+        .openrouter-key-modal__close {
+            border: none;
+            background: transparent;
+            color: rgba(255,255,255,0.75);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+        .openrouter-key-modal__body { margin-top: 10px; }
+        .openrouter-key-modal__message { margin: 0 0 12px 0; line-height: 1.35; color: rgba(255,255,255,0.85); }
+        .openrouter-key-modal__actions { display: flex; gap: 10px; align-items: center; }
+        .openrouter-key-modal__link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.16);
+            color: rgba(255,255,255,0.92);
+            text-decoration: none;
+            background: rgba(255,255,255,0.06);
+        }
+        .openrouter-key-modal__ok {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            color: #0b0b0d;
+            background: #fbbf24;
+            font-weight: 700;
+        }
+        .openrouter-key-modal__hint { margin: 12px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.65); }
+    `;
+
+    overlay.querySelector('.openrouter-key-modal__message').textContent = message;
+    overlay.querySelector('.openrouter-key-modal__link').href = url;
+
+    const close = () => overlay.classList.remove('openrouter-key-modal--active');
+    overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
+    overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
+    overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
+
+    document.head.appendChild(style);
+    document.body.appendChild(overlay);
 }
 
 /**
@@ -1363,70 +1511,27 @@ function restoreSettings(settings) {
     const modelSelect = document.getElementById('setting-model');
     if (modelSelect && settings.model) {
         modelSelect.value = settings.model;
+        syncModelDropdownUI();
         updateSettingsForModel(settings.model);
     }
 
-    // Image size
-    const imageSizeSelect = document.getElementById('setting-image-size');
-    const customSizeGroup = document.getElementById('custom-size-group');
-    const widthInput = document.getElementById('setting-width');
-    const heightInput = document.getElementById('setting-height');
-
-    if (imageSizeSelect && settings.image_size) {
-        if (typeof settings.image_size === 'object') {
-            // Custom size
-            imageSizeSelect.value = 'custom';
-            if (customSizeGroup) customSizeGroup.classList.remove('settings-group--hidden');
-            if (widthInput) widthInput.value = settings.image_size.width || 1024;
-            if (heightInput) heightInput.value = settings.image_size.height || 768;
-        } else {
-            imageSizeSelect.value = settings.image_size;
-            if (customSizeGroup) customSizeGroup.classList.add('settings-group--hidden');
-        }
+    // Aspect ratio (OpenRouter / Gemini image_config)
+    const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
+    if (aspectRatioSelect && settings.aspect_ratio) {
+        aspectRatioSelect.value = settings.aspect_ratio;
     }
 
-    // Inference steps
-    const stepsInput = document.getElementById('setting-steps');
-    const stepsValue = document.getElementById('steps-value');
-    if (stepsInput && settings.num_inference_steps !== undefined) {
-        stepsInput.value = settings.num_inference_steps;
-        if (stepsValue) stepsValue.textContent = settings.num_inference_steps;
+    // Gemini image size (1K/2K/4K)
+    const resolutionSelect = document.getElementById('setting-resolution');
+    if (resolutionSelect && settings.resolution) {
+        resolutionSelect.value = settings.resolution;
     }
 
     // Number of images
     const numImagesSelect = document.getElementById('setting-num-images');
     if (numImagesSelect && settings.num_images !== undefined) {
         numImagesSelect.value = settings.num_images;
-    }
-
-    // Output format
-    const formatSelect = document.getElementById('setting-format');
-    if (formatSelect && settings.output_format) {
-        formatSelect.value = settings.output_format;
-    }
-
-    // Acceleration
-    const accelerationSelect = document.getElementById('setting-acceleration');
-    if (accelerationSelect && settings.acceleration) {
-        accelerationSelect.value = settings.acceleration;
-    }
-
-    // Seed
-    const seedInput = document.getElementById('setting-seed');
-    if (seedInput) {
-        seedInput.value = settings.seed !== undefined ? settings.seed : '';
-    }
-
-    // Safety checker
-    const safetyCheckbox = document.getElementById('setting-safety');
-    if (safetyCheckbox && settings.enable_safety_checker !== undefined) {
-        safetyCheckbox.checked = settings.enable_safety_checker;
-    }
-
-    // Sync mode
-    const syncCheckbox = document.getElementById('setting-sync');
-    if (syncCheckbox && settings.sync_mode !== undefined) {
-        syncCheckbox.checked = settings.sync_mode;
+        syncNumImagesDropdownUI();
     }
 }
 
@@ -1542,6 +1647,36 @@ function showError(message) {
         toast.style.animation = 'fadeOut 0.3s ease forwards';
         setTimeout(() => toast.remove(), 300);
     }, 4000);
+}
+
+/**
+ * Show success message
+ * @param {string} message
+ */
+function showSuccess(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast toast--success';
+    toast.textContent = message;
+    toast.style.cssText = `
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #22c55e;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 9999;
+    animation: fadeInUp 0.3s ease;
+  `;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 2500);
 }
 
 // Add shake animation styles

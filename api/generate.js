@@ -2,7 +2,7 @@ module.exports = async function handler(req, res) {
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key');
 
     // Handle preflight request
     if (req.method === 'OPTIONS') {
@@ -16,26 +16,13 @@ module.exports = async function handler(req, res) {
 
     const {
         prompt,
-        model = 'z-image-turbo',
-        image_size = 'landscape_4_3',
-        num_inference_steps = 30,
+        model = 'black-forest-labs/flux.2-pro',
         num_images = 1,
-        max_images,
-        seed,
-        output_format = 'png',
-        enable_safety_checker = false,
-        sync_mode = false,
-        acceleration = 'none',
-        // Qwen-specific parameters
-        guidance_scale = 2.5,
-        negative_prompt = '',
-        use_turbo = false,
-        image_url = null,
-        image_urls = [],
-        // FLUX Kontext parameters
-        aspect_ratio = '1:1',
-        safety_tolerance = '2',
-        enhance_prompt = false
+        // UI sends these; only Gemini models currently support image_config options reliably
+        aspect_ratio,
+        image_size, // legacy "preset" from UI; used to derive aspect ratio if aspect_ratio isn't set
+        resolution, // legacy UI field; repurposed as Gemini image_config.image_size (1K/2K/4K)
+        image_urls = [], // optional image inputs (data URLs) for all models
     } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
@@ -48,401 +35,292 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: '`num_images` must be an integer between 1 and 4' });
     }
 
-    const FAL_KEY = process.env.FAL_KEY;
+    const OPENROUTER_API_KEY =
+        req.headers['x-openrouter-api-key'] ||
+        req.headers['x-openrouter-api_key'];
 
-    if (!FAL_KEY) {
-        return res.status(500).json({ error: 'FAL_KEY environment variable is not configured' });
+    if (!OPENROUTER_API_KEY) {
+        return res.status(401).json({
+            code: 'OPENROUTER_API_KEY_REQUIRED',
+            error: 'OpenRouter API key required',
+            help: {
+                message: 'Open Settings → paste your OpenRouter API key. Create one at openrouter.ai/keys.',
+                url: 'https://openrouter.ai/keys'
+            }
+        });
     }
 
-    // Determine API endpoint and build payload based on model
-    let apiEndpoint;
-    let payload;
+    const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-    // Normalize image URLs for models that require them
-    const normalizedImageUrls = Array.isArray(image_urls)
-        ? image_urls.filter((url) => typeof url === 'string' && url.trim() !== '')
+    const isGeminiModel = typeof model === 'string' && model.startsWith('google/gemini-');
+
+    const imageSizePresetToAspectRatio = (preset) => {
+        switch (preset) {
+            case 'portrait_4_3':
+                return '3:4';
+            case 'portrait_16_9':
+                return '9:16';
+            case 'landscape_4_3':
+                return '4:3';
+            case 'landscape_16_9':
+                return '16:9';
+            case 'square':
+            case 'square_hd':
+            default:
+                return '1:1';
+        }
+    };
+
+    const normalizedAspectRatio =
+        typeof aspect_ratio === 'string' && aspect_ratio.trim() !== ''
+            ? aspect_ratio.trim()
+            : imageSizePresetToAspectRatio(image_size);
+
+    const normalizedInputImages = Array.isArray(image_urls)
+        ? image_urls
+            .filter((u) => typeof u === 'string' && u.startsWith('data:image/'))
+            .slice(0, 3)
         : [];
-    if (image_url && typeof image_url === 'string' && image_url.trim() !== '') {
-        normalizedImageUrls.push(image_url.trim());
-    }
 
-    if (model === 'qwen-image') {
-        // Qwen Image model
-        apiEndpoint = 'https://fal.run/fal-ai/qwen-image';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_inference_steps: parseInt(num_inference_steps, 10),
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker,
-            output_format: output_format === 'webp' ? 'png' : output_format, // Qwen only supports png/jpeg
-            sync_mode,
-            guidance_scale: parseFloat(guidance_scale),
-            use_turbo,
+    const buildPayload = () => {
+        /** @type {any} */
+        const userContent =
+            normalizedInputImages.length > 0
+                ? [
+                    { type: 'text', text: prompt.trim() },
+                    ...normalizedInputImages.map((url) => ({
+                        type: 'image_url',
+                        image_url: { url },
+                    })),
+                ]
+                : prompt.trim();
+
+        /** @type {any} */
+        const payload = {
+            model,
+            messages: [
+                {
+                    role: 'user',
+                    content: userContent,
+                },
+            ],
+            modalities: ['image', 'text'],
+            stream: false,
         };
 
-        // Add negative prompt if provided
-        if (negative_prompt && negative_prompt.trim() !== '') {
-            payload.negative_prompt = negative_prompt.trim();
+        if (isGeminiModel) {
+            payload.image_config = {
+                aspect_ratio: normalizedAspectRatio,
+            };
+
+            if (typeof resolution === 'string' && ['1K', '2K', '4K'].includes(resolution)) {
+                payload.image_config.image_size = resolution;
+            }
         }
 
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
+        return payload;
+    };
 
-        // Add acceleration if provided (Qwen supports none, regular, high)
-        if (acceleration && acceleration !== 'none') {
-            payload.acceleration = acceleration;
-        }
+    const extractImageUrls = (openRouterJson) => {
+        const message = openRouterJson?.choices?.[0]?.message;
+        const images = message?.images;
+        if (!Array.isArray(images)) return [];
+        return images
+            .map((img) => img?.image_url?.url || img?.imageUrl?.url)
+            .filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
+    };
 
-        // Add input image URL if provided (for image editing)
-        if (image_url) {
-            payload.image_url = image_url;
-        }
-    } else if (model === 'flux-kontext') {
-        // FLUX.1 Kontext [pro] model - requires image_url
-        if (!image_url) {
-            return res.status(400).json({ error: 'FLUX Kontext requires an input image' });
-        }
+    const extractUsageNumber = (openRouterJson) => {
+        // OpenRouter returns cost in usage.total_cost (in USD)
+        if (typeof openRouterJson?.usage?.total_cost === 'number') return openRouterJson.usage.total_cost;
+        // Fallback: some responses may have usage as a direct number
+        if (typeof openRouterJson?.usage === 'number') return openRouterJson.usage;
+        return 0;
+    };
 
-        apiEndpoint = 'https://fal.run/fal-ai/flux-pro/kontext';
-        payload = {
-            prompt: prompt.trim(),
-            image_url,
-            num_images: parseInt(num_images, 10),
-            output_format: output_format === 'webp' ? 'jpeg' : output_format, // Kontext only supports jpeg/png
-            sync_mode,
-            guidance_scale: parseFloat(guidance_scale),
-            safety_tolerance: safety_tolerance,
-            enhance_prompt,
+    const fetchGenerationCost = async (generationId, retries = 3) => {
+        if (!generationId) return 0;
+
+        // Small delay to allow OpenRouter to calculate cost
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        for (let attempt = 0; attempt < retries; attempt++) {
+            try {
+                const response = await fetch(`https://openrouter.ai/api/v1/generation?id=${generationId}`, {
+                    headers: {
+                        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+                    },
+                });
+
+                if (!response.ok) {
+                    console.error(`Generation cost fetch failed (attempt ${attempt + 1}):`, response.status);
+                    if (attempt < retries - 1) {
+                        await new Promise((resolve) => setTimeout(resolve, 500));
+                        continue;
+                    }
+                    return 0;
+                }
+
+                const stats = await response.json();
+                console.log(`Generation stats for ${generationId}:`, JSON.stringify(stats, null, 2));
+
+                // OpenRouter returns cost in the `usage` field (in USD) - check both wrapped and unwrapped
+                const data = stats?.data || stats;
+                const cost = data?.usage ?? data?.total_cost ?? data?.cost ?? 0;
+                console.log(`Extracted cost: ${cost}`);
+
+                if (typeof cost === 'number' && cost > 0) {
+                    return cost;
+                }
+
+                // If cost is still 0, might need to wait for calculation
+                if (attempt < retries - 1) {
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    continue;
+                }
+
+                return typeof cost === 'number' ? cost : parseFloat(cost || 0);
+            } catch (e) {
+                console.error(`Error fetching generation cost (attempt ${attempt + 1}):`, e);
+                if (attempt < retries - 1) {
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    continue;
+                }
+                return 0;
+            }
+        }
+        return 0;
+    };
+
+    const extractUsageMeta = (openRouterJson) => {
+        return {
+            model: openRouterJson?.model || model,
+            provider_name: openRouterJson?.provider_name || openRouterJson?.provider || null,
+            generation_id: openRouterJson?.generation_id || openRouterJson?.id || null,
+            created_at: openRouterJson?.created_at || null,
+            usage: extractUsageNumber(openRouterJson),
         };
+    };
 
-        // Add aspect ratio if provided
-        if (aspect_ratio) {
-            payload.aspect_ratio = aspect_ratio;
-        }
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    } else if (model === 'hidream-i1-fast') {
-        // HiDream I1 Fast model
-        apiEndpoint = 'https://fal.run/fal-ai/hidream-i1-fast';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_inference_steps: parseInt(num_inference_steps, 10) || 50,
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker: false, // Disabled by default for HiDream
-            output_format: output_format === 'webp' ? 'jpeg' : output_format, // HiDream only supports jpeg/png
-            sync_mode,
-        };
-
-        // Add negative prompt if provided
-        if (negative_prompt && negative_prompt.trim() !== '') {
-            payload.negative_prompt = negative_prompt.trim();
-        }
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    } else if (model === 'hunyuan-image') {
-        // Hunyuan Image 3.0 model
-        apiEndpoint = 'https://fal.run/fal-ai/hunyuan-image/v3/text-to-image';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_inference_steps: parseInt(num_inference_steps, 10) || 28,
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker: false, // Disabled by default for Hunyuan
-            output_format: output_format === 'webp' ? 'png' : output_format, // Hunyuan only supports jpeg/png
-            sync_mode,
-            guidance_scale: parseFloat(guidance_scale) || 7.5,
-        };
-
-        // Add negative prompt if provided
-        if (negative_prompt && negative_prompt.trim() !== '') {
-            payload.negative_prompt = negative_prompt.trim();
-        }
-
-        // Add enable_prompt_expansion if provided
-        if (enhance_prompt !== undefined) {
-            payload.enable_prompt_expansion = enhance_prompt;
-        }
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    } else if (model === 'flux-dev') {
-        // FLUX.1 [dev] model
-        apiEndpoint = 'https://fal.run/fal-ai/flux/dev';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_inference_steps: parseInt(num_inference_steps, 10) || 50,
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker: false, // Disabled by default for FLUX.1 [dev]
-            output_format: output_format === 'webp' ? 'jpeg' : output_format, // FLUX.1 [dev] only supports jpeg/png
-            sync_mode,
-            guidance_scale: parseFloat(guidance_scale) || 3.5,
-            acceleration,
-        };
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    } else if (model === 'flux-kontext-lora-t2i') {
-        // FLUX Kontext LoRA Text-to-Image model
-        apiEndpoint = 'https://fal.run/fal-ai/flux-kontext-lora/text-to-image';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_inference_steps: parseInt(num_inference_steps, 10) || 30,
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker: false, // Disabled by default
-            output_format: output_format === 'webp' ? 'png' : output_format, // Only supports jpeg/png
-            sync_mode,
-            guidance_scale: parseFloat(guidance_scale) || 2.5,
-            acceleration,
-        };
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    } else if (model === 'piflow') {
-        // Piflow model - fast with good quality
-        apiEndpoint = 'https://fal.run/fal-ai/piflow';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_inference_steps: parseInt(num_inference_steps, 10) || 8,
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker: false, // Disabled by default
-            output_format: output_format === 'webp' ? 'jpeg' : output_format, // Only supports jpeg/png
-            sync_mode,
-        };
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    } else if (model === 'seedream-45') {
-        // ByteDance Seedream 4.5 Text-to-Image
-        apiEndpoint = 'https://fal.run/fal-ai/bytedance/seedream/v4.5/text-to-image';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker: enable_safety_checker ?? false, // default to lowest safety
-            sync_mode,
-        };
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-
-        // Support optional multi-image generation if provided
-        if (max_images !== undefined && max_images !== null && max_images !== '') {
-            payload.max_images = parseInt(max_images, 10);
-        }
-    } else if (model === 'seedream-45-edit') {
-        // ByteDance Seedream 4.5 Image-to-Image (edit)
-        if (!normalizedImageUrls.length) {
-            return res.status(400).json({ error: 'Seedream 4.5 Edit requires at least one input image' });
-        }
-
-        apiEndpoint = 'https://fal.run/fal-ai/bytedance/seedream/v4.5/edit';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker: enable_safety_checker ?? false, // lowest safety by default
-            sync_mode,
-            image_urls: normalizedImageUrls.slice(-10), // API allows up to 10 inputs
-        };
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-
-        // Support optional multi-image generation if provided
-        if (max_images !== undefined && max_images !== null && max_images !== '') {
-            payload.max_images = parseInt(max_images, 10);
-        }
-    } else if (model === 'reve') {
-        // Reve model - text rendering and aesthetic quality
-        apiEndpoint = 'https://fal.run/fal-ai/reve/text-to-image';
-        payload = {
-            prompt: prompt.trim(),
-            aspect_ratio: aspect_ratio || '3:2',
-            num_images: parseInt(num_images, 10),
-            output_format,
-            sync_mode,
-        };
-    } else if (model === 'nano-banana-pro-edit') {
-        // Nano Banana Pro Edit - image-to-image editing (requires image_urls)
-        if (normalizedImageUrls.length === 0) {
-            return res.status(400).json({ error: 'Nano Banana Pro Edit requires at least one input image' });
-        }
-
-        apiEndpoint = 'https://fal.run/fal-ai/nano-banana-pro/edit';
-        payload = {
-            prompt: prompt.trim(),
-            image_urls: normalizedImageUrls,
-            num_images: parseInt(num_images, 10),
-            output_format: output_format || 'png',
-            sync_mode,
-        };
-
-        // Add aspect_ratio if provided
-        if (aspect_ratio) {
-            payload.aspect_ratio = aspect_ratio;
-        }
-
-        // Add resolution if provided (1K, 2K, 4K)
-        const resolution = req.body.resolution || '1K';
-        payload.resolution = resolution;
-
-        // Add optional parameters
-        if (req.body.limit_generations !== undefined) {
-            payload.limit_generations = req.body.limit_generations;
-        }
-        if (req.body.enable_web_search !== undefined) {
-            payload.enable_web_search = req.body.enable_web_search;
-        }
-    } else if (model === 'fibo') {
-        // Fibo - text-to-image with optional reference image
-        apiEndpoint = 'https://fal.run/bria/fibo/generate';
-        payload = {
-            prompt: prompt.trim(),
-            seed: seed !== undefined && seed !== null && seed !== '' ? parseInt(seed, 10) : 5555,
-            steps_num: parseInt(num_inference_steps, 10) || 50,
-            guidance_scale: parseFloat(guidance_scale) || 5,
-            sync_mode,
-        };
-
-        // Add aspect_ratio if provided
-        if (aspect_ratio) {
-            payload.aspect_ratio = aspect_ratio;
-        }
-
-        // Add negative prompt if provided
-        if (negative_prompt && negative_prompt.trim() !== '') {
-            payload.negative_prompt = negative_prompt.trim();
-        }
-
-        // Add optional reference image
-        if (image_url && typeof image_url === 'string' && image_url.trim() !== '') {
-            payload.image_url = image_url.trim();
-        }
-    } else if (model === 'wan-26-text-to-image') {
-        // Wan v2.6 Text-to-Image
-        apiEndpoint = 'https://fal.run/wan/v2.6/text-to-image';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            max_images: parseInt(num_images, 10), // uses max_images instead of num_images
-            enable_safety_checker: enable_safety_checker ?? false, // default to lowest safety
-            sync_mode,
-        };
-
-        // Add negative prompt if provided
-        if (negative_prompt && negative_prompt.trim() !== '') {
-            payload.negative_prompt = negative_prompt.trim();
-        }
-
-        // Add optional reference image (0 or 1 image)
-        if (image_url && typeof image_url === 'string' && image_url.trim() !== '') {
-            payload.image_url = image_url.trim();
-        }
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    } else if (model === 'wan-26-image-to-image') {
-        // Wan v2.6 Image-to-Image - requires 1-3 input images
-        if (normalizedImageUrls.length < 1 || normalizedImageUrls.length > 3) {
-            return res.status(400).json({ error: 'Wan v2.6 Image-to-Image requires 1-3 input images' });
-        }
-
-        apiEndpoint = 'https://fal.run/wan/v2.6/image-to-image';
-        payload = {
-            prompt: prompt.trim(),
-            image_urls: normalizedImageUrls.slice(0, 3), // API allows 1-3 inputs
-            image_size,
-            num_images: parseInt(num_images, 10), // uses num_images (1-4)
-            enable_safety_checker: enable_safety_checker ?? false, // default to lowest safety
-            sync_mode,
-        };
-
-        // Add negative prompt if provided
-        if (negative_prompt && negative_prompt.trim() !== '') {
-            payload.negative_prompt = negative_prompt.trim();
-        }
-
-        // Add enable_prompt_expansion if provided (default true)
-        if (enhance_prompt !== undefined) {
-            payload.enable_prompt_expansion = enhance_prompt;
-        }
-
-        // Add seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    } else {
-        // Z-Image Turbo model (default)
-        apiEndpoint = 'https://fal.run/fal-ai/z-image/turbo';
-        payload = {
-            prompt: prompt.trim(),
-            image_size,
-            num_inference_steps: parseInt(num_inference_steps, 10),
-            num_images: parseInt(num_images, 10),
-            enable_safety_checker,
-            output_format,
-            sync_mode,
-            acceleration,
-        };
-
-        // Only include seed if provided
-        if (seed !== undefined && seed !== null && seed !== '') {
-            payload.seed = parseInt(seed, 10);
-        }
-    }
-
-    try {
-        console.log('API Endpoint:', apiEndpoint);
-        console.log('Payload:', JSON.stringify(payload, null, 2));
-
-        const response = await fetch(apiEndpoint, {
+    const requestSingle = async () => {
+        const response = await fetch(OPENROUTER_URL, {
             method: 'POST',
             headers: {
-                'Authorization': `Key ${FAL_KEY}`,
+                Authorization: `Bearer ${OPENROUTER_API_KEY}`,
                 'Content-Type': 'application/json',
+                'HTTP-Referer': req.headers.referer || 'http://localhost',
+                'X-Title': 'AI Image Generator',
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(buildPayload()),
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Fal.ai API error:', errorText);
-            console.error('Status:', response.status);
-            return res.status(response.status).json({
-                error: 'Failed to generate image',
-                details: errorText
-            });
+            return { ok: false, status: response.status, errorText };
         }
 
         const data = await response.json();
-        return res.status(200).json(data);
+        console.log('Completion response keys:', Object.keys(data));
+        return { ok: true, data };
+    };
+
+    try {
+        /** @type {Array<{url: string, model: string, cost: number, provider: string|null}>} */
+        const imageResults = [];
+        /** @type {Array<{model: string, provider_name: (string|null), generation_id: (string|number|null), created_at: (string|null), usage: number}>} */
+        const usageRequests = [];
+        let totalUsage = 0;
+
+        // First call: some models may return multiple images in one response.
+        const first = await requestSingle();
+        if (!first.ok) {
+            console.error('OpenRouter API error:', first.errorText);
+            return res.status(first.status).json({
+                error: 'Failed to generate image',
+                details: first.errorText,
+            });
+        }
+
+        const firstUrls = extractImageUrls(first.data);
+        const firstMeta = extractUsageMeta(first.data);
+        console.log('Completion response id:', first.data?.id, 'generation_id:', first.data?.generation_id);
+        console.log('Extracted generation_id:', firstMeta.generation_id);
+
+        // Always fetch cost from generation endpoint for image generation
+        // (completion response only has token counts, not actual USD cost)
+        if (firstMeta.generation_id) {
+            const fetchedCost = await fetchGenerationCost(firstMeta.generation_id);
+            if (fetchedCost > 0) {
+                firstMeta.usage = fetchedCost;
+            }
+        }
+
+        usageRequests.push(firstMeta);
+        totalUsage += firstMeta.usage;
+
+        // Pro-rate cost per image from this request
+        const firstCostPerImage = firstUrls.length > 0 ? firstMeta.usage / firstUrls.length : 0;
+        firstUrls.forEach((url) => {
+            imageResults.push({
+                url,
+                model: firstMeta.model,
+                cost: firstCostPerImage,
+                provider: firstMeta.provider_name
+            });
+        });
+
+        // Fallback: if the provider only returns 1 image, loop up to num_images.
+        while (imageResults.length < parsedNumImages) {
+            const next = await requestSingle();
+            if (!next.ok) {
+                console.error('OpenRouter API error:', next.errorText);
+                return res.status(next.status).json({
+                    error: 'Failed to generate image',
+                    details: next.errorText,
+                });
+            }
+
+            const nextUrls = extractImageUrls(next.data);
+            const nextMeta = extractUsageMeta(next.data);
+
+            // Always fetch cost from generation endpoint for image generation
+            if (nextMeta.generation_id) {
+                const fetchedCost = await fetchGenerationCost(nextMeta.generation_id);
+                if (fetchedCost > 0) {
+                    nextMeta.usage = fetchedCost;
+                }
+            }
+
+            usageRequests.push(nextMeta);
+            totalUsage += nextMeta.usage;
+
+            // Pro-rate cost per image from this request
+            const nextCostPerImage = nextUrls.length > 0 ? nextMeta.usage / nextUrls.length : 0;
+            nextUrls.forEach((url) => {
+                imageResults.push({
+                    url,
+                    model: nextMeta.model,
+                    cost: nextCostPerImage,
+                    provider: nextMeta.provider_name
+                });
+            });
+        }
+
+        // Trim to requested count
+        const limited = imageResults.slice(0, parsedNumImages);
+        if (limited.length === 0) {
+            return res.status(502).json({
+                error: 'No images returned from OpenRouter',
+            });
+        }
+
+        return res.status(200).json({
+            images: limited,
+            meta: {
+                total_usage: totalUsage,
+                requests: usageRequests,
+            },
+        });
     } catch (error) {
         console.error('Server error:', error);
         return res.status(500).json({ error: 'Internal server error' });

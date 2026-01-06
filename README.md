@@ -1,6 +1,6 @@
-# ✨ AI Image Generator
+# AI Image Generator
 
-A beautiful, lightweight AI image generator powered by [Fal.ai](https://fal.ai/). Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration.
+A modern, lightweight AI image generator powered by OpenRouter. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration.
 
 ![No Build Tools](https://img.shields.io/badge/Build-None%20Required-green)
 ![Vercel Ready](https://img.shields.io/badge/Deploy-Vercel-black)
@@ -8,53 +8,63 @@ A beautiful, lightweight AI image generator powered by [Fal.ai](https://fal.ai/)
 
 ## Features
 
-- 🎨 **AI Image Generation** - Generate images from text prompts using Fal.ai's Z-Image Turbo model
-- ✨ **Prompt Enhancement** - AI-powered prompt improvement using OpenRouter (Grok 4 Fast)
-- 🎲 **Surprise Me** - Random creative prompt suggestions for inspiration
-- 🖼️ **Grid Gallery** - Responsive thumbnail grid with click-to-expand lightbox
-- 🌟 **Golden Shimmer Loading** - Beautiful golden loading animation while generating
-- ⚙️ **Full Settings Panel** - Configure image size, steps, number of images, format, and more
-- 💾 **Persistent Storage** - Images saved to localStorage
-- 🔍 **Lightbox View** - Click any thumbnail for full-screen preview with download option
-- 📋 **Copy Prompt** - Copy prompts directly from the lightbox
-- ⬇️ **Download Images** - Save generated images directly
-- 📱 **PWA Support** - Install as a standalone app on mobile and desktop
-- 🚀 **Zero Build** - No Webpack, Vite, or bundlers needed
+- **AI Image Generation** - Generate images from text prompts using multiple models (FLUX, Gemini, GPT-5, Seedream, etc.)
+- **Image Editing** - Attach images and describe changes (supported by compatible models)
+- **Prompt Enhancement** - AI-powered prompt improvement
+- **Random Prompts** - Creative prompt suggestions for inspiration
+- **Folder Organization** - Organize generated images into custom folders
+- **Cost Tracking** - Real-time cost tracking per image and total spend
+- **Grid Gallery** - Responsive thumbnail grid with lightbox preview
+- **Model Selection** - Choose from multiple image generation models inline
+- **Remix** - Re-generate with the same prompt and settings
+- **Persistent Storage** - Images saved to IndexedDB with localStorage fallback
+- **PWA Support** - Install as a standalone app on mobile and desktop
+- **Zero Build** - No Webpack, Vite, or bundlers needed
+
+## Supported Models
+
+| Provider | Models |
+|----------|--------|
+| Black Forest Labs | FLUX.2 Pro, FLUX.2 Max, FLUX.2 Flex |
+| Google | Gemini 3 Pro Image, Gemini 2.5 Flash Image |
+| OpenAI | GPT-5 Image, GPT-5 Image Mini |
+| ByteDance | Seedream 4.5 |
+| Sourceful | Riverflow v2 (Max, Standard, Fast) |
 
 ## Tech Stack
 
 - **Frontend:** HTML5, CSS3 (Variables + Flexbox/Grid), Vanilla JS (ES6 Modules)
-- **Backend:** Vercel Serverless Functions (Node.js)
-- **Storage:** localStorage
-- **APIs:**
-  - Fal.ai Z-Image Turbo (image generation)
-  - OpenRouter / Grok 4 Fast (prompt enhancement)
+- **Backend:** Vercel Serverless Functions (Node.js) / Express for local dev
+- **Storage:** IndexedDB (primary), localStorage (fallback)
+- **API:** OpenRouter
 
 ## Project Structure
 
 ```
 ├── api/
-│   ├── generate.js       # Vercel serverless function (Fal.ai proxy)
-│   └── enhance.js        # Vercel serverless function (OpenRouter proxy)
+│   ├── generate.js       # Image generation endpoint (OpenRouter proxy)
+│   ├── enhance.js        # Prompt enhancement endpoint
+│   └── test-key.js       # API key validation endpoint
 ├── css/
 │   ├── base.css          # Reset, variables, colors
-│   ├── layout.css        # Main container, centering
-│   ├── components.css    # Input bar, buttons, modal, settings panel
+│   ├── layout.css        # Layout, sidebar, responsive
+│   ├── components.css    # Input bar, buttons, modal, settings
 │   └── gallery.css       # Grid layout, cards, shimmer animations
 ├── js/
-│   ├── app.js            # Main entry point, settings management
+│   ├── app.js            # Main entry point, event handling
 │   ├── api.js            # Client-side API wrapper
-│   ├── state.js          # State management & localStorage
-│   ├── utils.js          # Helper functions
+│   ├── state.js          # State management & persistence
+│   ├── storage.js        # IndexedDB storage layer
 │   ├── gallery.js        # Gallery rendering & lightbox
-│   └── prompts.js        # Creative prompts for "Surprise Me" feature
+│   ├── image-utils.js    # Image compression & processing
+│   ├── prompts.js        # Random prompt suggestions
+│   └── utils.js          # Helper functions
 ├── public/
 │   ├── manifest.json     # PWA manifest
 │   ├── sw.js             # Service worker
 │   └── icon-192.svg      # App icon
 ├── index.html            # Main HTML file
 ├── server.js             # Express server for local development
-├── favicon.svg           # Favicon
 ├── vercel.json           # Vercel configuration
 └── README.md
 ```
@@ -63,127 +73,75 @@ A beautiful, lightweight AI image generator powered by [Fal.ai](https://fal.ai/)
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (for Vercel CLI, optional for local dev)
-- [Fal.ai API Key](https://fal.ai/) - Sign up and get your API key
-- [OpenRouter API Key](https://openrouter.ai/) - For prompt enhancement feature (optional)
+- [Node.js](https://nodejs.org/) v18+
+- [OpenRouter API Key](https://openrouter.ai/keys)
 
 ### Local Development
 
-1. **Clone the repository**
+1. **Clone and install**
 
    ```bash
    git clone https://github.com/AppleLamps/free-photo-or.git
    cd free-photo-or
-   ```
-
-2. **Install dependencies**
-
-   ```bash
    npm install
    ```
 
-3. **Set up environment variables**
-
-   ```bash
-   # Create .env.local file
-   echo "FAL_KEY=your_fal_api_key_here" > .env.local
-   echo "OPENROUTER_API_KEY=your_openrouter_key_here" >> .env.local
-   ```
-
-4. **Run locally**
-
-   Option A: Using Express server
+2. **Run the server**
 
    ```bash
    npm start
    ```
 
-   Option B: Using Vercel CLI (recommended for testing serverless functions)
-
-   ```bash
-   npx vercel dev
-   ```
-
-5. **Open in browser**
+3. **Open in browser**
 
    ```
    http://localhost:3000
    ```
 
+4. **Add your API key**
+   
+   Click the settings icon and paste your OpenRouter API key.
+
 ### Deploy to Vercel
 
-1. **Push to GitHub** (or GitLab/Bitbucket)
-
-2. **Import in Vercel**
-   - Go to [vercel.com/new](https://vercel.com/new)
-   - Import your repository
-
-3. **Add Environment Variables**
-   - `FAL_KEY` - Your Fal.ai API key
-   - `OPENROUTER_API_KEY` - Your OpenRouter API key (optional, for prompt enhancement)
-
-4. **Deploy!**
+1. Push to GitHub
+2. Import at [vercel.com/new](https://vercel.com/new)
+3. Deploy (no environment variables required - users provide their own API key)
 
 Or use the CLI:
 
 ```bash
-vercel --prod
+npx vercel --prod
 ```
-
-## API Parameters
-
-The generate serverless function accepts these parameters:
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `prompt` | string | *required* | Image description |
-| `image_size` | string/object | `landscape_4_3` | Size preset or `{width, height}` |
-| `num_inference_steps` | integer | `30` | Quality (higher = better, slower) |
-| `num_images` | integer | `1` | Number of images to generate (1-4) |
-| `seed` | integer | *random* | For reproducible results |
-| `output_format` | string | `png` | `jpeg`, `png`, or `webp` |
-| `enable_safety_checker` | boolean | `true` | NSFW content filter |
-| `sync_mode` | boolean | `false` | Wait for completion |
-| `acceleration` | string | `none` | `none`, `regular`, or `high` |
-
-### Image Size Presets
-
-- `square_hd` - High-def square (default)
-- `square` - Standard square
-- `portrait_4_3` - Portrait 4:3
-- `portrait_16_9` - Portrait 16:9
-- `landscape_4_3` - Landscape 4:3
-- `landscape_16_9` - Landscape 16:9
-- `custom` - Custom dimensions (256-2048px)
 
 ## Usage
 
-1. Type a description of the image you want to create
-2. (Optional) Click the ✨ sparkle button to enhance your prompt with AI
-3. (Optional) Click the 🎲 dice button for a random creative prompt
-4. Click the send button or press Enter to generate
-5. Watch the golden shimmer while your images generate
-6. Click any thumbnail for fullscreen view
-7. Use the download button or copy the prompt from the lightbox
+1. Enter your OpenRouter API key in Settings (stored locally in browser)
+2. Type a description of the image you want
+3. (Optional) Attach an image for editing/variation
+4. (Optional) Click the sparkle icon to enhance your prompt
+5. (Optional) Click the dice icon for a random prompt
+6. Select a model and number of images
+7. Click send or press Enter to generate
+8. Click any thumbnail for fullscreen view with download option
 
-### Settings Panel
+### Settings
 
-Click the settings icon (grid) to configure:
+- **OpenRouter API Key** - Required for generation
+- **Aspect Ratio** - For Gemini models (1:1, 16:9, etc.)
+- **Image Size** - For Gemini models (1K, 2K, 4K)
+- **Photo Visibility** - Show all photos or folder-only
 
-- Image size preset or custom dimensions
-- Number of inference steps (1-50)
-- Number of images per generation (1-4)
-- Output format (PNG, JPEG, WebP)
-- Acceleration mode
-- Seed for reproducibility
-- Safety checker toggle
+### Limits
+
+- **Vercel:** 4.5 MB request/response body limit
+- **Image attachments:** Automatically compressed to stay under limits
 
 ## License
 
-MIT License - feel free to use this project for personal or commercial purposes.
+MIT License
 
 ## Acknowledgments
 
-- [Fal.ai](https://fal.ai/) for the amazing Z-Image Turbo model
-- [OpenRouter](https://openrouter.ai/) for AI prompt enhancement
+- [OpenRouter](https://openrouter.ai/) for unified AI model access
 - [Vercel](https://vercel.com/) for serverless hosting

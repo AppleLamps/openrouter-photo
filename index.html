@@ -28,7 +28,65 @@
 </head>
 
 <body>
-    <div class="app-container">
+    <div class="app-container app-container--sidebar-open">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar sidebar--open">
+            <div class="sidebar__header">
+                <h2 class="sidebar__title">Folders</h2>
+                <button id="sidebar-collapse" class="sidebar__collapse-btn" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+            </div>
+            <div class="sidebar__content">
+                <nav class="sidebar__folders">
+                    <button id="folder-all" class="sidebar__folder sidebar__folder--active" data-folder-id="" type="button">
+                        <span class="sidebar__folder-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
+                        </span>
+                        <span class="sidebar__folder-name">All Photos</span>
+                        <span class="sidebar__folder-count" id="folder-all-count">0</span>
+                    </button>
+                    <div id="folder-list" class="sidebar__folder-list">
+                        <!-- Dynamic folder items rendered here -->
+                    </div>
+                </nav>
+                <div class="sidebar__actions">
+                    <button id="create-folder-btn" class="sidebar__action-btn" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>New Folder</span>
+                    </button>
+                    <button id="edit-folders-btn" class="sidebar__action-btn" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        <span>Edit Folders</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Floating button to reopen collapsed sidebar -->
+        <button id="sidebar-expand" class="sidebar__expand-btn sidebar__expand-btn--hidden" type="button" title="Open sidebar" aria-label="Open sidebar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+        </button>
+
+        <button id="spend-tracker" class="spend-tracker" type="button" aria-label="Total spent" title="Click for cost breakdown">
+            Spent: $0.00
+        </button>
         <!-- Header -->
         <header class="header">
             <h1 class="header__title">✨ AI Image Generator</h1>
@@ -39,7 +97,13 @@
         <main class="main-content">
             <!-- Empty State -->
             <div id="empty-state" class="empty-state">
-                <div class="empty-state__icon">🎨</div>
+                <div class="empty-state__icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                        <circle cx="9" cy="9" r="2"/>
+                        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                    </svg>
+                </div>
                 <h2 class="empty-state__title">No images yet</h2>
                 <p class="empty-state__description">
                     Start creating by typing a description of the image you want to generate in the input below.
@@ -54,13 +118,20 @@
         <div class="input-bar">
             <div class="input-bar__container">
                 <div class="input-bar__input-row">
-                    <button id="surprise-btn" class="input-bar__icon-btn input-bar__surprise-btn"
-                        title="Surprise me with a random prompt">
-                        🎲
+                    <input id="prompt-image-input" class="input-bar__file-input" type="file" accept="image/*" multiple>
+                    <button id="prompt-image-btn" class="input-bar__icon-btn" title="Attach images">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v7" />
+                            <path d="M3 15l4-4a2 2 0 0 1 3 0l2 2a2 2 0 0 0 3 0l4-4" />
+                            <path d="M14 10h.01" />
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        </svg>
                     </button>
                     <textarea id="prompt-input" class="input-bar__input" placeholder="Describe an image to generate..."
                         rows="1"></textarea>
                 </div>
+                <div id="prompt-attachments" class="input-bar__attachments" aria-label="Attached images"></div>
                 <div class="input-bar__actions">
                     <div class="input-bar__actions-left">
                         <button id="settings-btn" class="input-bar__icon-btn" title="Generation settings">
@@ -78,6 +149,72 @@
                                     d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
                             </svg>
                         </button>
+                        <button id="surprise-btn" class="input-bar__icon-btn"
+                            title="Surprise me with a random prompt">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect width="12" height="12" x="2" y="10" rx="2" ry="2"/>
+                                <path d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6"/>
+                                <path d="M6 18h.01"/>
+                                <path d="M10 14h.01"/>
+                                <path d="M15 6h.01"/>
+                                <path d="M18 9h.01"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-bar__actions-center">
+                        <!-- Folder selector -->
+                        <div class="input-bar__inline-dropdown" id="folder-selector-dropdown">
+                            <input id="selected-folder" type="hidden" value="">
+                            <button id="folder-selector-trigger" type="button"
+                                class="input-bar__inline-select input-bar__dropdown-trigger"
+                                aria-haspopup="listbox" aria-expanded="false" title="Save to folder">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="folder-selector__icon">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                <span class="folder-selector__name">All Photos</span>
+                            </button>
+                            <div id="folder-selector-menu" class="input-bar__dropdown-menu" role="listbox">
+                                <!-- Dynamic folder options rendered here -->
+                            </div>
+                        </div>
+                        <div class="input-bar__inline-dropdown" id="model-dropdown">
+                            <input id="setting-model" type="hidden" value="black-forest-labs/flux.2-pro">
+                            <button id="model-trigger" type="button"
+                                class="input-bar__inline-select input-bar__dropdown-trigger"
+                                aria-haspopup="listbox" aria-expanded="false" title="Model">
+                                black-forest-labs/flux.2-pro
+                            </button>
+                            <div id="model-menu" class="input-bar__dropdown-menu input-bar__dropdown-menu--model"
+                                role="listbox" aria-label="Model">
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="bytedance-seed/seedream-4.5">bytedance-seed/seedream-4.5</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="black-forest-labs/flux.2-max">black-forest-labs/flux.2-max</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="black-forest-labs/flux.2-flex">black-forest-labs/flux.2-flex</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="black-forest-labs/flux.2-pro">black-forest-labs/flux.2-pro</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="google/gemini-3-pro-image-preview">google/gemini-3-pro-image-preview</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="google/gemini-2.5-flash-image">google/gemini-2.5-flash-image</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="openai/gpt-5-image-mini">openai/gpt-5-image-mini</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="openai/gpt-5-image">openai/gpt-5-image</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="sourceful/riverflow-v2-max-preview">sourceful/riverflow-v2-max-preview</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="sourceful/riverflow-v2-standard-preview">sourceful/riverflow-v2-standard-preview</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model" role="option" data-value="sourceful/riverflow-v2-fast-preview">sourceful/riverflow-v2-fast-preview</button>
+                            </div>
+                        </div>
+                        <div class="input-bar__inline-dropdown" id="num-images-dropdown">
+                            <input id="setting-num-images" type="hidden" value="2">
+                            <button id="num-images-trigger" type="button"
+                                class="input-bar__inline-select input-bar__inline-select--compact input-bar__dropdown-trigger"
+                                aria-haspopup="listbox" aria-expanded="false" title="Number of images">
+                                2
+                            </button>
+                            <div id="num-images-menu" class="input-bar__dropdown-menu" role="listbox"
+                                aria-label="Number of images">
+                                <button type="button" class="input-bar__dropdown-item" role="option" data-value="1">1</button>
+                                <button type="button" class="input-bar__dropdown-item" role="option" data-value="2">2</button>
+                                <button type="button" class="input-bar__dropdown-item" role="option" data-value="3">3</button>
+                                <button type="button" class="input-bar__dropdown-item" role="option" data-value="4">4</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="input-bar__actions-right">
                         <button id="generate-btn" class="input-bar__button" title="Generate image">
@@ -96,48 +233,47 @@
         <div id="settings-panel" class="settings-panel">
             <div class="settings-panel__header">
                 <h3 class="settings-panel__title">Generation Settings</h3>
-                <button id="settings-close" class="settings-panel__close">✕</button>
+                <button id="settings-close" class="settings-panel__close" aria-label="Close settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
             <div class="settings-panel__content">
+                <!-- OpenRouter API Key -->
+                <div class="settings-group">
+                    <label class="settings-label" for="setting-openrouter-key">OpenRouter API Key</label>
+                    <div class="settings-inline">
+                        <input type="password" id="setting-openrouter-key" class="settings-input settings-inline__input"
+                            placeholder="Paste your OpenRouter key (stored locally in your browser)">
+                        <button type="button" id="setting-openrouter-save" class="settings-btn settings-btn--inline settings-btn--sm">
+                            Save
+                        </button>
+                        <button type="button" id="setting-openrouter-test" class="settings-btn settings-btn--inline settings-btn--sm">
+                            Test
+                        </button>
+                    </div>
+                    <label class="settings-checkbox" style="margin-top: 8px;">
+                        <input type="checkbox" id="setting-openrouter-key-show">
+                        <span>Show API key</span>
+                    </label>
+                    <span id="setting-openrouter-test-status" class="settings-hint" style="margin-top: 8px;"></span>
+                    <p class="settings-hint" style="margin-top: 8px;">
+                        This app stores your key in <code>localStorage</code> and sends it to <code>/api</code> on each request.
+                    </p>
+                </div>
+
                 <!-- Model Selection -->
                 <div class="settings-group">
-                    <label class="settings-label">Model</label>
-                    <select id="setting-model" class="settings-select">
-                        <option value="z-image-turbo" selected>Z-Image Turbo (Fast)</option>
-                        <option value="wan-26-text-to-image">Wan v2.6 Text-to-Image</option>
-                        <option value="wan-26-image-to-image">Wan v2.6 Image-to-Image</option>
-                        <option value="nano-banana-pro-edit">Nano Banana Pro Edit (Google)</option>
-                        <option value="fibo">Fibo (BRIA - Licensed Data)</option>
-                        <option value="seedream-45">Seedream 4.5 (ByteDance)</option>
-                        <option value="seedream-45-edit">Seedream 4.5 Edit (ByteDance)</option>
-                        <option value="flux-dev">FLUX.1 [dev] (12B)</option>
-                        <option value="flux-kontext-lora-t2i">FLUX Kontext LoRA (T2I)</option>
-                        <option value="piflow">Piflow (Fast + Quality)</option>
-                        <option value="reve">Reve (Text + Aesthetic)</option>
-                        <option value="hidream-i1-fast">HiDream I1 Fast (17B)</option>
-                        <option value="hunyuan-image">Hunyuan Image 3.0</option>
-                        <option value="qwen-image">Qwen Image (Text Rendering)</option>
-                        <option value="flux-kontext">FLUX Kontext (Image Editing)</option>
-                    </select>
+                    <label class="settings-label">Advanced (Gemini)</label>
+                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio and image size are only applied for Gemini models.</p>
                 </div>
 
-                <!-- Image Size -->
-                <div class="settings-group" id="image-size-group">
-                    <label class="settings-label">Image Size</label>
-                    <select id="setting-image-size" class="settings-select">
-                        <option value="square_hd" selected>Square HD</option>
-                        <option value="square">Square</option>
-                        <option value="portrait_4_3">Portrait 4:3</option>
-                        <option value="portrait_16_9">Portrait 16:9</option>
-                        <option value="landscape_4_3">Landscape 4:3</option>
-                        <option value="landscape_16_9">Landscape 16:9</option>
-                        <option value="custom">Custom Size</option>
-                    </select>
-                </div>
-
-                <!-- Aspect Ratio (FLUX Kontext only) -->
+                <!-- Aspect Ratio (Gemini only) -->
                 <div class="settings-group settings-group--hidden" id="aspect-ratio-group">
-                    <label class="settings-label">Aspect Ratio</label>
+                    <label class="settings-label">Aspect Ratio (Gemini only)</label>
                     <select id="setting-aspect-ratio" class="settings-select">
                         <option value="1:1" selected>1:1 (Square)</option>
                         <option value="4:3">4:3 (Landscape)</option>
@@ -149,181 +285,71 @@
                         <option value="21:9">21:9 (Ultrawide)</option>
                         <option value="9:21">9:21</option>
                     </select>
+                    <p class="settings-hint">Only applied for Gemini image-generation models.</p>
                 </div>
 
-                <!-- Custom Size (hidden by default) -->
-                <div id="custom-size-group" class="settings-group settings-group--hidden">
-                    <div class="settings-row">
-                        <div class="settings-field">
-                            <label class="settings-label">Width</label>
-                            <input type="number" id="setting-width" class="settings-input" value="1024" min="256"
-                                max="2048" step="64">
-                        </div>
-                        <div class="settings-field">
-                            <label class="settings-label">Height</label>
-                            <input type="number" id="setting-height" class="settings-input" value="768" min="256"
-                                max="2048" step="64">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Inference Steps -->
-                <div class="settings-group" id="steps-group">
-                    <label class="settings-label">Inference Steps: <span id="steps-value">30</span></label>
-                    <input type="range" id="setting-steps" class="settings-range" value="30" min="1" max="30" step="1">
-                </div>
-
-                <!-- Guidance Scale (Qwen only) -->
-                <div class="settings-group settings-group--hidden" id="guidance-group">
-                    <label class="settings-label">Guidance Scale: <span id="guidance-value">2.5</span></label>
-                    <input type="range" id="setting-guidance" class="settings-range" value="2.5" min="1" max="10"
-                        step="0.1">
-                </div>
-
-                <!-- Negative Prompt (Qwen only) -->
-                <div class="settings-group settings-group--hidden" id="negative-prompt-group">
-                    <label class="settings-label">Negative Prompt</label>
-                    <textarea id="setting-negative-prompt" class="settings-textarea"
-                        placeholder="blurry, ugly, low quality" rows="2"></textarea>
-                </div>
-
-                <!-- Turbo Mode (Qwen only) -->
-                <div class="settings-group settings-group--hidden" id="turbo-group">
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="setting-turbo">
-                        <span>Turbo Mode (10 steps, faster)</span>
-                    </label>
-                </div>
-
-                <!-- Enhance Prompt (FLUX Kontext only) -->
-                <div class="settings-group settings-group--hidden" id="enhance-prompt-group">
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="setting-enhance-prompt">
-                        <span>Enhance Prompt</span>
-                    </label>
-                </div>
-
-                <!-- Resolution (Nano Banana Pro only) -->
+                <!-- Resolution (Gemini only) -->
                 <div class="settings-group settings-group--hidden" id="resolution-group">
-                    <label class="settings-label">Resolution</label>
+                    <label class="settings-label">Gemini Image Size</label>
                     <select id="setting-resolution" class="settings-select">
                         <option value="1K" selected>1K</option>
                         <option value="2K">2K</option>
                         <option value="4K">4K</option>
                     </select>
+                    <p class="settings-hint">Only applied for Gemini image-generation models.</p>
                 </div>
 
-                <!-- Web Search (Nano Banana Pro only) -->
-                <div class="settings-group settings-group--hidden" id="web-search-group">
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="setting-enable-web-search">
-                        <span>Enable Web Search</span>
-                    </label>
+                <!-- Photo Visibility Mode -->
+                <div class="settings-group">
+                    <label class="settings-label" for="setting-photo-visibility">Photo Visibility</label>
+                    <select id="setting-photo-visibility" class="settings-select">
+                        <option value="all" selected>Show all photos in main gallery</option>
+                        <option value="folder-only">Photos only visible in their folder</option>
+                    </select>
+                    <p class="settings-hint">When set to "folder-only", photos will only appear when viewing their specific folder.</p>
                 </div>
 
-                <!-- Limit Generations (Nano Banana Pro only) -->
-                <div class="settings-group settings-group--hidden" id="limit-generations-group">
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="setting-limit-generations">
-                        <span>Limit Generations to 1</span>
-                    </label>
-                </div>
-
-                <!-- Input Image for Editing (Qwen only) -->
-                <div class="settings-group settings-group--hidden" id="input-image-group">
-                    <label class="settings-label">Input Image (for editing)</label>
-                    <div class="image-upload">
-                        <input type="file" id="setting-input-image" class="image-upload__input" accept="image/*">
-                        <label for="setting-input-image" class="image-upload__label" id="image-upload-label">
-                            <span class="image-upload__icon">📷</span>
-                            <span class="image-upload__text">Choose image or drag here</span>
-                        </label>
-                        <div id="image-preview" class="image-upload__preview image-upload__preview--hidden">
-                            <img id="image-preview-img" src="" alt="Preview">
-                            <button type="button" id="image-preview-clear" class="image-upload__clear">✕</button>
+                <!-- Storage Indicator -->
+                <div class="settings-group settings-group--storage">
+                    <label class="settings-label">Storage</label>
+                    <div class="storage-indicator">
+                        <div class="storage-indicator__bar">
+                            <div class="storage-indicator__used" id="storage-used"></div>
+                        </div>
+                        <div class="storage-indicator__info">
+                            <span class="storage-indicator__count" id="image-count">0 images</span>
+                            <span class="storage-indicator__text" id="storage-text">Calculating...</span>
                         </div>
                     </div>
-                    <p class="settings-hint" id="input-image-hint">Optional: Upload an image to edit with your prompt
-                    </p>
-                </div>
-
-                <!-- Multi-Image Upload for Wan v2.6 Image-to-Image -->
-                <div class="settings-group settings-group--hidden" id="multi-image-group">
-                    <label class="settings-label">Reference Images (1-3 required)</label>
-                    <div class="multi-image-upload">
-                        <input type="file" id="setting-multi-images" class="image-upload__input" accept="image/*"
-                            multiple>
-                        <label for="setting-multi-images" class="image-upload__label" id="multi-image-upload-label">
-                            <span class="image-upload__icon">🖼️</span>
-                            <span class="image-upload__text">Choose 1-3 images or drag here</span>
-                        </label>
-                        <div id="multi-image-previews" class="multi-image-previews"></div>
-                    </div>
-                    <p class="settings-hint">Reference images as 'image 1', 'image 2', 'image 3' in your prompt. Max
-                        10MB each, 384-5000px.</p>
-                </div>
-
-                <!-- Number of Images -->
-                <div class="settings-group">
-                    <label class="settings-label">Number of Images</label>
-                    <select id="setting-num-images" class="settings-select">
-                        <option value="1">1</option>
-                        <option value="2" selected>2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                    </select>
-                </div>
-
-                <!-- Output Format -->
-                <div class="settings-group">
-                    <label class="settings-label">Output Format</label>
-                    <select id="setting-format" class="settings-select">
-                        <option value="png" selected>PNG</option>
-                        <option value="jpeg">JPEG</option>
-                        <option value="webp">WebP</option>
-                    </select>
-                </div>
-
-                <!-- Acceleration (Z-Image only) -->
-                <div class="settings-group" id="acceleration-group">
-                    <label class="settings-label">Acceleration</label>
-                    <select id="setting-acceleration" class="settings-select">
-                        <option value="none" selected>None (Best Quality)</option>
-                        <option value="regular">Regular</option>
-                        <option value="high">High (Fastest)</option>
-                    </select>
-                </div>
-
-                <!-- Seed -->
-                <div class="settings-group">
-                    <label class="settings-label">Seed (optional)</label>
-                    <input type="number" id="setting-seed" class="settings-input" placeholder="Random" min="0">
-                </div>
-
-                <!-- Safety Checker -->
-                <div class="settings-group">
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="setting-safety">
-                        <span>Enable Safety Checker</span>
-                    </label>
-                </div>
-
-                <!-- Sync Mode -->
-                <div class="settings-group">
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="setting-sync">
-                        <span>Sync Mode (faster, no history)</span>
-                    </label>
+                    <button type="button" id="clear-all-btn" class="settings-btn settings-btn--danger">
+                        Clear All Images
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- Lightbox Modal -->
         <div id="lightbox-modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true" tabindex="-1">
-            <button class="modal__close" type="button" title="Close" aria-label="Close photo">✕</button>
+            <button class="modal__close" type="button" title="Close" aria-label="Close photo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
             <div class="modal__content">
                 <img class="modal__image" src="" alt="">
                 <div class="modal__info">
+                    <div class="modal__metadata">
+                        <div class="modal__metadata-item">
+                            <span class="modal__metadata-label">Model</span>
+                            <span class="modal__metadata-value" id="modal-model">-</span>
+                        </div>
+                        <div class="modal__metadata-item">
+                            <span class="modal__metadata-label">Cost</span>
+                            <span class="modal__metadata-value" id="modal-cost">-</span>
+                        </div>
+                    </div>
                     <div class="modal__prompt-container">
                         <p class="modal__prompt"></p>
                         <button class="modal__copy-btn" title="Copy prompt">
@@ -337,7 +363,13 @@
                     </div>
                     <div class="modal__actions">
                         <button class="modal__button modal__download-btn modal__button--primary">
-                            ⬇ Download
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Download
                         </button>
                     </div>
                 </div>

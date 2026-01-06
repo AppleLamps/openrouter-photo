@@ -166,6 +166,21 @@ function handleStateChange(action, data) {
             pendingDeletions.clear();
             renderGallery();
             break;
+        case 'folder-selected':
+        case 'images-moved':
+        case 'settings-changed':
+            // Re-render gallery when folder filter or visibility changes
+            renderGallery();
+            break;
+        case 'edit-mode-changed':
+            // Re-render gallery to show/hide checkboxes
+            renderGallery();
+            updateEditModeActionBar();
+            break;
+        case 'selection-changed':
+            // Update selection count in action bar
+            updateEditModeActionBar();
+            break;
     }
 }
 
@@ -202,7 +217,8 @@ function renderGallery() {
 
     galleryElement.innerHTML = '';
 
-    const images = state.getImages();
+    // Use filtered images based on folder selection and visibility settings
+    const images = state.getFilteredImages();
 
     if (images.length === 0) {
         updateEmptyState();
@@ -218,6 +234,130 @@ function renderGallery() {
     galleryElement.appendChild(fragment);
 
     updateEmptyState();
+
+    // Add edit mode action bar if in edit mode
+    updateEditModeActionBar();
+}
+
+/**
+ * Update or create the edit mode floating action bar
+ */
+function updateEditModeActionBar() {
+    const existingBar = document.getElementById('edit-mode-action-bar');
+
+    if (!state.editMode) {
+        // Remove action bar if not in edit mode
+        if (existingBar) existingBar.remove();
+        return;
+    }
+
+    const selectedCount = state.selectedImageIds.size;
+
+    if (!existingBar) {
+        // Create action bar
+        const bar = createElement('div', {
+            id: 'edit-mode-action-bar',
+            className: 'edit-mode-action-bar'
+        });
+
+        const countSpan = createElement('span', {
+            className: 'edit-mode-action-bar__count'
+        }, `${selectedCount} selected`);
+
+        const moveBtn = createElement('button', {
+            className: 'edit-mode-action-bar__btn',
+            type: 'button',
+            disabled: selectedCount === 0,
+            onClick: () => showMoveToFolderMenu(moveBtn)
+        }, 'Move to Folder');
+
+        const selectAllBtn = createElement('button', {
+            className: 'edit-mode-action-bar__btn edit-mode-action-bar__btn--secondary',
+            type: 'button',
+            onClick: () => state.selectAllImages()
+        }, 'Select All');
+
+        const cancelBtn = createElement('button', {
+            className: 'edit-mode-action-bar__btn edit-mode-action-bar__btn--secondary',
+            type: 'button',
+            onClick: () => state.setEditMode(false)
+        }, 'Done');
+
+        bar.appendChild(countSpan);
+        bar.appendChild(moveBtn);
+        bar.appendChild(selectAllBtn);
+        bar.appendChild(cancelBtn);
+
+        document.body.appendChild(bar);
+    } else {
+        // Update existing bar
+        const countSpan = existingBar.querySelector('.edit-mode-action-bar__count');
+        if (countSpan) countSpan.textContent = `${selectedCount} selected`;
+
+        const moveBtn = existingBar.querySelector('.edit-mode-action-bar__btn');
+        if (moveBtn) moveBtn.disabled = selectedCount === 0;
+    }
+}
+
+/**
+ * Show move to folder menu
+ * @param {HTMLElement} anchor - Button that triggered the menu
+ */
+function showMoveToFolderMenu(anchor) {
+    // Remove any existing menu
+    const existingMenu = document.querySelector('.move-folder-menu');
+    if (existingMenu) existingMenu.remove();
+
+    const selectedIds = state.getSelectedImageIds();
+    if (selectedIds.length === 0) return;
+
+    const menu = createElement('div', {
+        className: 'move-folder-menu'
+    });
+
+    // "All Photos" (uncategorized) option
+    const allOption = createElement('button', {
+        className: 'move-folder-menu__item',
+        type: 'button',
+        onClick: async () => {
+            menu.remove();
+            await state.moveImagesToFolder(selectedIds, null);
+            state.clearSelection();
+        }
+    }, 'All Photos (No Folder)');
+    menu.appendChild(allOption);
+
+    // Folder options
+    const folders = state.getFolders();
+    folders.forEach(folder => {
+        const option = createElement('button', {
+            className: 'move-folder-menu__item',
+            type: 'button',
+            onClick: async () => {
+                menu.remove();
+                await state.moveImagesToFolder(selectedIds, folder.id);
+                state.clearSelection();
+            }
+        }, folder.name);
+        menu.appendChild(option);
+    });
+
+    // Position the menu above the button
+    const rect = anchor.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+    menu.style.left = `${rect.left}px`;
+
+    document.body.appendChild(menu);
+
+    // Close on click outside
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target) && e.target !== anchor) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
 }
 
 /**
@@ -237,12 +377,40 @@ function updateEmptyState() {
  * @returns {HTMLElement}
  */
 function createImageCard(image, preloaded = false) {
+    const isEditMode = state.editMode;
+    const isSelected = state.selectedImageIds.has(image.id);
+
     const card = createElement('div', {
-        className: 'gallery__card',
+        className: `gallery__card${isEditMode ? ' gallery__card--edit-mode' : ''}${isSelected ? ' gallery__card--selected' : ''}`,
         dataset: { id: image.id }
     });
 
-    // Delete button
+    // Checkbox for edit mode
+    if (isEditMode) {
+        const checkboxWrapper = createElement('label', {
+            className: 'gallery__checkbox-wrapper',
+            onClick: (e) => e.stopPropagation()
+        });
+
+        const checkbox = createElement('input', {
+            type: 'checkbox',
+            className: 'gallery__checkbox',
+            checked: isSelected,
+            onChange: () => {
+                state.toggleImageSelection(image.id);
+                // Update card's selected state
+                card.classList.toggle('gallery__card--selected', state.selectedImageIds.has(image.id));
+            }
+        });
+
+        const checkmark = createElement('span', { className: 'gallery__checkmark' });
+
+        checkboxWrapper.appendChild(checkbox);
+        checkboxWrapper.appendChild(checkmark);
+        card.appendChild(checkboxWrapper);
+    }
+
+    // Delete button (hidden in edit mode)
     const deleteBtn = createElement('button', {
         className: 'gallery__delete-btn',
         title: 'Delete image',
@@ -279,8 +447,18 @@ function createImageCard(image, preloaded = false) {
     card.appendChild(deleteBtn);
     card.appendChild(img);
 
-    // Click to open lightbox
-    card.addEventListener('click', () => openLightbox(image));
+    // Click to open lightbox (or toggle selection in edit mode)
+    card.addEventListener('click', () => {
+        if (state.editMode) {
+            state.toggleImageSelection(image.id);
+            card.classList.toggle('gallery__card--selected', state.selectedImageIds.has(image.id));
+            // Update checkbox state
+            const checkbox = card.querySelector('.gallery__checkbox');
+            if (checkbox) checkbox.checked = state.selectedImageIds.has(image.id);
+        } else {
+            openLightbox(image);
+        }
+    });
 
     return card;
 }
@@ -366,7 +544,7 @@ export function removeAllPlaceholders() {
  * Open lightbox modal
  * @param {Object} image - Image data
  */
-function openLightbox(image) {
+async function openLightbox(image) {
     const modal = document.getElementById('lightbox-modal');
     if (!modal) return;
 
@@ -383,16 +561,46 @@ function openLightbox(image) {
     resetLightboxSwipeState();
 
     if (modalImage) {
+        // Show thumbnail first for instant feedback
         modalImage.src = image.url;
         modalImage.alt = image.prompt;
+        modalImage.classList.add('modal__image--loading');
     }
 
     if (modalPrompt) {
         modalPrompt.textContent = image.prompt;
     }
 
+    // Populate metadata (model and cost)
+    const modalModel = modal.querySelector('#modal-model');
+    const modalCost = modal.querySelector('#modal-cost');
+
+    if (modalModel) {
+        const modelName = image.generation?.model;
+        // Show short model name (last part after /)
+        modalModel.textContent = modelName
+            ? modelName.split('/').pop() || modelName
+            : '-';
+        modalModel.title = modelName || '';
+    }
+
+    if (modalCost) {
+        const cost = image.generation?.cost;
+        if (typeof cost === 'number' && cost > 0) {
+            // Format as USD with appropriate precision
+            modalCost.textContent = cost < 0.01
+                ? `$${cost.toFixed(4)}`
+                : `$${cost.toFixed(3)}`;
+        } else {
+            modalCost.textContent = '-';
+        }
+    }
+
     if (downloadBtn) {
-        downloadBtn.onclick = () => downloadImage(image.url, `ai-image-${image.id}.png`);
+        downloadBtn.onclick = async () => {
+            const fullUrl = await state.getFullImageUrl(image.id);
+            downloadImage(fullUrl || image.url, `ai-image-${image.id}.png`);
+        };
     }
 
     if (copyBtn) {
@@ -432,6 +640,7 @@ function openLightbox(image) {
     modal.classList.remove('modal--ui-hidden', 'modal--dragging');
     modal.classList.add('modal--active');
     modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('is-modal-open');
 
     lockBodyScroll();
 
@@ -440,6 +649,16 @@ function openLightbox(image) {
         closeBtn.focus({ preventScroll: true });
     } else {
         modal.focus({ preventScroll: true });
+    }
+
+    // Load full resolution image after modal is visible
+    if (modalImage) {
+        const fullUrl = await state.getFullImageUrl(image.id);
+        // Only update if modal is still open and we got a full URL
+        if (fullUrl && modal.classList.contains('modal--active')) {
+            modalImage.src = fullUrl;
+        }
+        modalImage.classList.remove('modal__image--loading');
     }
 }
 
@@ -453,6 +672,7 @@ export function closeLightbox() {
     modal.classList.remove('modal--active');
     modal.classList.remove('modal--ui-hidden', 'modal--dragging');
     modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('is-modal-open');
 
     // Reset swipe-to-close state in case the modal is closed mid-gesture (e.g. ESC/backdrop).
     resetLightboxSwipeState();
