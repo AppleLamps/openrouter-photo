@@ -29,6 +29,12 @@ module.exports = async function handler(req, res) {
         });
     }
 
+    const redactKey = (text) => {
+        if (!text) return text;
+        const str = String(text);
+        return str.replace(/sk-or-v1-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]');
+    };
+
     try {
         // Cheap validation call: list models. If the key is invalid, OpenRouter will return 401/403.
         const response = await fetch('https://openrouter.ai/api/v1/models', {
@@ -45,13 +51,13 @@ module.exports = async function handler(req, res) {
             return res.status(response.status).json({
                 code: 'OPENROUTER_KEY_INVALID',
                 error: 'OpenRouter API key test failed',
-                details: errorText
+                details: redactKey(errorText)
             });
         }
 
         return res.status(200).json({ ok: true });
     } catch (error) {
-        console.error('Server error:', error);
+        console.error('Server error:', redactKey(error));
         return res.status(500).json({ error: 'Internal server error' });
     }
 };

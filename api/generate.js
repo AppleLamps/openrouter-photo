@@ -50,6 +50,12 @@ module.exports = async function handler(req, res) {
         });
     }
 
+    const redactKey = (text) => {
+        if (!text) return text;
+        const str = String(text);
+        return str.replace(/sk-or-v1-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]');
+    };
+
     const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
     const isGeminiModel = typeof model === 'string' && model.startsWith('google/gemini-');
@@ -176,7 +182,7 @@ module.exports = async function handler(req, res) {
 
                 return typeof cost === 'number' ? cost : parseFloat(cost || 0);
             } catch (e) {
-                console.error(`Error fetching generation cost (attempt ${attempt + 1}):`, e);
+                console.error(`Error fetching generation cost (attempt ${attempt + 1}):`, redactKey(e));
                 if (attempt < retries - 1) {
                     await new Promise((resolve) => setTimeout(resolve, 200));
                     continue;
@@ -228,10 +234,10 @@ module.exports = async function handler(req, res) {
         // First call: some models may return multiple images in one response.
         const first = await requestSingle();
         if (!first.ok) {
-            console.error('OpenRouter API error:', first.errorText);
+            console.error('OpenRouter API error:', redactKey(first.errorText));
             return res.status(first.status).json({
                 error: 'Failed to generate image',
-                details: first.errorText,
+                details: redactKey(first.errorText),
             });
         }
 
@@ -260,7 +266,7 @@ module.exports = async function handler(req, res) {
 
             for (const next of parallelResults) {
                 if (!next.ok) {
-                    console.error('OpenRouter API error:', next.errorText);
+                    console.error('OpenRouter API error:', redactKey(next.errorText));
                     continue;
                 }
 
@@ -327,7 +333,7 @@ module.exports = async function handler(req, res) {
             },
         });
     } catch (error) {
-        console.error('Server error:', error);
+        console.error('Server error:', redactKey(error));
         return res.status(500).json({ error: 'Internal server error' });
     }
 }

@@ -52,15 +52,6 @@ function renderPromptAttachments() {
     });
 }
 
-async function fileToDataUrl(file) {
-    return await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Failed to read image file'));
-        reader.readAsDataURL(file);
-    });
-}
-
 /**
  * Compress an image file for API submission (max 1024px, JPEG 85% quality)
  * This keeps payloads under Vercel's 4.5MB limit

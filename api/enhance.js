@@ -35,6 +35,12 @@ module.exports = async function handler(req, res) {
         });
     }
 
+    const redactKey = (text) => {
+        if (!text) return text;
+        const str = String(text);
+        return str.replace(/sk-or-v1-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]');
+    };
+
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -63,10 +69,10 @@ module.exports = async function handler(req, res) {
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('OpenRouter API error:', errorText);
+            console.error('OpenRouter API error:', redactKey(errorText));
             return res.status(response.status).json({
                 error: 'Failed to enhance prompt',
-                details: errorText
+                details: redactKey(errorText)
             });
         }
 
@@ -83,7 +89,7 @@ module.exports = async function handler(req, res) {
             enhancedPrompt: enhancedPrompt.trim()
         });
     } catch (error) {
-        console.error('Server error:', error);
+        console.error('Server error:', redactKey(error));
         return res.status(500).json({ error: 'Internal server error' });
     }
 }
