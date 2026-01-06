@@ -17,6 +17,9 @@ const PROMPT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024; // 8MB
 /** @type {string[]} */
 let promptImageDataUrls = [];
 
+/** @type {boolean} - Prevents race condition from rapid button clicks */
+let isGenerating = false;
+
 function renderPromptAttachments() {
     const container = document.getElementById('prompt-attachments');
     if (!container) return;
@@ -191,44 +194,53 @@ function updateSpendTrackerUI() {
     pill.textContent = `Spent: ${formatUsd(spend.total)}`;
 }
 
-function syncNumImagesDropdownUI() {
-    const hidden = document.getElementById('setting-num-images');
-    const trigger = document.getElementById('num-images-trigger');
-    const menu = document.getElementById('num-images-menu');
-    if (!(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) return;
+/**
+ * Create a reusable dropdown controller
+ * @param {Object} config - Dropdown configuration
+ * @param {string} config.dropdownId - ID of the dropdown container element
+ * @param {string} config.hiddenId - ID of the hidden input element
+ * @param {string} config.triggerId - ID of the trigger button element
+ * @param {string} config.menuId - ID of the menu element
+ * @param {string} [config.defaultValue] - Default value if hidden is empty
+ * @param {string} [config.placeholder] - Placeholder text when no value
+ * @param {boolean} [config.showTitle] - Whether to set title attribute on trigger
+ * @param {boolean} [config.dispatchChange] - Whether to dispatch change event on value set
+ * @param {Function} [config.formatDisplay] - Custom function to format display text
+ * @returns {{ syncUI: Function, setValue: Function, close: Function } | null}
+ */
+function createDropdown(config) {
+    const {
+        dropdownId,
+        hiddenId,
+        triggerId,
+        menuId,
+        defaultValue,
+        placeholder = 'Select',
+        showTitle = false,
+        dispatchChange = false,
+        formatDisplay = (v) => v || placeholder
+    } = config;
 
-    const v = hidden.value || '2';
-    trigger.textContent = v;
-    menu.querySelectorAll('.input-bar__dropdown-item').forEach((btn) => {
-        const selected = btn.getAttribute('data-value') === v;
-        btn.setAttribute('aria-selected', selected ? 'true' : 'false');
-    });
-}
-
-function syncModelDropdownUI() {
-    const hidden = document.getElementById('setting-model');
-    const trigger = document.getElementById('model-trigger');
-    const menu = document.getElementById('model-menu');
-    if (!(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) return;
-
-    const v = hidden.value || '';
-    trigger.textContent = v || 'Select model';
-    trigger.title = v || 'Model';
-    menu.querySelectorAll('.input-bar__dropdown-item').forEach((btn) => {
-        const selected = btn.getAttribute('data-value') === v;
-        btn.setAttribute('aria-selected', selected ? 'true' : 'false');
-    });
-}
-
-function initModelDropdown() {
-    const dropdown = document.getElementById('model-dropdown');
-    const hidden = document.getElementById('setting-model');
-    const trigger = document.getElementById('model-trigger');
-    const menu = document.getElementById('model-menu');
+    const dropdown = document.getElementById(dropdownId);
+    const hidden = document.getElementById(hiddenId);
+    const trigger = document.getElementById(triggerId);
+    const menu = document.getElementById(menuId);
 
     if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) {
-        return;
+        return null;
     }
+
+    const syncUI = () => {
+        const v = hidden.value || '';
+        trigger.textContent = formatDisplay(v);
+        if (showTitle) {
+            trigger.title = v || placeholder;
+        }
+        menu.querySelectorAll('.input-bar__dropdown-item').forEach((btn) => {
+            const selected = btn.getAttribute('data-value') === v;
+            btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+    };
 
     const close = () => {
         dropdown.classList.remove('is-open');
@@ -242,27 +254,27 @@ function initModelDropdown() {
 
     const setValue = (value) => {
         hidden.value = String(value);
-        syncModelDropdownUI();
-        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        syncUI();
+        if (dispatchChange) {
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     };
 
-    // Ensure a default selection exists.
-    if (!hidden.value) {
+    // Set default value if needed
+    if (defaultValue && !hidden.value) {
         const first = menu.querySelector('.input-bar__dropdown-item[data-value]');
         const firstVal = first?.getAttribute?.('data-value');
         if (firstVal) hidden.value = firstVal;
     }
 
-    syncModelDropdownUI();
+    // Initial sync
+    syncUI();
 
+    // Event listeners
     trigger.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (dropdown.classList.contains('is-open')) {
-            close();
-        } else {
-            open();
-        }
+        dropdown.classList.contains('is-open') ? close() : open();
     });
 
     menu.addEventListener('click', (e) => {
@@ -286,68 +298,47 @@ function initModelDropdown() {
         if (e.key !== 'Escape') return;
         if (!dropdown.classList.contains('is-open')) return;
         close();
+    });
+
+    return { syncUI, setValue, close };
+}
+
+// Store dropdown controllers for external access
+let modelDropdown = null;
+let numImagesDropdown = null;
+
+function syncNumImagesDropdownUI() {
+    if (numImagesDropdown) {
+        numImagesDropdown.syncUI();
+    }
+}
+
+function syncModelDropdownUI() {
+    if (modelDropdown) {
+        modelDropdown.syncUI();
+    }
+}
+
+function initModelDropdown() {
+    modelDropdown = createDropdown({
+        dropdownId: 'model-dropdown',
+        hiddenId: 'setting-model',
+        triggerId: 'model-trigger',
+        menuId: 'model-menu',
+        defaultValue: true,
+        placeholder: 'Select model',
+        showTitle: true,
+        dispatchChange: true
     });
 }
 
 function initNumImagesDropdown() {
-    const dropdown = document.getElementById('num-images-dropdown');
-    const hidden = document.getElementById('setting-num-images');
-    const trigger = document.getElementById('num-images-trigger');
-    const menu = document.getElementById('num-images-menu');
-
-    if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) {
-        return;
-    }
-
-    const close = () => {
-        dropdown.classList.remove('is-open');
-        trigger.setAttribute('aria-expanded', 'false');
-    };
-
-    const open = () => {
-        dropdown.classList.add('is-open');
-        trigger.setAttribute('aria-expanded', 'true');
-    };
-
-    const setValue = (value) => {
-        hidden.value = String(value);
-        syncNumImagesDropdownUI();
-    };
-
-    // Initial sync
-    syncNumImagesDropdownUI();
-
-    trigger.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropdown.classList.contains('is-open')) {
-            close();
-        } else {
-            open();
-        }
-    });
-
-    menu.addEventListener('click', (e) => {
-        const target = e.target;
-        if (!(target instanceof HTMLElement)) return;
-        const item = target.closest('.input-bar__dropdown-item');
-        if (!(item instanceof HTMLButtonElement)) return;
-        const value = item.getAttribute('data-value');
-        if (!value) return;
-        setValue(value);
-        close();
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!dropdown.classList.contains('is-open')) return;
-        if (e.target instanceof Node && dropdown.contains(e.target)) return;
-        close();
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        if (!dropdown.classList.contains('is-open')) return;
-        close();
+    numImagesDropdown = createDropdown({
+        dropdownId: 'num-images-dropdown',
+        hiddenId: 'setting-num-images',
+        triggerId: 'num-images-trigger',
+        menuId: 'num-images-menu',
+        formatDisplay: (v) => v || '2'
     });
 }
 
@@ -1184,12 +1175,14 @@ function closeSettings(button, panel) {
  * @param {HTMLButtonElement} button - Generate button element
  */
 async function handleGenerate(input, button) {
-    // Guard against rapid clicks
-    if (button.disabled) return;
+    // Guard against rapid clicks - check flag BEFORE any async operations
+    if (isGenerating || button.disabled) return;
+    isGenerating = true;
 
     const prompt = input.value.trim();
 
     if (!prompt) {
+        isGenerating = false;
         input.focus();
         shakeElement(input);
         return;
@@ -1266,6 +1259,7 @@ async function handleGenerate(input, button) {
         }
         showError(error.message || 'Failed to generate image. Please try again.');
     } finally {
+        isGenerating = false;
         setLoading(input, button, false);
     }
 }
@@ -1365,63 +1359,6 @@ function showOpenRouterApiKeyPopup(help) {
         </div>
     `;
 
-    const style = document.createElement('style');
-    style.textContent = `
-        .openrouter-key-modal { position: fixed; inset: 0; z-index: 10000; display: none; }
-        .openrouter-key-modal--active { display: block; }
-        .openrouter-key-modal__backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
-        .openrouter-key-modal__card {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            width: min(520px, calc(100vw - 32px));
-            background: #0f0f12;
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 14px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-            color: rgba(255,255,255,0.92);
-            padding: 16px;
-        }
-        .openrouter-key-modal__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-        .openrouter-key-modal__title { font-weight: 700; font-size: 16px; }
-        .openrouter-key-modal__close {
-            border: none;
-            background: transparent;
-            color: rgba(255,255,255,0.75);
-            font-size: 18px;
-            cursor: pointer;
-            padding: 4px 8px;
-        }
-        .openrouter-key-modal__body { margin-top: 10px; }
-        .openrouter-key-modal__message { margin: 0 0 12px 0; line-height: 1.35; color: rgba(255,255,255,0.85); }
-        .openrouter-key-modal__actions { display: flex; gap: 10px; align-items: center; }
-        .openrouter-key-modal__link {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.16);
-            color: rgba(255,255,255,0.92);
-            text-decoration: none;
-            background: rgba(255,255,255,0.06);
-        }
-        .openrouter-key-modal__ok {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: none;
-            cursor: pointer;
-            color: #0b0b0d;
-            background: #fbbf24;
-            font-weight: 700;
-        }
-        .openrouter-key-modal__hint { margin: 12px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.65); }
-    `;
-
     overlay.querySelector('.openrouter-key-modal__message').textContent = message;
     overlay.querySelector('.openrouter-key-modal__link').href = url;
 
@@ -1430,7 +1367,6 @@ function showOpenRouterApiKeyPopup(help) {
     overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
     overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
 
-    document.head.appendChild(style);
     document.body.appendChild(overlay);
 }
 
