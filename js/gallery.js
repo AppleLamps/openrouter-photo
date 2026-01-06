@@ -155,8 +155,15 @@ export function initGallery(container, emptyState) {
 function handleStateChange(action, data) {
     switch (action) {
         case 'add':
-            // Preload image before showing to ensure seamless transition
-            preloadAndShowImage(data);
+            // Check if the new image should be visible in current folder view
+            if (shouldShowImageInCurrentView(data)) {
+                // Preload image before showing to ensure seamless transition
+                preloadAndShowImage(data);
+            } else {
+                // Image goes to a different folder, just remove placeholder
+                removePlaceholder();
+                updateEmptyState();
+            }
             break;
         case 'remove':
             removeImageCard(data.id);
@@ -184,6 +191,30 @@ function handleStateChange(action, data) {
             // Update selection count in action bar
             updateEditModeActionBar();
             break;
+    }
+}
+
+/**
+ * Check if an image should be visible in the current folder view
+ * @param {Object} image - Image data
+ * @returns {boolean}
+ */
+function shouldShowImageInCurrentView(image) {
+    const visibilityMode = state.getPhotoVisibilityMode();
+    const selectedFolder = state.selectedFolderId;
+    const imageFolderId = image.folderId || null;
+
+    if (selectedFolder === null) {
+        // "All Photos" selected
+        if (visibilityMode === 'all') {
+            return true; // Show all images
+        } else {
+            // folder-only: show only uncategorized images
+            return imageFolderId === null;
+        }
+    } else {
+        // Specific folder selected - only show images in that folder
+        return imageFolderId === selectedFolder;
     }
 }
 

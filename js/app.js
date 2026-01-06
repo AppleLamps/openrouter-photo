@@ -366,12 +366,31 @@ function initFolderSelectorDropdown() {
         trigger.setAttribute('aria-expanded', 'true');
     };
 
-    const setValue = (folderId, folderName) => {
+    const setValue = (folderId, folderName, updateSidebar = false) => {
         hidden.value = folderId || '';
         if (nameSpan) {
             nameSpan.textContent = folderName || 'All Photos';
         }
+        // Optionally update sidebar selection to keep in sync
+        if (updateSidebar && state.selectedFolderId !== folderId) {
+            state.setSelectedFolder(folderId || null);
+        }
         close();
+    };
+
+    const syncWithSidebar = () => {
+        // Sync folder selector with sidebar's selected folder
+        const selectedFolderId = state.selectedFolderId;
+        if (selectedFolderId) {
+            const folder = state.getFolder(selectedFolderId);
+            if (folder) {
+                hidden.value = folder.id;
+                if (nameSpan) nameSpan.textContent = folder.name;
+            }
+        } else {
+            hidden.value = '';
+            if (nameSpan) nameSpan.textContent = 'All Photos';
+        }
     };
 
     const renderMenu = () => {
@@ -385,7 +404,7 @@ function initFolderSelectorDropdown() {
         allOption.setAttribute('data-value', '');
         allOption.setAttribute('aria-selected', hidden.value === '' ? 'true' : 'false');
         allOption.textContent = 'All Photos';
-        allOption.addEventListener('click', () => setValue('', 'All Photos'));
+        allOption.addEventListener('click', () => setValue('', 'All Photos', true));
         menu.appendChild(allOption);
 
         // Folder options
@@ -398,7 +417,7 @@ function initFolderSelectorDropdown() {
             option.setAttribute('data-value', folder.id);
             option.setAttribute('aria-selected', hidden.value === folder.id ? 'true' : 'false');
             option.textContent = folder.name;
-            option.addEventListener('click', () => setValue(folder.id, folder.name));
+            option.addEventListener('click', () => setValue(folder.id, folder.name, true));
             menu.appendChild(option);
         });
 
@@ -412,7 +431,7 @@ function initFolderSelectorDropdown() {
             const name = prompt('Enter folder name:');
             if (name && name.trim()) {
                 const folder = await state.addFolder(name.trim());
-                setValue(folder.id, folder.name);
+                setValue(folder.id, folder.name, true);
             }
         });
         menu.appendChild(newFolderOption);
@@ -421,10 +440,18 @@ function initFolderSelectorDropdown() {
     // Initial render
     renderMenu();
 
-    // Re-render menu when folders change
+    // Sync with sidebar selection on init
+    syncWithSidebar();
+
+    // Re-render menu and sync when folders or selection change
     state.subscribe((action) => {
         if (action === 'folder-add' || action === 'folder-rename' || action === 'folder-delete') {
             renderMenu();
+            syncWithSidebar();
+        }
+        if (action === 'folder-selected') {
+            // When sidebar folder selection changes, update the dropdown
+            syncWithSidebar();
         }
     });
 
