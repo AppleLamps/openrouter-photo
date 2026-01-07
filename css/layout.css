@@ -439,6 +439,7 @@
 @media (max-width: 480px) {
     .main-content {
         padding: calc(var(--spacing-md) + 56px) var(--spacing-md) var(--spacing-md) var(--spacing-md);
-        padding-bottom: 100px;
+        padding-bottom: 180px;
+        /* Increased to account for taller wrapping input bar */
     }
 }

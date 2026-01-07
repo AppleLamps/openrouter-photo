@@ -769,6 +769,67 @@ body.is-modal-open .spend-tracker {
     }
 }
 
+@media (max-width: 600px) {
+
+    /* Stack actions on mobile to prevent overlaps */
+    .input-bar__actions {
+        flex-wrap: wrap;
+        gap: 12px;
+        /* bit more space between rows */
+    }
+
+    .input-bar__actions-left {
+        order: 1;
+    }
+
+    .input-bar__actions-right {
+        order: 2;
+        margin-left: auto;
+        /* Push to right */
+    }
+
+    .input-bar__actions-center {
+        order: 3;
+        width: 100%;
+        margin-top: 4px;
+        /* Space between buttons and dropdowns */
+        justify-content: space-between;
+        /* Distribute dropdowns evenly */
+        border-top: 1px solid var(--border-color);
+        padding-top: 12px;
+    }
+
+    /* Make dropdowns take available space */
+    .input-bar__inline-dropdown {
+        flex: 1;
+        min-width: 0;
+        margin-right: 6px;
+    }
+
+    .input-bar__inline-dropdown:last-child {
+        margin-right: 0;
+    }
+
+    /* Adjust the buttons inside dropdowns to fill width */
+    .input-bar__inline-select {
+        width: 100%;
+        max-width: none;
+        justify-content: center;
+    }
+
+    /* Keep number compact maybe? */
+    #num-images-dropdown {
+        flex: 0 0 auto;
+        min-width: auto;
+    }
+
+    /* Better vertical alignment for input with icon button */
+    .input-bar__input {
+        margin-top: 6px;
+        /* Align text baseline with icon button */
+    }
+}
+
 @media (max-width: 480px) {
     .input-bar__container {
         padding: 12px 14px 8px 14px;
@@ -787,6 +848,15 @@ body.is-modal-open .spend-tracker {
     .input-bar__icon-btn svg {
         width: 18px;
         height: 18px;
+    }
+}
+
+/* Adjust toast positions for taller mobile input bar */
+@media (max-width: 600px) {
+
+    .toast-container,
+    .undo-toast {
+        bottom: 190px;
     }
 }
 
@@ -1188,10 +1258,15 @@ body.is-modal-open .spend-tracker {
     }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
     .settings-panel {
-        bottom: 70px;
+        bottom: 180px;
+        /* Moved up to clear the taller input bar */
     }
+}
+
+@media (max-width: 480px) {
+    /* .settings-panel bottom handled by 600px rule above */
 
     .settings-row {
         flex-direction: column;
