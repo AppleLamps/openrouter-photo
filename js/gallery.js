@@ -541,7 +541,7 @@ function removeImageCard(id) {
 }
 
 /**
- * Show loading placeholder
+ * Show loading placeholder with premium golden shimmer
  */
 export function showPlaceholder() {
     if (!galleryElement) return;
@@ -549,6 +549,17 @@ export function showPlaceholder() {
     const placeholder = createElement('div', {
         className: 'gallery__placeholder'
     });
+
+    // Add inner layers for enhanced shimmer effect
+    const innerShimmer = createElement('div', {
+        className: 'gallery__placeholder-inner'
+    });
+    const glowEffect = createElement('div', {
+        className: 'gallery__placeholder-glow'
+    });
+
+    placeholder.appendChild(innerShimmer);
+    placeholder.appendChild(glowEffect);
 
     placeholderElements.push(placeholder);
     galleryElement.insertBefore(placeholder, galleryElement.firstChild);

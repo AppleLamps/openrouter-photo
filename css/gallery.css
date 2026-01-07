@@ -46,80 +46,181 @@
     display: none;
 }
 
-/* Placeholder Card with Premium Golden Shimmer */
+/* Premium Golden Shimmer Placeholder */
 .gallery__placeholder {
     border-radius: 12px;
     overflow: hidden;
     position: relative;
     isolation: isolate;
-    /* Rich dark gold base with subtle gradient */
-    background:
-        radial-gradient(ellipse 150% 100% at 25% 0%, rgba(255, 215, 0, 0.12) 0%, transparent 50%),
-        radial-gradient(ellipse 150% 100% at 75% 100%, rgba(255, 193, 7, 0.08) 0%, transparent 50%),
-        radial-gradient(ellipse 100% 100% at 50% 50%, rgba(255, 215, 0, 0.03) 0%, transparent 70%),
-        linear-gradient(145deg, #1a1408 0%, #221a0a 30%, #2b220f 50%, #221a0a 70%, #1a1408 100%);
     aspect-ratio: 1;
-    border: 1px solid rgba(255, 215, 0, 0.15);
-    box-shadow:
-        0 10px 40px rgba(0, 0, 0, 0.2),
-        inset 0 0 0 1px rgba(255, 215, 0, 0.08),
-        inset 0 0 60px rgba(255, 215, 0, 0.04);
     contain: layout style paint;
+
+    /* Deep luxurious base with warm undertones */
+    background:
+        /* Ambient corner glows */
+        radial-gradient(ellipse 120% 80% at 10% 10%, rgba(255, 195, 0, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 120% 80% at 90% 90%, rgba(218, 165, 32, 0.06) 0%, transparent 50%),
+        /* Central warmth */
+        radial-gradient(ellipse 100% 100% at 50% 50%, rgba(255, 215, 0, 0.025) 0%, transparent 60%),
+        /* Rich dark gold gradient base */
+        linear-gradient(160deg,
+            #1a1509 0%,
+            #1f1a0b 20%,
+            #231d0c 40%,
+            #211b0b 60%,
+            #1c160a 80%,
+            #171308 100%);
+
+    /* Golden border with subtle glow */
+    border: 1px solid rgba(255, 200, 50, 0.12);
+    box-shadow:
+        /* Outer shadow for depth */
+        0 8px 32px rgba(0, 0, 0, 0.25),
+        0 16px 48px rgba(0, 0, 0, 0.15),
+        /* Inner golden rim */
+        inset 0 0 0 1px rgba(255, 215, 0, 0.06),
+        /* Soft inner glow */
+        inset 0 0 80px rgba(255, 200, 50, 0.03);
 }
 
-/* Primary shimmer wave - diagonal golden sweep */
+/* Primary shimmer wave - smooth diagonal sweep */
 .gallery__placeholder::before {
     content: '';
     position: absolute;
-    inset: 0;
-    transform: translateX(-100%) skewX(-15deg);
+    inset: -50%;
+    width: 200%;
+    height: 200%;
+    transform: translateX(-100%) rotate(-45deg);
     background: linear-gradient(90deg,
         transparent 0%,
-        transparent 25%,
-        rgba(255, 215, 0, 0.03) 35%,
-        rgba(255, 215, 0, 0.08) 45%,
-        rgba(255, 223, 100, 0.18) 50%,
-        rgba(255, 215, 0, 0.08) 55%,
-        rgba(255, 215, 0, 0.03) 65%,
-        transparent 75%,
+        transparent 35%,
+        rgba(255, 215, 0, 0.02) 42%,
+        rgba(255, 200, 50, 0.06) 46%,
+        rgba(255, 223, 100, 0.12) 48%,
+        rgba(255, 235, 150, 0.18) 50%,
+        rgba(255, 223, 100, 0.12) 52%,
+        rgba(255, 200, 50, 0.06) 54%,
+        rgba(255, 215, 0, 0.02) 58%,
+        transparent 65%,
         transparent 100%);
     will-change: transform;
-    animation: shimmerWave 2.2s ease-in-out infinite;
+    animation: shimmerWave 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-/* Secondary shimmer - subtle glow pulse */
+/* Secondary shimmer - luminous center pulse */
 .gallery__placeholder::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 80% 60% at 50% 50%,
-        rgba(255, 215, 0, 0.06) 0%,
-        transparent 60%);
+    background:
+        /* Central glow */
+        radial-gradient(ellipse 70% 50% at 50% 50%,
+            rgba(255, 215, 0, 0.08) 0%,
+            rgba(255, 200, 50, 0.04) 30%,
+            transparent 70%),
+        /* Edge highlight sweep */
+        linear-gradient(135deg,
+            transparent 0%,
+            transparent 40%,
+            rgba(255, 220, 100, 0.05) 50%,
+            transparent 60%,
+            transparent 100%);
     opacity: 0;
-    animation: shimmerPulse 2.2s ease-in-out infinite;
+    animation: shimmerGlow 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Inner shimmer layer for extra depth */
+.gallery__placeholder-inner {
+    position: absolute;
+    inset: 0;
+    background:
+        /* Subtle noise texture simulation */
+        repeating-linear-gradient(
+            90deg,
+            transparent 0px,
+            rgba(255, 215, 0, 0.008) 1px,
+            transparent 2px,
+            transparent 4px
+        ),
+        repeating-linear-gradient(
+            0deg,
+            transparent 0px,
+            rgba(255, 215, 0, 0.008) 1px,
+            transparent 2px,
+            transparent 4px
+        );
+    animation: shimmerTexture 4s linear infinite;
+    pointer-events: none;
 }
 
 @keyframes shimmerWave {
     0% {
-        transform: translateX(-100%) skewX(-15deg);
+        transform: translateX(-100%) rotate(-45deg);
     }
     100% {
-        transform: translateX(200%) skewX(-15deg);
+        transform: translateX(100%) rotate(-45deg);
     }
 }
 
-@keyframes shimmerPulse {
+@keyframes shimmerGlow {
     0%, 100% {
         opacity: 0;
+        transform: scale(0.98);
     }
     50% {
         opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes shimmerTexture {
+    0% {
+        background-position: 0 0, 0 0;
+    }
+    100% {
+        background-position: 40px 0, 0 40px;
+    }
+}
+
+/* Edge glow animation for premium feel */
+.gallery__placeholder-glow {
+    position: absolute;
+    inset: -1px;
+    border-radius: 13px;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 215, 0, 0.15) 0%,
+        transparent 30%,
+        transparent 70%,
+        rgba(255, 195, 50, 0.1) 100%
+    );
+    opacity: 0;
+    animation: shimmerEdge 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    pointer-events: none;
+}
+
+@keyframes shimmerEdge {
+    0%, 100% {
+        opacity: 0;
+        transform: rotate(0deg);
+    }
+    25% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 0;
+        transform: rotate(180deg);
+    }
+    75% {
+        opacity: 0.4;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .gallery__placeholder::before,
-    .gallery__placeholder::after {
+    .gallery__placeholder::after,
+    .gallery__placeholder-inner,
+    .gallery__placeholder-glow {
         animation: none !important;
     }
 
@@ -129,6 +230,11 @@
 
     .gallery__placeholder::after {
         opacity: 0.5;
+        transform: scale(1);
+    }
+
+    .gallery__placeholder-glow {
+        opacity: 0.3;
     }
 }
 
@@ -158,6 +264,10 @@
 
     .gallery__placeholder {
         border-radius: 10px;
+    }
+
+    .gallery__placeholder-glow {
+        border-radius: 11px;
     }
 }
 
