@@ -523,33 +523,36 @@ function openSpendBreakdownModal() {
                 const imgCount = Number.isFinite(e.images) ? Math.round(e.images) : 0;
                 return `
                     <tr>
-                        <td style="padding: 10px 8px; vertical-align: top; color: rgba(255,255,255,0.92); font-weight: 600; word-break: break-word;">${e.model}</td>
-                        <td style="padding: 10px 8px; white-space: nowrap; color: rgba(255,255,255,0.85); text-align: right;">${formatUsd(e.cost)}</td>
-                        <td style="padding: 10px 8px; white-space: nowrap; color: rgba(255,255,255,0.75); text-align: right;">${e.generations}</td>
-                        <td style="padding: 10px 8px; white-space: nowrap; color: rgba(255,255,255,0.75); text-align: right;">${imgCount}</td>
+                        <td class="spend-breakdown__model">${e.model}</td>
+                        <td class="spend-breakdown__cost">${formatUsd(e.cost)}</td>
+                        <td class="spend-breakdown__stat">${e.generations}</td>
+                        <td class="spend-breakdown__stat">${imgCount}</td>
                     </tr>
                 `;
             })
             .join('')
-        : `<tr><td colspan="4" style="padding: 14px 8px; color: rgba(255,255,255,0.75);">No spend recorded yet.</td></tr>`;
+        : `<tr><td colspan="4" class="spend-breakdown__empty">No spend recorded yet.</td></tr>`;
 
     overlay.innerHTML = `
         <div class="openrouter-key-modal__backdrop" role="presentation"></div>
         <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="Spend breakdown">
             <div class="openrouter-key-modal__header">
-                <div class="openrouter-key-modal__title">Spend breakdown</div>
+                <h2 class="openrouter-key-modal__title">Spend breakdown</h2>
                 <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
             </div>
             <div class="openrouter-key-modal__body">
-                <p class="openrouter-key-modal__message" style="margin-bottom: 10px;">Total spent: <strong>${formatUsd(spend.total)}</strong></p>
-                <div style="overflow: auto; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;">
-                    <table style="width: 100%; border-collapse: collapse; min-width: 520px;">
+                <div class="spend-breakdown__total">
+                    <span class="spend-breakdown__total-label">Total spent</span>
+                    <span class="spend-breakdown__total-value">${formatUsd(spend.total)}</span>
+                </div>
+                <div class="spend-breakdown__table-container">
+                    <table class="spend-breakdown__table">
                         <thead>
                             <tr>
-                                <th style="text-align: left; padding: 10px 8px; color: rgba(255,255,255,0.65); font-weight: 600;">Model</th>
-                                <th style="text-align: right; padding: 10px 8px; color: rgba(255,255,255,0.65); font-weight: 600;">Cost</th>
-                                <th style="text-align: right; padding: 10px 8px; color: rgba(255,255,255,0.65); font-weight: 600;">Generations</th>
-                                <th style="text-align: right; padding: 10px 8px; color: rgba(255,255,255,0.65); font-weight: 600;">Images</th>
+                                <th>Model</th>
+                                <th>Cost</th>
+                                <th>Generations</th>
+                                <th>Images</th>
                             </tr>
                         </thead>
                         <tbody>
