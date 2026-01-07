@@ -92,17 +92,17 @@
     height: 200%;
     transform: translateX(-100%) rotate(-45deg);
     background: linear-gradient(90deg,
-        transparent 0%,
-        transparent 35%,
-        rgba(255, 215, 0, 0.02) 42%,
-        rgba(255, 200, 50, 0.06) 46%,
-        rgba(255, 223, 100, 0.12) 48%,
-        rgba(255, 235, 150, 0.18) 50%,
-        rgba(255, 223, 100, 0.12) 52%,
-        rgba(255, 200, 50, 0.06) 54%,
-        rgba(255, 215, 0, 0.02) 58%,
-        transparent 65%,
-        transparent 100%);
+            transparent 0%,
+            transparent 35%,
+            rgba(255, 215, 0, 0.02) 42%,
+            rgba(255, 200, 50, 0.06) 46%,
+            rgba(255, 223, 100, 0.12) 48%,
+            rgba(255, 235, 150, 0.18) 50%,
+            rgba(255, 223, 100, 0.12) 52%,
+            rgba(255, 200, 50, 0.06) 54%,
+            rgba(255, 215, 0, 0.02) 58%,
+            transparent 65%,
+            transparent 100%);
     will-change: transform;
     animation: shimmerWave 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
@@ -135,20 +135,16 @@
     inset: 0;
     background:
         /* Subtle noise texture simulation */
-        repeating-linear-gradient(
-            90deg,
+        repeating-linear-gradient(90deg,
             transparent 0px,
             rgba(255, 215, 0, 0.008) 1px,
             transparent 2px,
-            transparent 4px
-        ),
-        repeating-linear-gradient(
-            0deg,
+            transparent 4px),
+        repeating-linear-gradient(0deg,
             transparent 0px,
             rgba(255, 215, 0, 0.008) 1px,
             transparent 2px,
-            transparent 4px
-        );
+            transparent 4px);
     animation: shimmerTexture 4s linear infinite;
     pointer-events: none;
 }
@@ -157,16 +153,20 @@
     0% {
         transform: translateX(-100%) rotate(-45deg);
     }
+
     100% {
         transform: translateX(100%) rotate(-45deg);
     }
 }
 
 @keyframes shimmerGlow {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 0;
         transform: scale(0.98);
     }
+
     50% {
         opacity: 1;
         transform: scale(1);
@@ -177,6 +177,7 @@
     0% {
         background-position: 0 0, 0 0;
     }
+
     100% {
         background-position: 40px 0, 0 40px;
     }
@@ -187,36 +188,40 @@
     position: absolute;
     inset: -1px;
     border-radius: 13px;
-    background: linear-gradient(
-        135deg,
-        rgba(255, 215, 0, 0.15) 0%,
-        transparent 30%,
-        transparent 70%,
-        rgba(255, 195, 50, 0.1) 100%
-    );
+    background: linear-gradient(135deg,
+            rgba(255, 215, 0, 0.15) 0%,
+            transparent 30%,
+            transparent 70%,
+            rgba(255, 195, 50, 0.1) 100%);
     opacity: 0;
     animation: shimmerEdge 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     pointer-events: none;
 }
 
 @keyframes shimmerEdge {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 0;
         transform: rotate(0deg);
     }
+
     25% {
         opacity: 0.6;
     }
+
     50% {
         opacity: 0;
         transform: rotate(180deg);
     }
+
     75% {
         opacity: 0.4;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
+
     .gallery__placeholder::before,
     .gallery__placeholder::after,
     .gallery__placeholder-inner,
@@ -236,6 +241,85 @@
     .gallery__placeholder-glow {
         opacity: 0.3;
     }
+}
+
+/* Error Card */
+.gallery__error-card {
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+    aspect-ratio: 1;
+    text-align: center;
+}
+
+.gallery__error-card-icon {
+    width: 48px;
+    height: 48px;
+    color: #ef4444;
+}
+
+.gallery__error-card-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.gallery__error-card-message {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    max-width: 90%;
+}
+
+.gallery__error-card-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.gallery__error-card-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.gallery__error-card-btn--retry {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.gallery__error-card-btn--retry:hover {
+    background: var(--accent-secondary);
+}
+
+.gallery__error-card-btn--copy {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.gallery__error-card-btn--copy:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.gallery__error-card-btn--remove {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 8px 12px;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.gallery__error-card-btn--remove:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 /* Responsive Gallery */
@@ -396,12 +480,12 @@
     transition: all 0.15s ease;
 }
 
-.gallery__checkbox:checked + .gallery__checkmark {
+.gallery__checkbox:checked+.gallery__checkmark {
     background: var(--accent-primary);
     border-color: var(--accent-primary);
 }
 
-.gallery__checkbox:checked + .gallery__checkmark::after {
+.gallery__checkbox:checked+.gallery__checkmark::after {
     content: '';
     width: 6px;
     height: 10px;
@@ -506,4 +590,36 @@
         flex-wrap: wrap;
         justify-content: center;
     }
+}
+
+/* Model/Cost Badge on Gallery Cards */
+.gallery__metadata-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.gallery__card:hover .gallery__metadata-badge {
+    opacity: 1;
+}
+
+.gallery__metadata-model {
+    color: #fbbf24;
+}
+
+.gallery__metadata-cost {
+    color: #a3e635;
 }

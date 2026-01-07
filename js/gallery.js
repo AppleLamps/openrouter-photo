@@ -11,8 +11,8 @@ let galleryElement = null;
 /** @type {HTMLElement|null} */
 let emptyStateElement = null;
 
-/** @type {HTMLElement[]} */
-let placeholderElements = [];
+/** @type {Map<string, HTMLElement>} */
+let placeholderElements = new Map();
 
 /** @type {Map<string, number>} */
 let confirmationTimeouts = new Map();
@@ -160,8 +160,7 @@ function handleStateChange(action, data) {
                 // Preload image before showing to ensure seamless transition
                 preloadAndShowImage(data);
             } else {
-                // Image goes to a different folder, just remove placeholder
-                removePlaceholder();
+                // Image goes to a different folder; nothing to render here
                 updateEmptyState();
             }
             break;
@@ -230,7 +229,6 @@ function preloadAndShowImage(image) {
         // Clean up event handlers to allow garbage collection
         img.onload = null;
         img.onerror = null;
-        removePlaceholder();
         prependImageCard(image, true); // true = already loaded
         updateEmptyState();
     };
@@ -400,7 +398,7 @@ function showMoveToFolderMenu(anchor) {
 function updateEmptyState() {
     if (!emptyStateElement) return;
 
-    const hasImages = state.getImages().length > 0 || placeholderElements.length > 0;
+    const hasImages = state.getImages().length > 0 || placeholderElements.size > 0;
     emptyStateElement.style.display = hasImages ? 'none' : 'flex';
 }
 
@@ -542,12 +540,14 @@ function removeImageCard(id) {
 
 /**
  * Show loading placeholder with premium golden shimmer
+ * @param {string} placeholderId - Unique ID for this placeholder
  */
-export function showPlaceholder() {
+export function showPlaceholder(placeholderId) {
     if (!galleryElement) return;
 
     const placeholder = createElement('div', {
-        className: 'gallery__placeholder'
+        className: 'gallery__placeholder',
+        'data-placeholder-id': placeholderId
     });
 
     // Add inner layers for enhanced shimmer effect
@@ -561,18 +561,21 @@ export function showPlaceholder() {
     placeholder.appendChild(innerShimmer);
     placeholder.appendChild(glowEffect);
 
-    placeholderElements.push(placeholder);
+    placeholderElements.set(placeholderId, placeholder);
     galleryElement.insertBefore(placeholder, galleryElement.firstChild);
     updateEmptyState();
 }
 
 /**
- * Remove loading placeholder
+ * Remove loading placeholder by ID
+ * @param {string} placeholderId - Unique ID for this placeholder
  */
-export function removePlaceholder() {
-    const placeholder = placeholderElements.pop();
+export function removePlaceholder(placeholderId) {
+    const placeholder = placeholderElements.get(placeholderId);
     if (placeholder) {
         placeholder.remove();
+        placeholderElements.delete(placeholderId);
+        updateEmptyState();
     }
 }
 
@@ -581,8 +584,81 @@ export function removePlaceholder() {
  */
 export function removeAllPlaceholders() {
     placeholderElements.forEach(p => p.remove());
-    placeholderElements = [];
+    placeholderElements.clear();
     updateEmptyState();
+}
+
+/**
+ * Replace a placeholder with an error card
+ * @param {string} placeholderId - Unique ID for the placeholder
+ * @param {string} errorMessage - Error message to display
+ * @param {string} prompt - Original prompt
+ * @param {Function} onRetry - Retry callback
+ */
+export function showErrorCard(placeholderId, errorMessage, prompt, onRetry) {
+    const placeholder = placeholderElements.get(placeholderId);
+    if (!placeholder || !galleryElement) return;
+
+    const errorCard = createElement('div', {
+        className: 'gallery__error-card',
+        'data-error-id': placeholderId
+    }, [
+        createElement('div', { className: 'gallery__error-card-icon' }, [
+            createElement('svg', {
+                xmlns: 'http://www.w3.org/2000/svg',
+                viewBox: '0 0 24 24',
+                fill: 'none',
+                stroke: 'currentColor',
+                'stroke-width': '2',
+                'stroke-linecap': 'round',
+                'stroke-linejoin': 'round'
+            }, [
+                createElement('circle', { cx: '12', cy: '12', r: '10' }),
+                createElement('line', { x1: '12', y1: '8', x2: '12', y2: '12' }),
+                createElement('line', { x1: '12', y1: '16', x2: '12.01', y2: '16' })
+            ])
+        ]),
+        createElement('div', { className: 'gallery__error-card-message' }, errorMessage),
+        createElement('div', { className: 'gallery__error-card-actions' }, [
+            createElement('button', {
+                className: 'gallery__error-card-btn gallery__error-card-btn--retry',
+                onClick: () => {
+                    errorCard.remove();
+                    onRetry();
+                }
+            }, 'Retry'),
+            createElement('button', {
+                className: 'gallery__error-card-btn gallery__error-card-btn--copy',
+                onClick: async () => {
+                    try {
+                        await navigator.clipboard.writeText(errorMessage);
+                        // Show success feedback
+                        const btn = errorCard.querySelector('.gallery__error-card-btn--copy');
+                        if (btn) {
+                            const originalText = btn.textContent;
+                            btn.textContent = 'Copied!';
+                            setTimeout(() => {
+                                btn.textContent = originalText;
+                            }, 2000);
+                        }
+                    } catch (err) {
+                        console.error('Failed to copy error:', err);
+                    }
+                }
+            }, 'Copy Error'),
+            createElement('button', {
+                className: 'gallery__error-card-btn gallery__error-card-btn--remove',
+                onClick: () => {
+                    errorCard.remove();
+                    updateEmptyState();
+                }
+            }, '×')
+        ])
+    ]);
+
+    // Replace placeholder with error card
+    placeholder.replaceWith(errorCard);
+    placeholderElements.delete(placeholderId);
 }
 
 /**

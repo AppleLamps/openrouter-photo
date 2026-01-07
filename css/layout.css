@@ -70,6 +70,40 @@
     max-width: 400px;
 }
 
+.empty-state__no-key {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    max-width: 400px;
+}
+
+.empty-state__no-key-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-md);
+}
+
+.empty-state__button {
+    padding: 10px 20px;
+    background: var(--accent-primary);
+    color: white;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all 0.15s ease;
+}
+
+.empty-state__button:hover {
+    background: var(--accent-secondary);
+    transform: translateY(-1px);
+}
+
+.empty-state__button:active {
+    transform: translateY(0);
+}
+
 /* ========== Sidebar ========== */
 
 .sidebar {
@@ -346,7 +380,8 @@
 
 /* Input bar and settings panel adjust when sidebar is open */
 .app-container--sidebar-open .input-bar {
-    left: calc(50% + 130px); /* shift by half the sidebar width */
+    left: calc(50% + 130px);
+    /* shift by half the sidebar width */
     width: calc(100% - 260px - var(--spacing-xl) * 2);
 }
 

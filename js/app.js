@@ -5,7 +5,7 @@
 import { generateImage, enhancePrompt, testOpenRouterKey, getRandomPromptFromAI } from './api.js';
 import { state } from './state.js';
 import { generateId } from './utils.js';
-import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, initLightbox, closeLightbox } from './gallery.js';
+import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, showErrorCard, initLightbox, closeLightbox } from './gallery.js';
 import { formatBytes } from './image-utils.js';
 import { initSidebar } from './sidebar.js';
 
@@ -18,6 +18,12 @@ let promptImageDataUrls = [];
 
 /** @type {boolean} - Prevents race condition from rapid button clicks */
 let isGenerating = false;
+
+/** @type {AbortController|null} - For canceling generation */
+let generationAbortController = null;
+
+/** @type {Map<string, {prompt: string, settings: Object}>} - Track placeholder metadata for retry */
+let placeholderMetadata = new Map();
 
 function renderPromptAttachments() {
     const container = document.getElementById('prompt-attachments');
@@ -609,6 +615,7 @@ async function init() {
     const promptImageBtn = document.getElementById('prompt-image-btn');
     const promptImageInput = document.getElementById('prompt-image-input');
     const generateBtn = document.getElementById('generate-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
     const enhanceBtn = document.getElementById('enhance-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const settingsPanel = document.getElementById('settings-panel');
@@ -637,6 +644,11 @@ async function init() {
                 e.preventDefault();
                 handleGenerate(promptInput, generateBtn);
             }
+            // Escape key to cancel generation
+            if (e.key === 'Escape' && isGenerating) {
+                e.preventDefault();
+                handleCancelGeneration();
+            }
         });
 
         // Auto-resize textarea
@@ -654,6 +666,11 @@ async function init() {
                 await addPromptImageFiles(imageFiles);
             }
         });
+    }
+
+    // Set up cancel button
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', handleCancelGeneration);
     }
 
     // Attach images from file picker
@@ -1212,12 +1229,19 @@ async function handleGenerate(input, button) {
     const settings = getGenerationSettings();
     const numImages = settings.num_images;
 
-    // Disable input while generating
+    // Create abort controller for cancellation
+    generationAbortController = new AbortController();
+
+    // Keep textarea enabled but disable generate button and show cancel button
     setLoading(input, button, true);
 
-    // Show placeholder cards for each image
+    // Show placeholder cards for each image with unique IDs
+    const placeholderIds = [];
     for (let i = 0; i < numImages; i++) {
-        showPlaceholder();
+        const placeholderId = generateId();
+        placeholderIds.push(placeholderId);
+        showPlaceholder(placeholderId);
+        placeholderMetadata.set(placeholderId, { prompt, settings });
     }
 
     try {
@@ -1228,10 +1252,15 @@ async function handleGenerate(input, button) {
                 : {}),
         };
 
-        const response = await generateImage(prompt, requestSettings);
+        const response = await generateImage(prompt, requestSettings, generationAbortController.signal);
 
-        // Always remove all placeholders first
-        removeAllPlaceholders();
+        // Check if generation was cancelled
+        if (generationAbortController.signal.aborted) {
+            // Remove all placeholders on cancel
+            placeholderIds.forEach(id => removePlaceholder(id));
+            placeholderIds.forEach(id => placeholderMetadata.delete(id));
+            return;
+        }
 
         if (response.images && response.images.length > 0) {
             recordSpend(response.meta, response.images.length);
@@ -1245,7 +1274,13 @@ async function handleGenerate(input, button) {
             const folderId = selectedFolderInput?.value || null;
 
             // Add each generated image to state with settings for remix
-            response.images.forEach((image) => {
+            response.images.forEach((image, index) => {
+                // Remove corresponding placeholder
+                if (placeholderIds[index]) {
+                    removePlaceholder(placeholderIds[index]);
+                    placeholderMetadata.delete(placeholderIds[index]);
+                }
+
                 state.addImage({
                     id: generateId(),
                     url: image.url,
@@ -1261,6 +1296,12 @@ async function handleGenerate(input, button) {
                 });
             });
 
+            // Remove any remaining placeholders (if fewer images returned than requested)
+            placeholderIds.slice(response.images.length).forEach(id => {
+                removePlaceholder(id);
+                placeholderMetadata.delete(id);
+            });
+
             // Clear input and reset height
             input.value = '';
             autoResizeTextarea(input);
@@ -1268,11 +1309,47 @@ async function handleGenerate(input, button) {
             // Clear prompt attachments after a successful generation
             clearPromptAttachments();
 
+        } else {
+            // No images returned - show error cards for all placeholders
+            placeholderIds.forEach(id => {
+                const metadata = placeholderMetadata.get(id);
+                if (metadata) {
+                    showErrorCard(
+                        id,
+                        'No images were generated. Please try again.',
+                        metadata.prompt,
+                        () => retryGeneration(metadata.prompt, metadata.settings)
+                    );
+                    placeholderMetadata.delete(id);
+                }
+            });
         }
     } catch (error) {
         console.error('Generation failed:', error);
-        // Remove all placeholders on error
-        removeAllPlaceholders();
+
+        // Check if it was a cancellation
+        if (error.name === 'AbortError') {
+            placeholderIds.forEach(id => {
+                removePlaceholder(id);
+                placeholderMetadata.delete(id);
+            });
+            return;
+        }
+
+        // Show error cards for all placeholders instead of removing them
+        placeholderIds.forEach(id => {
+            const metadata = placeholderMetadata.get(id);
+            if (metadata) {
+                showErrorCard(
+                    id,
+                    error.message || 'Failed to generate image. Please try again.',
+                    metadata.prompt,
+                    () => retryGeneration(metadata.prompt, metadata.settings)
+                );
+                placeholderMetadata.delete(id);
+            }
+        });
+
         if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
             showOpenRouterApiKeyPopup(error?.help);
             return;
@@ -1280,6 +1357,40 @@ async function handleGenerate(input, button) {
         showError(error.message || 'Failed to generate image. Please try again.');
     } finally {
         isGenerating = false;
+        generationAbortController = null;
+        setLoading(input, button, false);
+    }
+}
+
+/**
+ * Retry generation with saved prompt and settings
+ * @param {string} prompt - Original prompt
+ * @param {Object} settings - Original settings
+ */
+async function retryGeneration(prompt, settings) {
+    const input = document.getElementById('prompt-input');
+    const button = document.getElementById('generate-btn');
+
+    if (input && button) {
+        input.value = prompt;
+        autoResizeTextarea(input);
+        await handleGenerate(input, button);
+    }
+}
+
+/**
+ * Cancel ongoing generation
+ */
+function handleCancelGeneration() {
+    if (generationAbortController) {
+        generationAbortController.abort();
+        generationAbortController = null;
+    }
+    isGenerating = false;
+
+    const input = document.getElementById('prompt-input');
+    const button = document.getElementById('generate-btn');
+    if (input && button) {
         setLoading(input, button, false);
     }
 }
@@ -1578,18 +1689,28 @@ function flashInput(input) {
  * @param {boolean} isLoading
  */
 function setLoading(input, button, isLoading) {
-    input.disabled = isLoading;
+    // Keep textarea enabled during generation
     button.disabled = isLoading;
 
     const sendIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></svg>`;
     const loadingIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin-icon"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
 
+    const cancelBtn = document.getElementById('cancel-btn');
+
     if (isLoading) {
         button.classList.add('input-bar__button--loading');
         button.innerHTML = loadingIcon;
+        button.style.display = 'none';
+        if (cancelBtn) {
+            cancelBtn.style.display = 'flex';
+        }
     } else {
         button.classList.remove('input-bar__button--loading');
         button.innerHTML = sendIcon;
+        button.style.display = 'flex';
+        if (cancelBtn) {
+            cancelBtn.style.display = 'none';
+        }
     }
 }
 

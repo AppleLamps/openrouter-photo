@@ -69,10 +69,11 @@ function getOpenRouterApiKey() {
  * Generate an image from a prompt
  * @param {string} prompt - Image description prompt
  * @param {GenerateOptions} [options] - Optional generation parameters
+ * @param {AbortSignal} [signal] - Optional abort signal for cancellation
  * @returns {Promise<GenerateResponse>}
  * @throws {Error} If generation fails
  */
-export async function generateImage(prompt, options = {}) {
+export async function generateImage(prompt, options = {}, signal = null) {
     if (!prompt || typeof prompt !== 'string') {
         throw new Error('Prompt is required');
     }
@@ -97,6 +98,7 @@ export async function generateImage(prompt, options = {}) {
                 ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
             },
             body: JSON.stringify(requestBody),
+            ...(signal ? { signal } : {})
         });
 
         if (!response.ok) {
@@ -118,6 +120,9 @@ export async function generateImage(prompt, options = {}) {
 
         return data;
     } catch (error) {
+        if (error.name === 'AbortError') {
+            throw error; // Re-throw abort errors
+        }
         if (error.name === 'TypeError' && error.message.includes('fetch')) {
             throw new Error('Network error: please check your connection');
         }
