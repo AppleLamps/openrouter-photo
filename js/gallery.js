@@ -35,6 +35,9 @@ let scrollYBeforeLock = 0;
 /** @type {boolean} */
 let isScrollLocked = false;
 
+const ZIP_DOWNLOAD_THRESHOLD = 5;
+let jsZipLoaderPromise = null;
+
 /**
  * Swipe-to-close state for the lightbox (kept at module scope so it can be reset on close).
  * @type {{startX:number,startY:number,startTime:number,deltaY:number,isActive:boolean}}
@@ -271,6 +274,110 @@ function renderGallery() {
     updateEditModeActionBar();
 }
 
+function getExtensionFromType(mimeType) {
+    if (!mimeType) return 'png';
+    if (mimeType.includes('jpeg')) return 'jpg';
+    const [, subtype] = mimeType.split('/');
+    if (!subtype) return 'png';
+    return subtype.split(';')[0] || 'png';
+}
+
+function triggerBlobDownload(blob, filename) {
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+}
+
+async function loadJSZip() {
+    if (!jsZipLoaderPromise) {
+        jsZipLoaderPromise = import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm')
+            .then(mod => mod.default || mod)
+            .catch((error) => {
+                jsZipLoaderPromise = null;
+                throw error;
+            });
+    }
+    return jsZipLoaderPromise;
+}
+
+async function getImageBlobForDownload(imageId) {
+    await state.ready;
+
+    if (!state.useFallback && state.storage) {
+        try {
+            const blob = await state.storage.getFullImageBlob(imageId);
+            if (blob) return blob;
+        } catch (error) {
+            console.error(`Failed to read blob for image ${imageId}:`, error);
+        }
+    }
+
+    const image = state.getImage(imageId);
+    if (!image || !image.url) return null;
+
+    try {
+        const fullUrl = await state.getFullImageUrl(imageId);
+        const response = await fetch(fullUrl || image.url);
+        return await response.blob();
+    } catch (error) {
+        console.error(`Failed to fetch image ${imageId}:`, error);
+        return null;
+    }
+}
+
+async function downloadSelectedImages(button) {
+    const selectedIds = state.getSelectedImageIds();
+    if (selectedIds.length === 0) return;
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.dataset.loading = 'true';
+    button.textContent = 'Preparing...';
+
+    try {
+        const files = [];
+        for (const id of selectedIds) {
+            const blob = await getImageBlobForDownload(id);
+            if (!blob) continue;
+            const extension = getExtensionFromType(blob.type);
+            files.push({ id, blob, extension });
+        }
+
+        if (files.length === 0) return;
+
+        if (files.length >= ZIP_DOWNLOAD_THRESHOLD) {
+            button.textContent = 'Zipping...';
+            try {
+                const JSZip = await loadJSZip();
+                const zip = new JSZip();
+                files.forEach(({ id, blob, extension }) => {
+                    zip.file(`ai-image-${id}.${extension}`, blob);
+                });
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                triggerBlobDownload(zipBlob, `ai-images-${files.length}.zip`);
+                return;
+            } catch (error) {
+                console.error('Bulk zip download failed, falling back to individual downloads:', error);
+            }
+        }
+
+        files.forEach(({ id, blob, extension }) => {
+            triggerBlobDownload(blob, `ai-image-${id}.${extension}`);
+        });
+    } catch (error) {
+        console.error('Failed to download selected images:', error);
+    } finally {
+        button.dataset.loading = 'false';
+        button.textContent = originalText;
+        button.disabled = state.selectedImageIds.size === 0;
+    }
+}
+
 /**
  * Update or create the edit mode floating action bar
  */
@@ -296,10 +403,23 @@ function updateEditModeActionBar() {
             className: 'edit-mode-action-bar__count'
         }, `${selectedCount} selected`);
 
+        const downloadBtn = createElement('button', {
+            className: 'edit-mode-action-bar__btn',
+            type: 'button',
+            disabled: selectedCount === 0,
+            dataset: { action: 'download', loading: 'false' },
+            onClick: (event) => {
+                if (event?.currentTarget instanceof HTMLElement) {
+                    downloadSelectedImages(event.currentTarget);
+                }
+            }
+        }, 'Download Selected');
+
         const moveBtn = createElement('button', {
             className: 'edit-mode-action-bar__btn',
             type: 'button',
             disabled: selectedCount === 0,
+            dataset: { action: 'move' },
             onClick: () => showMoveToFolderMenu(moveBtn)
         }, 'Move to Folder');
 
@@ -316,6 +436,7 @@ function updateEditModeActionBar() {
         }, 'Done');
 
         bar.appendChild(countSpan);
+        bar.appendChild(downloadBtn);
         bar.appendChild(moveBtn);
         bar.appendChild(selectAllBtn);
         bar.appendChild(cancelBtn);
@@ -326,8 +447,17 @@ function updateEditModeActionBar() {
         const countSpan = existingBar.querySelector('.edit-mode-action-bar__count');
         if (countSpan) countSpan.textContent = `${selectedCount} selected`;
 
-        const moveBtn = existingBar.querySelector('.edit-mode-action-bar__btn');
+        const moveBtn = existingBar.querySelector('[data-action="move"]');
         if (moveBtn) moveBtn.disabled = selectedCount === 0;
+
+        const downloadBtn = existingBar.querySelector('[data-action="download"]');
+        if (downloadBtn) {
+            const isLoading = downloadBtn.dataset.loading === 'true';
+            downloadBtn.disabled = isLoading || selectedCount === 0;
+            if (!isLoading) {
+                downloadBtn.textContent = 'Download Selected';
+            }
+        }
     }
 }
 
@@ -672,6 +802,7 @@ async function openLightbox(image) {
     const modalImage = modal.querySelector('.modal__image');
     const modalPrompt = modal.querySelector('.modal__prompt');
     const downloadBtn = modal.querySelector('.modal__download-btn');
+    const shareBtn = modal.querySelector('.modal__share-btn');
     const copyBtn = modal.querySelector('.modal__copy-btn');
     const actionsContainer = modal.querySelector('.modal__actions');
     const closeBtn = modal.querySelector('.modal__close');
@@ -723,8 +854,45 @@ async function openLightbox(image) {
     if (downloadBtn) {
         downloadBtn.onclick = async () => {
             const fullUrl = await state.getFullImageUrl(image.id);
-            downloadImage(fullUrl || image.url, `ai-image-${image.id}.png`);
+            downloadImage(fullUrl || image.url, `ai-image-${image.id}.png`);    
         };
+    }
+
+    if (shareBtn) {
+        if (!navigator.share) {
+            shareBtn.style.display = 'none';
+        } else {
+            shareBtn.style.display = '';
+            shareBtn.onclick = async () => {
+                const originalText = shareBtn.textContent;
+                shareBtn.disabled = true;
+                shareBtn.textContent = 'Sharing...';
+                try {
+                    const blob = await getImageBlobForDownload(image.id);
+                    if (!blob) throw new Error('Missing image blob');
+                    const extension = getExtensionFromType(blob.type);
+                    const file = new File([blob], `ai-image-${image.id}.${extension}`, {
+                        type: blob.type || 'image/png'
+                    });
+                    const shareData = {
+                        files: [file],
+                        title: 'AI Generated Image',
+                        text: image.prompt
+                    };
+                    if (navigator.canShare && !navigator.canShare(shareData)) {
+                        throw new Error('Cannot share file payload');
+                    }
+                    await navigator.share(shareData);
+                } catch (error) {
+                    console.error('Share failed, falling back to download:', error);
+                    const fullUrl = await state.getFullImageUrl(image.id);
+                    downloadImage(fullUrl || image.url, `ai-image-${image.id}.png`);
+                } finally {
+                    shareBtn.textContent = originalText;
+                    shareBtn.disabled = false;
+                }
+            };
+        }
     }
 
     if (copyBtn) {

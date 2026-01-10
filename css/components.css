@@ -1401,9 +1401,9 @@ body.is-modal-open .spend-tracker {
 .openrouter-key-modal__backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(32, 33, 36, 0.35);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
 .openrouter-key-modal__card {
@@ -1414,13 +1414,22 @@ body.is-modal-open .spend-tracker {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(180deg, #1f1f1f 0%, #1a1a1a 100%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius-lg);
     box-shadow:
-        0 32px 64px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-    color: white;
+        0 24px 56px rgba(32, 33, 36, 0.18),
+        0 4px 12px rgba(32, 33, 36, 0.08);
+    color: var(--text-primary);
+}
+
+.openrouter-key-modal__card::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 6px;
+    background: linear-gradient(90deg, rgba(26, 26, 26, 0.85), rgba(26, 26, 26, 0.25));
+    opacity: 0.7;
 }
 
 .openrouter-key-modal__header {
@@ -1429,12 +1438,13 @@ body.is-modal-open .spend-tracker {
     justify-content: space-between;
     gap: var(--spacing-md);
     padding: var(--spacing-lg) var(--spacing-xl);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
 }
 
 .openrouter-key-modal__title {
     font-weight: 600;
-    font-size: 1.25rem;
+    font-size: 1.125rem;
     letter-spacing: -0.01em;
 }
 
@@ -1444,19 +1454,19 @@ body.is-modal-open .spend-tracker {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius-sm);
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: var(--transition-fast);
     font-size: 1rem;
 }
 
 .openrouter-key-modal__close:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.15);
-    color: white;
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
+    color: var(--text-primary);
 }
 
 .openrouter-key-modal__body {
@@ -1467,7 +1477,7 @@ body.is-modal-open .spend-tracker {
 .openrouter-key-modal__message {
     margin: 0 0 var(--spacing-lg) 0;
     line-height: 1.5;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--text-secondary);
 }
 
 .openrouter-key-modal__actions {
@@ -1479,25 +1489,26 @@ body.is-modal-open .spend-tracker {
 .openrouter-key-modal__link {
     display: inline-block;
     padding: 12px 20px;
-    background: #6366f1;
+    background: var(--accent-primary);
     color: white;
     text-decoration: none;
     border-radius: var(--border-radius-sm);
     font-weight: 600;
     font-size: 0.9375rem;
     transition: var(--transition-fast);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
 }
 
 .openrouter-key-modal__link:hover {
-    background: #4f46e5;
+    background: var(--accent-secondary);
 }
 
 .openrouter-key-modal__ok {
     padding: 12px 20px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius-sm);
-    color: white;
+    color: var(--text-primary);
     font-weight: 600;
     font-size: 0.9375rem;
     cursor: pointer;
@@ -1505,21 +1516,22 @@ body.is-modal-open .spend-tracker {
 }
 
 .openrouter-key-modal__ok:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
 }
 
 .openrouter-key-modal__hint {
     margin: var(--spacing-lg) 0 0 0;
     padding-top: var(--spacing-lg);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--border-color);
     font-size: 0.8125rem;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
     line-height: 1.5;
 }
 
 .openrouter-key-modal__hint code {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     padding: 3px 8px;
     border-radius: 4px;
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
@@ -1531,29 +1543,33 @@ body.is-modal-open .spend-tracker {
     display: flex;
     align-items: baseline;
     gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
 }
 
 .spend-breakdown__total-label {
-    font-size: 1rem;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
 }
 
 .spend-breakdown__total-value {
-    font-size: 2rem;
+    font-size: 1.875rem;
     font-weight: 700;
     letter-spacing: -0.02em;
-    background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.85) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--text-primary);
 }
 
 .spend-breakdown__table-container {
     overflow: auto;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius-md);
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--bg-primary);
 }
 
 .spend-breakdown__table {
@@ -1569,9 +1585,9 @@ body.is-modal-open .spend-tracker {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: rgba(255, 255, 255, 0.45);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
 }
 
 .spend-breakdown__table th:not(:first-child) {
@@ -1581,7 +1597,8 @@ body.is-modal-open .spend-tracker {
 .spend-breakdown__table td {
     padding: var(--spacing-md) var(--spacing-lg);
     font-size: 0.9375rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
 }
 
 .spend-breakdown__table tr:last-child td {
@@ -1589,32 +1606,32 @@ body.is-modal-open .spend-tracker {
 }
 
 .spend-breakdown__table tr:hover td {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--bg-hover);
 }
 
 .spend-breakdown__model {
-    color: rgba(255, 255, 255, 0.95);
-    font-weight: 500;
+    color: var(--text-primary);
+    font-weight: 600;
     word-break: break-word;
 }
 
 .spend-breakdown__cost {
     text-align: right;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--text-primary);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
 
 .spend-breakdown__stat {
     text-align: right;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
 }
 
 .spend-breakdown__empty {
     padding: var(--spacing-2xl) var(--spacing-lg);
     text-align: center;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
 }
 
 /* Responsive spend breakdown */

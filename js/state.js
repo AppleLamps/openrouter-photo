@@ -7,6 +7,7 @@ import { ImageStorage } from './storage.js';
 import { dataUriToBlob, generateThumbnail, createBlobUrl, revokeBlobUrl } from './image-utils.js';
 
 const LEGACY_STORAGE_KEY = 'ai-image-generator-images';
+const FALLBACK_ID_PREFIX = 'legacy';
 
 /**
  * @typedef {Object} ImageData
@@ -31,6 +32,84 @@ const LEGACY_STORAGE_KEY = 'ai-image-generator-images';
  */
 
 const PHOTO_VISIBILITY_KEY = 'photo_visibility_mode';
+
+const createFallbackId = () =>
+    `${FALLBACK_ID_PREFIX}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const normalizeStoredImages = (stored) => {
+    if (!Array.isArray(stored)) {
+        return { images: [], didNormalize: true };
+    }
+
+    let didNormalize = false;
+    const images = [];
+
+    for (const raw of stored) {
+        if (!raw || typeof raw !== 'object') {
+            didNormalize = true;
+            continue;
+        }
+
+        const url = typeof raw.url === 'string' ? raw.url : '';
+        if (!url) {
+            didNormalize = true;
+            continue;
+        }
+
+        const id =
+            typeof raw.id === 'string' && raw.id.trim().length > 0 ? raw.id : createFallbackId();
+        if (id !== raw.id) {
+            didNormalize = true;
+        }
+
+        const prompt = typeof raw.prompt === 'string' ? raw.prompt : '';
+        if (prompt !== raw.prompt) {
+            didNormalize = true;
+        }
+
+        const createdAt =
+            typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt)
+                ? raw.createdAt
+                : Date.now();
+        if (createdAt !== raw.createdAt) {
+            didNormalize = true;
+        }
+
+        const settings =
+            raw.settings && typeof raw.settings === 'object' && !Array.isArray(raw.settings)
+                ? raw.settings
+                : null;
+        if (settings !== raw.settings) {
+            didNormalize = true;
+        }
+
+        const folderId =
+            typeof raw.folderId === 'string' && raw.folderId.trim().length > 0 ? raw.folderId : null;
+        if (folderId !== raw.folderId) {
+            didNormalize = true;
+        }
+
+        const generation =
+            raw.generation && typeof raw.generation === 'object' && !Array.isArray(raw.generation)
+                ? raw.generation
+                : null;
+        if (generation !== raw.generation) {
+            didNormalize = true;
+        }
+
+        images.push({
+            id,
+            url,
+            prompt,
+            createdAt,
+            settings,
+            folderId,
+            generation
+        });
+    }
+
+    return { images, didNormalize };
+};
 
 /**
  * State class to manage images with IndexedDB storage
@@ -193,7 +272,12 @@ class State {
         try {
             const stored = localStorage.getItem(LEGACY_STORAGE_KEY);
             if (stored) {
-                this.images = JSON.parse(stored);
+                const parsed = JSON.parse(stored);
+                const { images, didNormalize } = normalizeStoredImages(parsed);
+                this.images = images;
+                if (didNormalize) {
+                    this.saveToLocalStorage();
+                }
             }
         } catch (error) {
             console.error('Failed to load from localStorage:', error);

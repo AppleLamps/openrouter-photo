@@ -1,6 +1,23 @@
+const resolveCorsOrigin = (req) => {
+    const raw = process.env.ALLOWED_ORIGIN || '';
+    const allowed = raw.split(',').map((origin) => origin.trim()).filter(Boolean);
+    if (allowed.length === 0 || allowed.includes('*')) {
+        return '*';
+    }
+    const origin = req.headers.origin;
+    if (origin && allowed.includes(origin)) {
+        return origin;
+    }
+    return allowed[0];
+};
+
 module.exports = async function handler(req, res) {
     // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const allowedOrigin = resolveCorsOrigin(req);
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    if (allowedOrigin !== '*') {
+        res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key');
 
@@ -65,7 +82,7 @@ module.exports = async function handler(req, res) {
                 'X-Title': 'AI Image Generator'
             },
             body: JSON.stringify({
-                model: 'x-ai/grok-4.1-fast-fast',
+                model: 'x-ai/grok-4.1-fast',
                 messages: [
                     {
                         role: 'system',

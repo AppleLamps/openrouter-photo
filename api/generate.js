@@ -1,6 +1,23 @@
+const resolveCorsOrigin = (req) => {
+    const raw = process.env.ALLOWED_ORIGIN || '';
+    const allowed = raw.split(',').map((origin) => origin.trim()).filter(Boolean);
+    if (allowed.length === 0 || allowed.includes('*')) {
+        return '*';
+    }
+    const origin = req.headers.origin;
+    if (origin && allowed.includes(origin)) {
+        return origin;
+    }
+    return allowed[0];
+};
+
 module.exports = async function handler(req, res) {
     // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const allowedOrigin = resolveCorsOrigin(req);
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    if (allowedOrigin !== '*') {
+        res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key');
 
@@ -159,7 +176,7 @@ module.exports = async function handler(req, res) {
     };
 
     const fetchGenerationCost = async (generationId, retries = 2) => {
-        if (!generationId) return 0;
+        if (!generationId) return { cost: 0, pending: false };
 
         for (let attempt = 0; attempt < retries; attempt++) {
             try {
@@ -170,12 +187,22 @@ module.exports = async function handler(req, res) {
                 });
 
                 if (!response.ok) {
-                    console.error(`Generation cost fetch failed (attempt ${attempt + 1}):`, response.status);
+                    let errorBody = '';
+                    try {
+                        errorBody = await response.text();
+                    } catch {
+                        errorBody = '';
+                    }
+                    console.error(`Generation cost fetch failed (attempt ${attempt + 1}):`, {
+                        generationId,
+                        status: response.status,
+                        body: redactKey(errorBody),
+                    });
                     if (attempt < retries - 1) {
                         await new Promise((resolve) => setTimeout(resolve, 200));
                         continue;
                     }
-                    return 0;
+                    return { cost: 0, pending: true };
                 }
 
                 const stats = await response.json();
@@ -185,7 +212,7 @@ module.exports = async function handler(req, res) {
                 const cost = data?.usage ?? data?.total_cost ?? data?.cost ?? 0;
 
                 if (typeof cost === 'number' && cost > 0) {
-                    return cost;
+                    return { cost, pending: false };
                 }
 
                 // If cost is still 0, might need to wait for calculation
@@ -194,17 +221,21 @@ module.exports = async function handler(req, res) {
                     continue;
                 }
 
-                return typeof cost === 'number' ? cost : parseFloat(cost || 0);
+                const parsed = typeof cost === 'number' ? cost : parseFloat(cost || 0);
+                return { cost: Number.isFinite(parsed) ? parsed : 0, pending: false };
             } catch (e) {
-                console.error(`Error fetching generation cost (attempt ${attempt + 1}):`, redactKey(e));
+                console.error(`Error fetching generation cost (attempt ${attempt + 1}):`, {
+                    generationId,
+                    error: redactKey(e),
+                });
                 if (attempt < retries - 1) {
                     await new Promise((resolve) => setTimeout(resolve, 200));
                     continue;
                 }
-                return 0;
+                return { cost: 0, pending: true };
             }
         }
-        return 0;
+        return { cost: 0, pending: true };
     };
 
     const extractUsageMeta = (openRouterJson) => {
@@ -214,6 +245,7 @@ module.exports = async function handler(req, res) {
             generation_id: openRouterJson?.generation_id || openRouterJson?.id || null,
             created_at: openRouterJson?.created_at || null,
             usage: extractUsageNumber(openRouterJson),
+            usage_pending: false,
         };
     };
 
@@ -316,9 +348,12 @@ module.exports = async function handler(req, res) {
 
         const costPromises = usageRequests.map(async (meta) => {
             if (meta.generation_id) {
-                const cost = await fetchGenerationCost(meta.generation_id);
+                const initialUsage = meta.usage;
+                const { cost, pending } = await fetchGenerationCost(meta.generation_id);
                 if (cost > 0) {
                     meta.usage = cost;
+                } else if (pending && (!Number.isFinite(initialUsage) || initialUsage <= 0)) {
+                    meta.usage_pending = true;
                 }
             }
             return meta.usage;
@@ -344,6 +379,7 @@ module.exports = async function handler(req, res) {
             meta: {
                 total_usage: totalUsage,
                 requests: usageRequests,
+                usage_pending: usageRequests.some((meta) => meta.usage_pending),
             },
         });
     } catch (error) {

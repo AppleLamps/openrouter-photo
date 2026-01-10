@@ -63,6 +63,7 @@ function getOpenRouterApiKey() {
  * @property {Object} meta - Generation metadata
  * @property {number} meta.total_usage - Total cost in USD
  * @property {Array} meta.requests - Per-request usage data
+ * @property {boolean} [meta.usage_pending] - True when some usage data is pending
  */
 
 /**

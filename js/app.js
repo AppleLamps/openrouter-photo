@@ -3,6 +3,12 @@
  */
 
 import { generateImage, enhancePrompt, testOpenRouterKey, getRandomPromptFromAI } from './api.js';
+import {
+    PROMPT_ATTACHMENTS_MAX,
+    PROMPT_ATTACHMENT_MAX_BYTES,
+    PROMPT_ATTACHMENT_MAX_DIMENSION,
+    PROMPT_ATTACHMENT_JPEG_QUALITY
+} from './config.js';
 import { state } from './state.js';
 import { generateId } from './utils.js';
 import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, showErrorCard, initLightbox, closeLightbox } from './gallery.js';
@@ -10,8 +16,6 @@ import { formatBytes } from './image-utils.js';
 import { initSidebar } from './sidebar.js';
 
 const SPEND_STORAGE_KEY = 'openrouter_spend_v1';
-const PROMPT_ATTACHMENTS_MAX = 3;
-const PROMPT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024; // 8MB
 
 /** @type {string[]} */
 let promptImageDataUrls = [];
@@ -64,8 +68,8 @@ function renderPromptAttachments() {
  * @returns {Promise<string>} - Compressed data URL
  */
 async function compressImageForUpload(file) {
-    const MAX_SIZE = 1024; // Max dimension
-    const QUALITY = 0.85;
+    const MAX_SIZE = PROMPT_ATTACHMENT_MAX_DIMENSION;
+    const QUALITY = PROMPT_ATTACHMENT_JPEG_QUALITY;
 
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -167,7 +171,8 @@ function loadSpendState() {
 
     const total = typeof parsed.total === 'number' && Number.isFinite(parsed.total) ? parsed.total : 0;
     const byModel = parsed.byModel && typeof parsed.byModel === 'object' ? parsed.byModel : {};
-    return { total, byModel };
+    const pending = parsed.pending === true;
+    return { total, byModel, pending };
 }
 
 function saveSpendState(state) {
@@ -187,7 +192,10 @@ function updateSpendTrackerUI() {
     const pill = document.getElementById('spend-tracker');
     if (!pill) return;
     const spend = loadSpendState();
-    pill.textContent = `Spent: ${formatUsd(spend.total)}`;
+    pill.textContent = spend.pending
+        ? `Spent: ~${formatUsd(spend.total)}`
+        : `Spent: ${formatUsd(spend.total)}`;
+    pill.title = spend.pending ? 'Some costs are pending from OpenRouter.' : '';
 }
 
 /**
@@ -481,6 +489,9 @@ function recordSpend(meta, imagesReturned) {
     if (requests.length === 0) return;
 
     const spend = loadSpendState();
+    const hasPending =
+        meta.usage_pending === true ||
+        requests.some((req) => req && req.usage_pending === true);
 
     const images = typeof imagesReturned === 'number' && Number.isFinite(imagesReturned) ? imagesReturned : 0;
     const imagesPerGeneration = requests.length > 0 ? images / requests.length : 0;
@@ -497,6 +508,10 @@ function recordSpend(meta, imagesReturned) {
         spend.byModel[model].generations += 1;
         spend.byModel[model].images += imagesPerGeneration;
         spend.total += usage;
+    }
+
+    if (hasPending) {
+        spend.pending = true;
     }
 
     saveSpendState(spend);
@@ -539,6 +554,11 @@ function openSpendBreakdownModal() {
             .join('')
         : `<tr><td colspan="4" class="spend-breakdown__empty">No spend recorded yet.</td></tr>`;
 
+    const totalValue = spend.pending ? `~${formatUsd(spend.total)}` : formatUsd(spend.total);
+    const hint = spend.pending
+        ? 'Costs are recorded from the OpenRouter response field usage (USD) when present. Some costs are still pending.'
+        : 'Costs are recorded from the OpenRouter response field usage (USD) when present.';
+
     overlay.innerHTML = `
         <div class="openrouter-key-modal__backdrop" role="presentation"></div>
         <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="Spend breakdown">
@@ -549,7 +569,7 @@ function openSpendBreakdownModal() {
             <div class="openrouter-key-modal__body">
                 <div class="spend-breakdown__total">
                     <span class="spend-breakdown__total-label">Total spent</span>
-                    <span class="spend-breakdown__total-value">${formatUsd(spend.total)}</span>
+                    <span class="spend-breakdown__total-value">${totalValue}</span>
                 </div>
                 <div class="spend-breakdown__table-container">
                     <table class="spend-breakdown__table">
@@ -566,7 +586,7 @@ function openSpendBreakdownModal() {
                         </tbody>
                     </table>
                 </div>
-                <p class="openrouter-key-modal__hint">Costs are recorded from the OpenRouter response field <code>usage</code> (USD) when present.</p>
+                <p class="openrouter-key-modal__hint">${hint}</p>
             </div>
         </div>
     `;
