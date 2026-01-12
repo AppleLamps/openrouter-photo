@@ -1189,11 +1189,19 @@ function updateSettingsForModel(model) {
     const aspectRatioGroup = document.getElementById('aspect-ratio-group');
 
     const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
-    if (isGemini) {
+    const isSeedream = typeof model === 'string' && model.includes('seedream');
+
+    // Show aspect ratio for Gemini and Seedream models
+    if (isGemini || isSeedream) {
         aspectRatioGroup?.classList.remove('settings-group--hidden');
-        resolutionGroup?.classList.remove('settings-group--hidden');
     } else {
         aspectRatioGroup?.classList.add('settings-group--hidden');
+    }
+
+    // Resolution/image size is Gemini-only
+    if (isGemini) {
+        resolutionGroup?.classList.remove('settings-group--hidden');
+    } else {
         resolutionGroup?.classList.add('settings-group--hidden');
     }
 }

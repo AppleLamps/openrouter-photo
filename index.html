@@ -331,14 +331,13 @@
 
                 <!-- Model Selection -->
                 <div class="settings-group">
-                    <label class="settings-label">Advanced (Gemini)</label>
-                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio and image size are only applied for
-                        Gemini models.</p>
+                    <label class="settings-label">Advanced</label>
+                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio is supported for Gemini and Seedream models. Image size is Gemini only.</p>
                 </div>
 
-                <!-- Aspect Ratio (Gemini only) -->
+                <!-- Aspect Ratio (Gemini and Seedream) -->
                 <div class="settings-group settings-group--hidden" id="aspect-ratio-group">
-                    <label class="settings-label">Aspect Ratio (Gemini only)</label>
+                    <label class="settings-label">Aspect Ratio</label>
                     <select id="setting-aspect-ratio" class="settings-select">
                         <option value="1:1" selected>1:1 (Square)</option>
                         <option value="4:3">4:3 (Landscape)</option>
@@ -350,7 +349,7 @@
                         <option value="21:9">21:9 (Ultrawide)</option>
                         <option value="9:21">9:21</option>
                     </select>
-                    <p class="settings-hint">Only applied for Gemini image-generation models.</p>
+                    <p class="settings-hint">Applied for Gemini and Seedream models.</p>
                 </div>
 
                 <!-- Resolution (Gemini only) -->
