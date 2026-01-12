@@ -90,6 +90,7 @@ module.exports = async function handler(req, res) {
     const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
     const isGeminiModel = typeof model === 'string' && model.startsWith('google/gemini-');
+    const isSeedreamModel = typeof model === 'string' && model.includes('seedream');
 
     const imageSizePresetToAspectRatio = (preset) => {
         switch (preset) {
@@ -119,7 +120,9 @@ module.exports = async function handler(req, res) {
             .slice(0, 3)
         : [];
 
-    const buildPayload = () => {
+    const buildPayload = (options = {}) => {
+        const { includeAspectRatio = true } = options;
+
         /** @type {any} */
         const userContent =
             normalizedInputImages.length > 0
@@ -153,6 +156,11 @@ module.exports = async function handler(req, res) {
             if (typeof resolution === 'string' && ['1K', '2K', '4K'].includes(resolution)) {
                 payload.image_config.image_size = resolution;
             }
+        } else if (isSeedreamModel && includeAspectRatio) {
+            // Seedream may support aspect_ratio - include it with fallback retry if it fails
+            payload.image_config = {
+                aspect_ratio: normalizedAspectRatio,
+            };
         }
 
         return payload;
@@ -249,7 +257,9 @@ module.exports = async function handler(req, res) {
         };
     };
 
-    const requestSingle = async () => {
+    const requestSingle = async (options = {}) => {
+        const { includeAspectRatio = true } = options;
+
         const response = await fetch(OPENROUTER_URL, {
             method: 'POST',
             headers: {
@@ -258,7 +268,7 @@ module.exports = async function handler(req, res) {
                 'HTTP-Referer': req.headers.referer || 'http://localhost',
                 'X-Title': 'AI Image Generator',
             },
-            body: JSON.stringify(buildPayload()),
+            body: JSON.stringify(buildPayload({ includeAspectRatio })),
         });
 
         if (!response.ok) {
@@ -271,6 +281,19 @@ module.exports = async function handler(req, res) {
         return { ok: true, data };
     };
 
+    // Wrapper that retries seedream requests without aspect_ratio on failure
+    const requestSingleWithFallback = async () => {
+        const result = await requestSingle({ includeAspectRatio: true });
+
+        // If seedream fails and we included aspect_ratio, retry without it
+        if (!result.ok && isSeedreamModel) {
+            console.log('Seedream request failed with aspect_ratio, retrying without it...');
+            return requestSingle({ includeAspectRatio: false });
+        }
+
+        return result;
+    };
+
     try {
         /** @type {Array<{url: string, model: string, cost: number, provider: string|null, metaIndex: number}>} */
         const imageResults = [];
@@ -278,7 +301,7 @@ module.exports = async function handler(req, res) {
         const usageRequests = [];
 
         // First call: some models may return multiple images in one response.
-        const first = await requestSingle();
+        const first = await requestSingleWithFallback();
         if (!first.ok) {
             console.error('OpenRouter API error:', redactKey(first.errorText));
             return res.status(first.status).json({
@@ -307,7 +330,7 @@ module.exports = async function handler(req, res) {
         const remaining = parsedNumImages - imageResults.length;
         if (remaining > 0) {
             const parallelResults = await Promise.all(
-                Array(remaining).fill().map(() => requestSingle())
+                Array(remaining).fill().map(() => requestSingleWithFallback())
             );
 
             for (const next of parallelResults) {
