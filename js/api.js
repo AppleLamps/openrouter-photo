@@ -134,10 +134,11 @@ export async function generateImage(prompt, options = {}, signal = null) {
 /**
  * Enhance a prompt using AI
  * @param {string} currentPrompt - The current prompt to enhance
+ * @param {string[]} [imageUrls] - Optional array of image data URLs to include for context
  * @returns {Promise<string>} The enhanced prompt
  * @throws {Error} If enhancement fails
  */
-export async function enhancePrompt(currentPrompt) {
+export async function enhancePrompt(currentPrompt, imageUrls = []) {
     if (!currentPrompt || typeof currentPrompt !== 'string') {
         throw new Error('Prompt is required');
     }
@@ -149,13 +150,20 @@ export async function enhancePrompt(currentPrompt) {
 
     try {
         const openRouterApiKey = getOpenRouterApiKey();
+        const requestBody = { prompt: trimmedPrompt };
+
+        // Include image URLs if provided
+        if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+            requestBody.image_urls = imageUrls;
+        }
+
         const response = await fetch(ENHANCE_ENDPOINT, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
             },
-            body: JSON.stringify({ prompt: trimmedPrompt }),
+            body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
