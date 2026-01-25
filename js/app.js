@@ -1442,7 +1442,8 @@ async function handleEnhance(input, button) {
     input.disabled = true;
 
     try {
-        const enhanced = await enhancePrompt(prompt);
+        // Pass attached images so AI can see the photo when enhancing the prompt
+        const enhanced = await enhancePrompt(prompt, promptImageDataUrls);
 
         // Update input with enhanced prompt
         input.value = enhanced;
