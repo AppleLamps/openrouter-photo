@@ -3,11 +3,10 @@
  * Caches core assets for offline loading
  */
 
-const CACHE_NAME = 'ai-image-gen-v2';
+const CACHE_NAME = 'ai-image-gen-v4';
 
 const CORE_ASSETS = [
     '/',
-    '/index.html',
     '/css/base.css',
     '/css/layout.css',
     '/css/components.css',
@@ -17,8 +16,39 @@ const CORE_ASSETS = [
     '/js/gallery.js',
     '/js/state.js',
     '/js/utils.js',
-    '/js/prompts.js'
+    '/js/prompts.js',
+    '/js/config.js',
+    '/js/image-utils.js',
+    '/js/sidebar.js',
+    '/js/storage.js'
 ];
+
+/**
+ * Cache assets individually to avoid failing on missing resources
+ * @param {Cache} cache 
+ * @param {string[]} urls 
+ */
+async function cacheAssets(cache, urls) {
+    const results = await Promise.allSettled(
+        urls.map(async (url) => {
+            try {
+                const response = await fetch(url);
+                if (response.ok) {
+                    await cache.put(url, response);
+                    return { url, success: true };
+                }
+                return { url, success: false, reason: response.status };
+            } catch (err) {
+                return { url, success: false, reason: err.message };
+            }
+        })
+    );
+
+    const failed = results.filter(r => r.status === 'fulfilled' && !r.value.success);
+    if (failed.length > 0) {
+        console.log('[SW] Some assets failed to cache:', failed.map(r => r.value));
+    }
+}
 
 /**
  * Install event - cache core assets
@@ -28,7 +58,7 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME)
             .then((cache) => {
                 console.log('[SW] Caching core assets');
-                return cache.addAll(CORE_ASSETS);
+                return cacheAssets(cache, CORE_ASSETS);
             })
             .then(() => self.skipWaiting())
     );
