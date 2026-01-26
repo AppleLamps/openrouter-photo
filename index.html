@@ -332,7 +332,8 @@
                 <!-- Model Selection -->
                 <div class="settings-group">
                     <label class="settings-label">Advanced</label>
-                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio is supported for Gemini and Seedream models. Image size is Gemini only.</p>
+                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio is supported for Gemini and Seedream
+                        models. Image size is Gemini only.</p>
                 </div>
 
                 <!-- Aspect Ratio (Gemini and Seedream) -->
@@ -502,14 +503,14 @@
                         await reg.unregister();
                     }
                 }
-                
+
                 // Clear all caches to remove stale content
                 if ('caches' in window) {
                     const cacheNames = await caches.keys();
                     await Promise.all(cacheNames.map(name => caches.delete(name)));
                     console.log('Cleared old caches');
                 }
-                
+
                 navigator.serviceWorker.register('/sw.js')
                     .then((registration) => {
                         console.log('SW registered:', registration.scope);
