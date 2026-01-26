@@ -1,0 +1,4 @@
+# Ignore from deployment
+node_modules/
+server.js
+.env*

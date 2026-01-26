@@ -1,10 +1,67 @@
 {
     "version": 2,
-    "installCommand": "npm install",
-    "rewrites": [
+    "builds": [
         {
-            "source": "/favicon.ico",
-            "destination": "/favicon.svg"
+            "src": "api/*.js",
+            "use": "@vercel/node"
+        },
+        {
+            "src": "*.html",
+            "use": "@vercel/static"
+        },
+        {
+            "src": "css/**",
+            "use": "@vercel/static"
+        },
+        {
+            "src": "js/**",
+            "use": "@vercel/static"
+        },
+        {
+            "src": "public/**",
+            "use": "@vercel/static"
+        },
+        {
+            "src": "sw.js",
+            "use": "@vercel/static"
+        },
+        {
+            "src": "favicon.svg",
+            "use": "@vercel/static"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/(.*)",
+            "dest": "/api/$1"
+        },
+        {
+            "src": "/css/(.*)",
+            "dest": "/css/$1"
+        },
+        {
+            "src": "/js/(.*)",
+            "dest": "/js/$1"
+        },
+        {
+            "src": "/public/(.*)",
+            "dest": "/public/$1"
+        },
+        {
+            "src": "/sw.js",
+            "dest": "/sw.js"
+        },
+        {
+            "src": "/favicon.svg",
+            "dest": "/favicon.svg"
+        },
+        {
+            "src": "/favicon.ico",
+            "dest": "/favicon.svg"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/index.html"
         }
     ]
 }
