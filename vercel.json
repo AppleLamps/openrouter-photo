@@ -32,8 +32,20 @@
     ],
     "routes": [
         {
-            "src": "/api/(.*)",
-            "dest": "/api/$1"
+            "src": "/api/generate",
+            "dest": "/api/generate.js"
+        },
+        {
+            "src": "/api/enhance",
+            "dest": "/api/enhance.js"
+        },
+        {
+            "src": "/api/random-prompt",
+            "dest": "/api/random-prompt.js"
+        },
+        {
+            "src": "/api/test-key",
+            "dest": "/api/test-key.js"
         },
         {
             "src": "/css/(.*)",
