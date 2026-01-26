@@ -493,8 +493,24 @@
     <!-- Service Worker Registration -->
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/public/sw.js')
+            window.addEventListener('load', async () => {
+                // Unregister any old service workers first to clear stale caches
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (const reg of registrations) {
+                    if (reg.scope.includes('/public/')) {
+                        console.log('Unregistering old SW:', reg.scope);
+                        await reg.unregister();
+                    }
+                }
+                
+                // Clear all caches to remove stale content
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(name => caches.delete(name)));
+                    console.log('Cleared old caches');
+                }
+                
+                navigator.serviceWorker.register('/sw.js')
                     .then((registration) => {
                         console.log('SW registered:', registration.scope);
                     })
