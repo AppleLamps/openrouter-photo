@@ -1,0 +1,10 @@
+{
+    "version": 2,
+    "installCommand": "npm install",
+    "functions": {
+        "api/*.js": { "runtime": "nodejs20.x" }
+    },
+    "rewrites": [
+        { "source": "/favicon.ico", "destination": "/favicon.svg" }
+    ]
+}
