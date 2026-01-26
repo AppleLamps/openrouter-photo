@@ -11,20 +11,24 @@ A modern, lightweight AI image generator powered by OpenRouter. Built with vanil
 ## Features
 
 ### Image Generation
+
 - **Multi-Model Support** - Generate images using 10+ AI models from leading providers
 - **Batch Generation** - Create 1-4 images per request
 - **Configurable Output** - Aspect ratio (9 presets) and resolution (1K/2K/4K) for supported models
 
 ### Image Editing
+
 - **Reference Images** - Attach up to 3 images for editing or variations
 - **Auto Compression** - Large uploads automatically compressed (1024px max, JPEG 85%)
 - **Model Interpretation** - Describe changes and let compatible models apply them
 
 ### Prompt Tools
+
 - **AI Enhancement** - Improve prompts with one click using Grok-4
 - **Surprise Me** - AI-generated random prompts combining subjects, styles, moods, settings, and lighting
 
 ### Gallery & Organization
+
 - **Responsive Grid** - Thumbnail gallery with shimmer loading animations
 - **Lightbox Viewer** - Full-screen preview with metadata, download, and remix options
 - **Folder System** - Organize images into custom folders with drag-and-drop
@@ -32,11 +36,13 @@ A modern, lightweight AI image generator powered by OpenRouter. Built with vanil
 - **Visibility Modes** - Show all photos or folder-only view
 
 ### Cost Management
+
 - **Real-Time Tracking** - Cost displayed per image as it generates
 - **Spend Dashboard** - Breakdown by model with generation counts
 - **Total Spend** - Running total accessible from the UI
 
 ### User Experience
+
 - **Keyboard Shortcuts** - Quick actions without mouse
 - **Touch Gestures** - Swipe-to-close lightbox on mobile
 - **PWA Support** - Install as standalone app on any device
@@ -82,6 +88,7 @@ A modern, lightweight AI image generator powered by OpenRouter. Built with vanil
 ├── js/
 │   ├── app.js            # Main entry point, event handling
 │   ├── api.js            # Client-side API wrapper
+│   ├── config.js         # Configuration constants
 │   ├── state.js          # State management & persistence
 │   ├── storage.js        # IndexedDB storage layer
 │   ├── gallery.js        # Gallery rendering & lightbox
@@ -91,9 +98,9 @@ A modern, lightweight AI image generator powered by OpenRouter. Built with vanil
 │   └── utils.js          # Helper functions
 ├── public/
 │   ├── manifest.json     # PWA manifest
-│   ├── sw.js             # Service worker
 │   └── icon-192.svg      # App icon
 ├── index.html            # Main HTML file
+├── sw.js                 # Service worker (root scope)
 ├── server.js             # Express server for local development
 ├── vercel.json           # Vercel configuration
 └── README.md
@@ -220,25 +227,30 @@ npx vercel --prod
 ## Troubleshooting
 
 ### "API key is required"
+
 - Open Settings and enter your OpenRouter API key
 - Ensure the key is saved (click Save or the key auto-saves on input)
 
 ### Images not generating
+
 - Check your OpenRouter account has credits
 - Verify the selected model supports your request type
 - For image editing, ensure you're using a compatible model (GPT-5, Gemini)
 
 ### Storage full warning
+
 - Open Settings and check the storage indicator
 - Click **Clear All Images** to free space
 - Images are stored locally in your browser
 
 ### Attachments not working
+
 - Ensure images are under 8MB each
 - Maximum 3 images per generation
 - Try a different image format (PNG, JPEG, WebP supported)
 
 ### PWA not installing
+
 - Access via HTTPS (localhost works for testing)
 - Check browser supports PWA installation
 - Clear browser cache and reload
