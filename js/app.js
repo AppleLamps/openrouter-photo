@@ -2,7 +2,7 @@
  * Main application entry point
  */
 
-import { generateImage, enhancePrompt, testOpenRouterKey, getRandomPromptFromAI } from './api.js';
+import { generateImage, enhancePrompt, testOpenRouterKey, testXaiKey, getRandomPromptFromAI, pollVideoStatus } from './api.js';
 import {
     PROMPT_ATTACHMENTS_MAX,
     PROMPT_ATTACHMENT_MAX_BYTES,
@@ -186,6 +186,17 @@ function saveSpendState(state) {
 function formatUsd(amount) {
     const safe = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
     return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(safe);
+}
+
+/**
+ * Escape a string for safe insertion into HTML.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 function updateSpendTrackerUI() {
@@ -544,7 +555,7 @@ function openSpendBreakdownModal() {
                 const imgCount = Number.isFinite(e.images) ? Math.round(e.images) : 0;
                 return `
                     <tr>
-                        <td class="spend-breakdown__model">${e.model}</td>
+                        <td class="spend-breakdown__model">${escapeHtml(e.model)}</td>
                         <td class="spend-breakdown__cost">${formatUsd(e.cost)}</td>
                         <td class="spend-breakdown__stat">${e.generations}</td>
                         <td class="spend-breakdown__stat">${imgCount}</td>
@@ -607,8 +618,6 @@ function getGenerationSettings() {
     const numImagesSelect = document.getElementById('setting-num-images');
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
     const resolutionSelect = document.getElementById('setting-resolution');
-    const xaiImageSizeSelect = document.getElementById('setting-xai-image-size');
-    const xaiImageQualitySelect = document.getElementById('setting-xai-image-quality');
     const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
     const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
 
@@ -623,8 +632,6 @@ function getGenerationSettings() {
         // OpenRouter image generation (used for Gemini via `image_config` in the backend)
         aspect_ratio: aspectRatioSelect?.value || '1:1',
         resolution: resolutionSelect?.value || '1K',
-        xai_image_size: xaiImageSizeSelect?.value || '1024x1024',
-        xai_image_quality: xaiImageQualitySelect?.value || 'standard',
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
     };
@@ -847,6 +854,7 @@ function initSettingsUI() {
     const xaiKeyInput = document.getElementById('setting-xai-key');
     const xaiKeyShow = document.getElementById('setting-xai-key-show');
     const xaiSaveBtn = document.getElementById('setting-xai-save');
+    const xaiTestBtn = document.getElementById('setting-xai-test');
     const xaiSaveStatus = document.getElementById('setting-xai-save-status');
 
     // Toggle settings based on model selection
@@ -911,6 +919,26 @@ function initSettingsUI() {
                 showSuccess('xAI API key saved.');
             } catch {
                 showError('Failed to save xAI API key (storage unavailable).');
+            }
+        });
+    }
+
+    if (xaiTestBtn) {
+        xaiTestBtn.addEventListener('click', async () => {
+            if (xaiTestBtn.disabled) return;
+
+            if (xaiSaveStatus) xaiSaveStatus.textContent = 'Testing...';
+            xaiTestBtn.disabled = true;
+
+            try {
+                await testXaiKey();
+                if (xaiSaveStatus) xaiSaveStatus.textContent = 'Key works';
+                showSuccess('xAI API key is valid.');
+            } catch (error) {
+                if (xaiSaveStatus) xaiSaveStatus.textContent = '';
+                showError(error?.message || 'xAI API key test failed.');
+            } finally {
+                xaiTestBtn.disabled = false;
             }
         });
     }
@@ -1238,8 +1266,6 @@ function removeMultiImagePreview(index, container) {
 function updateSettingsForModel(model) {
     const resolutionGroup = document.getElementById('resolution-group');
     const aspectRatioGroup = document.getElementById('aspect-ratio-group');
-    const xaiImageSizeGroup = document.getElementById('xai-image-size-group');
-    const xaiImageQualityGroup = document.getElementById('xai-image-quality-group');
     const xaiVideoLengthGroup = document.getElementById('xai-video-length-group');
     const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
 
@@ -1263,13 +1289,7 @@ function updateSettingsForModel(model) {
         resolutionGroup?.classList.add('settings-group--hidden');
     }
 
-    if (isXaiImage) {
-        xaiImageSizeGroup?.classList.remove('settings-group--hidden');
-        xaiImageQualityGroup?.classList.remove('settings-group--hidden');
-    } else {
-        xaiImageSizeGroup?.classList.add('settings-group--hidden');
-        xaiImageQualityGroup?.classList.add('settings-group--hidden');
-    }
+
 
     if (isXaiVideo) {
         xaiVideoLengthGroup?.classList.remove('settings-group--hidden');
@@ -1354,7 +1374,7 @@ async function handleGenerate(input, button) {
                 : {}),
         };
 
-        const response = await generateImage(prompt, requestSettings, generationAbortController.signal);
+        let response = await generateImage(prompt, requestSettings, generationAbortController.signal);
 
         // Check if generation was cancelled
         if (generationAbortController.signal.aborted) {
@@ -1362,6 +1382,60 @@ async function handleGenerate(input, button) {
             placeholderIds.forEach(id => removePlaceholder(id));
             placeholderIds.forEach(id => placeholderMetadata.delete(id));
             return;
+        }
+
+        // Handle video generation 202 (pending) — poll client-side
+        if (response.status === 'pending' && response.request_id) {
+            const VIDEO_POLL_INTERVAL = 3000;
+            const VIDEO_POLL_MAX = 60; // 3 min max
+            let pollCount = 0;
+
+            while (pollCount < VIDEO_POLL_MAX) {
+                if (generationAbortController.signal.aborted) {
+                    placeholderIds.forEach(id => removePlaceholder(id));
+                    placeholderIds.forEach(id => placeholderMetadata.delete(id));
+                    return;
+                }
+
+                await new Promise(r => setTimeout(r, VIDEO_POLL_INTERVAL));
+                pollCount++;
+
+                const poll = await pollVideoStatus(response.request_id, generationAbortController.signal);
+
+                if (poll.status === 'completed' && poll.url) {
+                    response = {
+                        images: [{ url: poll.url, media_type: 'video', model: response.model }],
+                        meta: { model: response.model, estimated_cost: response.estimated_cost }
+                    };
+                    break;
+                }
+
+                if (poll.status === 'failed') {
+                    placeholderIds.forEach(id => {
+                        const metadata = placeholderMetadata.get(id);
+                        if (metadata) {
+                            showErrorCard(id, 'Video generation failed. Please try again.', metadata.prompt,
+                                () => retryGeneration(metadata.prompt, metadata.settings));
+                            placeholderMetadata.delete(id);
+                        }
+                    });
+                    return;
+                }
+                // status === 'pending' → continue polling
+            }
+
+            // If we exhausted all polls without completion
+            if (pollCount >= VIDEO_POLL_MAX && !(response.images && response.images.length > 0)) {
+                placeholderIds.forEach(id => {
+                    const metadata = placeholderMetadata.get(id);
+                    if (metadata) {
+                        showErrorCard(id, 'Video generation timed out. Please try again.', metadata.prompt,
+                            () => retryGeneration(metadata.prompt, metadata.settings));
+                        placeholderMetadata.delete(id);
+                    }
+                });
+                return;
+            }
         }
 
         if (response.images && response.images.length > 0) {
@@ -1745,16 +1819,6 @@ function restoreSettings(settings) {
     const resolutionSelect = document.getElementById('setting-resolution');
     if (resolutionSelect && settings.resolution) {
         resolutionSelect.value = settings.resolution;
-    }
-
-    const xaiImageSizeSelect = document.getElementById('setting-xai-image-size');
-    if (xaiImageSizeSelect && settings.xai_image_size) {
-        xaiImageSizeSelect.value = settings.xai_image_size;
-    }
-
-    const xaiImageQualitySelect = document.getElementById('setting-xai-image-quality');
-    if (xaiImageQualitySelect && settings.xai_image_quality) {
-        xaiImageQualitySelect.value = settings.xai_image_quality;
     }
 
     const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');

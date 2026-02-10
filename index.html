@@ -345,6 +345,10 @@
                             class="settings-btn settings-btn--inline settings-btn--sm">
                             Save
                         </button>
+                        <button type="button" id="setting-xai-test"
+                            class="settings-btn settings-btn--inline settings-btn--sm">
+                            Test
+                        </button>
                     </div>
                     <label class="settings-checkbox" style="margin-top: 8px;">
                         <input type="checkbox" id="setting-xai-key-show">
@@ -391,31 +395,13 @@
                     <p class="settings-hint">Only applied for Gemini image-generation models.</p>
                 </div>
 
-                <!-- xAI Image Size -->
-                <div class="settings-group settings-group--hidden" id="xai-image-size-group">
-                    <label class="settings-label">xAI Image Size</label>
-                    <select id="setting-xai-image-size" class="settings-select">
-                        <option value="1024x1024" selected>1024 × 1024</option>
-                        <option value="1024x1536">1024 × 1536</option>
-                        <option value="1536x1024">1536 × 1024</option>
-                    </select>
-                    <p class="settings-hint">Optional size for Grok image generation.</p>
-                </div>
 
-                <!-- xAI Image Quality -->
-                <div class="settings-group settings-group--hidden" id="xai-image-quality-group">
-                    <label class="settings-label">xAI Image Quality</label>
-                    <select id="setting-xai-image-quality" class="settings-select">
-                        <option value="standard" selected>Standard</option>
-                        <option value="high">High</option>
-                    </select>
-                    <p class="settings-hint">Optional quality setting for Grok image generation.</p>
-                </div>
 
                 <!-- xAI Video Length -->
                 <div class="settings-group settings-group--hidden" id="xai-video-length-group">
                     <label class="settings-label" for="setting-xai-video-length">xAI Video Length (seconds)</label>
-                    <input type="number" id="setting-xai-video-length" class="settings-input" min="1" max="15" value="5">
+                    <input type="number" id="setting-xai-video-length" class="settings-input" min="1" max="15"
+                        value="5">
                     <p class="settings-hint">Supported range is 1–15 seconds.</p>
                 </div>
 

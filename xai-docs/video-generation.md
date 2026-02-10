@@ -2,448 +2,157 @@
 
 # Video Generation
 
-All video generation/edit requests are deferred requests, where a user sends a video generation/edit request, get a response with a request ID, and retrieve the video result later using the request ID.
-If you're using our SDK, it can handle the polling of the result automatically.
-
-## Generate/Edit a Video with Automatic Polling
+Generate videos from text prompts, animate still images, or edit existing videos with natural language. The API supports configurable duration, aspect ratio, and resolution for generated videos — with the SDK handling the asynchronous polling automatically.
 
-For easiness of use, our SDK can automatically send the video generation/edit request, and poll for the response until the result is available, or if the request has failed.
+## Quick Start
 
-Generate a video directly from a text prompt:
+Generate a video with a single API call:
 
-```pythonXAI
-from xai_sdk import Client
+Video generation is an **asynchronous process** that typically takes up to several minutes to complete. The exact time varies based on:
 
-client = Client()
+* **Prompt complexity** — More detailed scenes require additional processing
+* **Duration** — Longer videos take more time to generate
+* **Resolution** — Higher resolutions (720p vs 480p) increase processing time
+* **Video editing** — Editing existing videos adds overhead compared to image-to-video or text-to-video
 
-response = client.video.generate(
-    prompt="A cat playing with a ball",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-)
-print(f"Video URL: {response.url}")
-```
+### How it works
 
-Generate a video from a user-provided image:
+Under the hood, video generation is a two-step process:
 
-```pythonXAI
-from xai_sdk import Client
+1. **Start** — Submit a generation request and receive a `request_id`
+2. **Poll** — Repeatedly check the status using the `request_id` until the video is ready
 
-client = Client()
+The xAI SDK's `generate()` method abstracts this entirely — it submits your request, polls for the result, and returns the completed video response. You don't need to manage request IDs or implement polling logic. For long-running generations, you can [customize the polling behavior](#customize-polling-behavior) with timeout and interval parameters, or [handle polling manually](#handle-polling-manually) for full control over the generation lifecycle.
 
-response = client.video.generate(
-    prompt="Generate a video based on the provided image.",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    image_url=<url of the image>,
-)
-print(f"Video URL: {response.url}")
-```
-
-Edit an existing video:
-
-```pythonXAI
-from xai_sdk import Client
-
-client = Client()
-
-response = client.video.generate(
-    prompt="Make the ball larger.",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    video_url=<url of the video to edit>,
-)
-print(f"Video URL: {response.url}")
-```
-
-## Send a Video Generation Request
-
-If you do not want to use our SDK, or prefer to send a request and retrieve the result yourself, you can still send a regular video generation request. This will return a `response_id` which you can use to retrieve the generated video later.
-
-### Video Generation from Text
-
-Send a request to start generating a video from a text prompt.
-
-```pythonXAI
-from xai_sdk import Client
-
-client = Client()
-
-response = client.video.start(
-    prompt="A cat playing with a ball",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-)
-print(f"Request ID: {response.request_id}")
-```
-
-```javascriptWithoutSDK
-const response = await fetch('https://api.x.ai/v1/videos/generations', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': \`Bearer \${process.env.XAI_API_KEY}\`,
-  },
-  body: JSON.stringify({
-    prompt: 'A cat playing with a ball',
-    model: '{{LATEST_VIDEO_MODEL_NAME}}',
-  }),
-});
-const data = await response.json();
-console.log('Request ID:', data.request_id);
-```
-
-```bash
-curl -X 'POST' https://api.x.ai/v1/videos/generations \\
-  -H 'accept: application/json' \\
-  -H 'Authorization: Bearer <API_KEY>' \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-      "prompt": "A cat playing with a ball",
-      "model": "{{LATEST_VIDEO_MODEL_NAME}}"
-  }'
-```
-
-The response includes a `request_id`, which you'll use to retrieve the generated video result.
-
-```bash
-{"request_id":"aa87081b-1a29-d8a6-e5bf-5807e3a7a561"}
-```
-
-### Video Generation from Image
-
-You can also generate a video from an existing image.
-
-To generate from an image:
-
-```pythonXAI
-from xai_sdk import Client
-
-client = Client()
-
-response = client.video.start(
-    prompt="Generate a video based on the provided image.",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    image_url=<url of the image>,
-)
-print(f"Request ID: {response.request_id}")
-```
-
-```javascriptWithoutSDK
-const response = await fetch('https://api.x.ai/v1/videos/generations', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': \`Bearer \${process.env.XAI_API_KEY}\`,
-  },
-  body: JSON.stringify({
-    prompt: 'Generate a video based on the provided image.',
-    model: '{{LATEST_VIDEO_MODEL_NAME}}',
-    image: { url: '<url of the image>' },
-  }),
-});
-const data = await response.json();
-console.log('Request ID:', data.request_id);
-```
-
-```bash
-curl -X 'POST' https://api.x.ai/v1/videos/generations \\
-  -H 'accept: application/json' \\
-  -H 'Authorization: Bearer <API_KEY>' \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-      "prompt": "Generate a video based on the provided image.",
-      "model": "{{LATEST_VIDEO_MODEL_NAME}}",
-      "image": {"url": "<url of the image>"}
-  }'
-```
-
-### Edit a Video
-
-Provide an input video (via a publicly accessible URL) and a prompt describing the desired changes. The API will generate a new edited video based on your instructions.
-
-**Note:** The input video URL must be a direct, publicly accessible link to the video file. The maximum supported video length is 8.7 seconds.
-
-```pythonXAI
-from xai_sdk import Client
-
-client = Client()
-
-response = client.video.start(
-    prompt="Make the ball in the video larger.",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    video_url=<url of the previous video>,
-)
-print(f"Request ID: {response.request_id}")
-```
-
-```javascriptWithoutSDK
-const response = await fetch('https://api.x.ai/v1/videos/edits', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': \`Bearer \${process.env.XAI_API_KEY}\`,
-  },
-  body: JSON.stringify({
-    prompt: 'Make the ball in the video larger.',
-    video: { url: '<url of the previous video>' },
-    model: '{{LATEST_VIDEO_MODEL_NAME}}',
-  }),
-});
-const data = await response.json();
-console.log('Request ID:', data.request_id);
-```
-
-```bash
-curl -X 'POST' https://api.x.ai/v1/videos/edits \\
-  -H 'accept: application/json' \\
-  -H 'Authorization: Bearer <API_KEY>' \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-      "prompt": "Make the ball in the video larger.",
-      "video": {"url": "<url of the previous video>"},
-      "model": "{{LATEST_VIDEO_MODEL_NAME}}"
-  }'
-```
-
-You will receive a `request_id` in the response body, which you can use to retrieve the edit generation result.
-
-```bash
-{"request_id":"a3d1008e-4544-40d4-d075-11527e794e4a"}
-```
-
-## Retrieving Video Generation/Edit Results
-
-After making a video generation or edit requests and receiving the video generation `request_id`, you can retrieve
-the results using the `request_id`.
-
-```pythonXAI
-# After sending the generation request and getting the request_id.
-
-response = client.video.get(request_id)
-print(f"Video URL: {response.url}")
-```
-
-```javascriptWithoutSDK
-// After sending the generation request and getting the request_id.
-const requestId = 'aa87081b-1a29-d8a6-e5bf-5807e3a7a561';
-
-const response = await fetch(\`https://api.x.ai/v1/videos/\${requestId}\`, {
-  headers: {
-    'Authorization': \`Bearer \${process.env.XAI_API_KEY}\`,
-  },
-});
-const data = await response.json();
-console.log('Video URL:', data.url);
-```
-
-```bash
-curl -X 'GET' https://api.x.ai/v1/videos/{request_id} \\
-  -H 'accept: application/json' \\
-  -H 'Authorization: Bearer <API_KEY>'
-```
-
-## Specifying Video Output Format
-
-### Video Duration
-
-You can specify the duration of the generated video in seconds. The allowed range is between 1 and 15 seconds.
-
-Video editing doesn't support user-defined `duration`. The edited video will have the same duration of the original video.
-
-Using xAI SDK auto-polling:
-
-```pythonXAI
-from xai_sdk import Client
-
-client = Client()
-
-response = client.video.generate(
-    prompt="A cat playing with a ball",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    duration=10
-)
-print(f"Video URL: {response.url}")
-print(f"Duration: {response.duration}")
-```
-
-Sending normal generation request:
-
-```pythonXAI
-from xai_sdk import Client
-
-client = Client()
-
-response = client.video.start(
-    prompt="A cat playing with a ball",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    duration=10
-)
-print(f"Request ID: {response.request_id}")
-```
-
-```javascriptWithoutSDK
-const response = await fetch('https://api.x.ai/v1/videos/generations', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': \`Bearer \${process.env.XAI_API_KEY}\`,
-  },
-  body: JSON.stringify({
-    prompt: 'A cat playing with a ball',
-    model: '{{LATEST_VIDEO_MODEL_NAME}}',
-    duration: 10,
-  }),
-});
-const data = await response.json();
-console.log('Request ID:', data.request_id);
-```
-
-```bash
-curl -X 'POST' https://api.x.ai/v1/videos/generations \\
-  -H 'accept: application/json' \\
-  -H 'Authorization: Bearer <API_KEY>' \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-      "prompt": "A cat playing with a ball",
-      "model": "{{LATEST_VIDEO_MODEL_NAME}}",
-      "duration": 10
-  }'
-```
+**REST API users** must implement this two-step flow manually:
+
+**Step 1: Start the generation request**
+
+Response:
+
+**Step 2: Poll for the result**
+
+Use the `request_id` to check the status. Keep polling every few seconds until the video is ready:
+
+The response includes a `status` field with one of these values:
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Video is still being generated |
+| `done` | Video is ready |
+| `expired` | Request has expired |
+
+Response (when complete):
+
+Videos are returned as temporary URLs — download or process them promptly.
+
+## Generate Videos from Images
+
+Transform a still image into a video by providing a source image along with your prompt. The model animates the image content based on your instructions.
+
+You can provide the source image as:
+
+* A **public URL** pointing to an image
+* A **base64-encoded data URI** (e.g., `data:image/jpeg;base64,...`)
+
+The demo below shows this in action — hold to animate a still image:
+
+## Edit Existing Videos
+
+Edit an existing video by providing a source video along with your prompt. The model understands the video content and applies your requested changes.
+
+The demo below shows video editing in action — `grok-imagine-video` delivers high-fidelity edits with strong scene preservation, modifying only what you ask for while keeping the rest of the video intact:
+
+## Concurrent Requests
+
+When you need to generate multiple videos or apply several edits to the same source video, use `AsyncClient` with `asyncio.gather` to fire requests concurrently. Since video generation and editing are long-running processes, running requests in parallel is significantly faster than issuing them sequentially.
+
+The example below applies all three edits from the interactive demo above — adding a necklace, changing the outfit color, and adding a hat — concurrently:
+
+## Configuration
+
+The video generation API lets you control the output format of your generated videos. You can specify the duration, aspect ratio, and resolution to match your specific use case.
+
+### Duration
+
+Control video length with the `duration` parameter. The allowed range is 1–15 seconds.
+
+Video editing does not support custom `duration`. The edited video retains the duration of the original, which is capped at 8.7 seconds.
 
 ### Aspect Ratio
 
-You can specify the aspect ratio of the video. The default aspect ratio is 16:9.
+| Ratio | Use case |
+|-------|----------|
+| `1:1` | Social media, thumbnails |
+| `16:9` / `9:16` | Widescreen, mobile, stories (default: `16:9`) |
+| `4:3` / `3:4` | Presentations, portraits |
+| `3:2` / `2:3` | Photography |
 
-The following aspect ratios are supported:
+For image-to-video generation, the output defaults to the input image's aspect ratio. If you specify the `aspect_ratio` parameter, it will override this and stretch the image to the desired aspect ratio.
 
-* 16:9
-* 4:3
-* 1:1
-* 9:16
-* 3:4
-* 3:2
-* 2:3
-
-Using xAI SDK auto-polling:
-
-```pythonXAI
-from xai_sdk import Client
-
-client = Client()
-
-response = client.video.generate(
-    prompt="A cat playing with a ball",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    aspect_ratio="4:3"
-)
-print(f"Video URL: {response.url}")
-```
-
-Sending regular generation request:
-
-```pythonXAI
-from xai_sdk import Client
-
-client = Client()
-
-response = client.video.start(
-    prompt="A cat playing with a ball",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    aspect_ratio="4:3"
-)
-print(f"Request ID: {response.request_id}")
-```
-
-```javascriptWithoutSDK
-const response = await fetch('https://api.x.ai/v1/videos/generations', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': \`Bearer \${process.env.XAI_API_KEY}\`,
-  },
-  body: JSON.stringify({
-    prompt: 'A cat playing with a ball',
-    model: '{{LATEST_VIDEO_MODEL_NAME}}',
-    aspect_ratio: '4:3',
-  }),
-});
-const data = await response.json();
-console.log('Request ID:', data.request_id);
-```
-
-```bash
-curl -X 'POST' https://api.x.ai/v1/videos/generations \\
-  -H 'accept: application/json' \\
-  -H 'Authorization: Bearer <API_KEY>' \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-      "prompt": "A cat playing with a ball",
-      "model": "{{LATEST_VIDEO_MODEL_NAME}}",
-      "aspect_ratio": "4:3"
-  }'
-```
+Video editing does not support custom `aspect_ratio` — the output matches the input video's aspect ratio.
 
 ### Resolution
 
-You can select a resolution from a list of supported resolutions.
+| Resolution | Description |
+|------------|-------------|
+| `720p` | HD quality |
+| `480p` | Standard definition, faster processing (default) |
 
-Supported resolutions:
+Video editing does not support custom `resolution`. The output resolution matches the input video's resolution, capped at 720p (e.g., a 1080p input will be downsized to 720p).
 
-* 720p
-* 480p
+### Example
 
-Using xAI SDK auto-polling:
+## Customize Polling Behavior
 
-```pythonXAI
-from xai_sdk import Client
+When using the SDK's `generate()` method, you can control how long to wait and how frequently to check for results using the `timeout` and `interval` parameters:
 
-client = Client()
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `timeout` | Maximum time to wait for the video to complete | 10 minutes |
+| `interval` | Time between status checks | 100 milliseconds |
 
-response = client.video.generate(
-    prompt="A cat playing with a ball",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    resolution="720p"
-)
-print(f"Video URL: {response.url}")
-```
+If the video isn't ready within the timeout period, a `TimeoutError` is raised. For even finer control, use the [manual polling approach](#handle-polling-manually) with `start()` and `get()`.
 
-Sending regular generation request:
+## Handle Polling Manually
 
-```pythonXAI
-from xai_sdk import Client
+For fine-grained control over the generation lifecycle, use `start()` to initiate generation and `get()` to check status.
 
-client = Client()
+The `get()` method returns a response with a `status` field. Import the status enum from the SDK:
 
-response = client.video.start(
-    prompt="A cat playing with a ball",
-    model="{{LATEST_VIDEO_MODEL_NAME}}",
-    resolution="720p"
-)
-print(f"Request ID: {response.request_id}")
-```
+The available status values are:
 
-```javascriptWithoutSDK
-const response = await fetch('https://api.x.ai/v1/videos/generations', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': \`Bearer \${process.env.XAI_API_KEY}\`,
-  },
-  body: JSON.stringify({
-    prompt: 'A cat playing with a ball',
-    model: '{{LATEST_VIDEO_MODEL_NAME}}',
-    resolution: '720p',
-  }),
-});
-const data = await response.json();
-console.log('Request ID:', data.request_id);
-```
+| Proto Value | Description |
+|-------------|-------------|
+| `deferred_pb2.DeferredStatus.PENDING` | Video is still being generated |
+| `deferred_pb2.DeferredStatus.DONE` | Video is ready |
+| `deferred_pb2.DeferredStatus.EXPIRED` | Request has expired |
 
-```bash
-curl -X 'POST' https://api.x.ai/v1/videos/generations \\
-  -H 'accept: application/json' \\
-  -H 'Authorization: Bearer <API_KEY>' \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-      "prompt": "A cat playing with a ball",
-      "model": "{{LATEST_VIDEO_MODEL_NAME}}",
-      "resolution": "720p"
-  }'
-```
+## Response Details
+
+The xAI SDK exposes additional metadata on the response object beyond the video URL.
+
+**Moderation** — Check whether the generated video passed content moderation:
+
+**Duration** — Get the actual duration of the generated video:
+
+**Model** — Get the actual model used (resolving any aliases):
+
+## Pricing
+
+Video generation uses per-second pricing. Longer videos cost more, and both duration and resolution affect the total cost.
+
+For full pricing details on the `grok-imagine-video` model, see the [model page](/developers/models).
+
+## Limitations
+
+* **Maximum duration:** 15 seconds for generation, 8.7 seconds for editing input videos
+* **URL expiration:** Generated URLs are ephemeral and should not be relied upon for long-term storage
+* **Resolutions:** 480p or 720p
+* **Content moderation:** Videos are subject to content policy review
+
+## Related
+
+* [Models](/developers/models) — Available video models and pricing
+* [Image Generation](/developers/model-capabilities/images/generation) — Generate still images from text
+* [API Reference](/developers/api-reference) — Full endpoint documentation

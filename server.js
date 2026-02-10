@@ -4,7 +4,9 @@ const express = require('express');
 const generateHandler = require('./api/generate');
 const enhanceHandler = require('./api/enhance');
 const testKeyHandler = require('./api/test-key');
+const testXaiKeyHandler = require('./api/test-xai-key');
 const randomPromptHandler = require('./api/random-prompt');
+const videoStatusHandler = require('./api/video-status');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,8 +46,16 @@ app.post('/api/test-key', (req, res) => {
     return testKeyHandler(req, res);
 });
 
+app.post('/api/test-xai-key', (req, res) => {
+    return testXaiKeyHandler(req, res);
+});
+
 app.post('/api/random-prompt', (req, res) => {
     return randomPromptHandler(req, res);
+});
+
+app.post('/api/video-status', (req, res) => {
+    return videoStatusHandler(req, res);
 });
 
 function startServer(port) {

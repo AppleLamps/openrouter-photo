@@ -1,50 +1,6 @@
-const resolveCorsOrigin = (req) => {
-    const raw = process.env.ALLOWED_ORIGIN || '';
-    const allowed = raw.split(',').map((origin) => origin.trim()).filter(Boolean);
-    if (allowed.length === 0 || allowed.includes('*')) {
-        return '*';
-    }
-    const origin = req.headers.origin;
-    if (origin && allowed.includes(origin)) {
-        return origin;
-    }
-    return allowed[0];
-};
+const { withMiddleware, redactKey } = require('./_middleware');
 
-module.exports = async function handler(req, res) {
-    // Set CORS headers
-    const allowedOrigin = resolveCorsOrigin(req);
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    if (allowedOrigin !== '*') {
-        res.setHeader('Vary', 'Origin');
-    }
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key');
-
-    // Handle preflight request
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-
-    // Only allow POST requests
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
-
-    // Parse body if not already parsed (Vercel compatibility)
-    if (!req.body || typeof req.body !== 'object') {
-        try {
-            const chunks = [];
-            for await (const chunk of req) {
-                chunks.push(chunk);
-            }
-            const body = Buffer.concat(chunks).toString();
-            req.body = JSON.parse(body);
-        } catch (error) {
-            return res.status(400).json({ error: 'Invalid JSON body' });
-        }
-    }
-
+module.exports = withMiddleware(async function handler(req, res) {
     const {
         prompt,
         model = 'black-forest-labs/flux.2-pro',
@@ -53,8 +9,6 @@ module.exports = async function handler(req, res) {
         aspect_ratio,
         image_size, // legacy "preset" from UI; used to derive aspect ratio if aspect_ratio isn't set
         resolution, // legacy UI field; repurposed as Gemini image_config.image_size (1K/2K/4K)
-        xai_image_size,
-        xai_image_quality,
         xai_video_length,
         xai_video_quality,
         image_urls = [], // optional image inputs (data URLs) for all models
@@ -78,12 +32,6 @@ module.exports = async function handler(req, res) {
         req.headers['x-xai-api-key'] ||
         req.headers['x-xai-api_key'] ||
         process.env.XAI_API_KEY;
-
-    const redactKey = (text) => {
-        if (!text) return text;
-        const str = String(text);
-        return str.replace(/sk-or-v1-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]');
-    };
 
     const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -181,32 +129,27 @@ module.exports = async function handler(req, res) {
             return images;
         };
 
-        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
         try {
             if (isXaiImageModel) {
-                const normalizedXaiImageSize =
-                    typeof xai_image_size === 'string' && xai_image_size.trim() !== ''
-                        ? xai_image_size.trim()
-                        : null;
-                const normalizedXaiImageQuality =
-                    typeof xai_image_quality === 'string' && xai_image_quality.trim() !== ''
-                        ? xai_image_quality.trim()
-                        : null;
                 const normalizedXaiAspectRatio =
                     typeof aspect_ratio === 'string' && aspect_ratio.trim() !== ''
                         ? aspect_ratio.trim()
                         : null;
 
+                // xAI image API supports: model, prompt, n, response_format, aspect_ratio, image_url
+                // It does NOT support: size, quality
                 const xaiPayload = {
                     model,
                     prompt: xaiPrompt,
                     response_format: 'b64_json',
                     n: parsedNumImages,
-                    ...(normalizedXaiImageSize ? { size: normalizedXaiImageSize } : {}),
-                    ...(normalizedXaiImageQuality ? { quality: normalizedXaiImageQuality } : {}),
                     ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
                 };
+
+                // Pass first input image for image editing
+                if (normalizedInputImages.length > 0) {
+                    xaiPayload.image_url = normalizedInputImages[0];
+                }
 
                 const response = await fetch('https://api.x.ai/v1/images/generations', {
                     method: 'POST',
@@ -229,15 +172,22 @@ module.exports = async function handler(req, res) {
                     return res.status(502).json({ error: 'No images returned from xAI' });
                 }
 
+                // Calculate cost per image based on model
+                const hasInputImage = normalizedInputImages.length > 0;
+                const inputImageCost = hasInputImage ? 0.002 : 0;
+                const perImageOutputCost = model === 'grok-imagine-image-pro' ? 0.07 : 0.02;
+                const actualCount = Math.min(images.length, parsedNumImages);
+                const totalCost = (perImageOutputCost * actualCount) + inputImageCost;
+
                 return res.status(200).json({
                     images: images.slice(0, parsedNumImages).map((url) => ({
                         url,
                         model,
-                        cost: 0,
+                        cost: perImageOutputCost,
                         provider: 'xai',
                     })),
                     meta: {
-                        total_usage: 0,
+                        total_usage: totalCost,
                         requests: [],
                         usage_pending: false,
                     },
@@ -267,6 +217,11 @@ module.exports = async function handler(req, res) {
                     ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
                 };
 
+                // Pass first input image for image-to-video generation
+                if (normalizedInputImages.length > 0) {
+                    startPayload.image_url = normalizedInputImages[0];
+                }
+
                 const startResponse = await fetch('https://api.x.ai/v1/videos/generations', {
                     method: 'POST',
                     headers: xaiHeaders,
@@ -288,58 +243,19 @@ module.exports = async function handler(req, res) {
                     return res.status(502).json({ error: 'xAI video request did not return a request ID' });
                 }
 
-                const maxAttempts = 20;
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    await sleep(2000);
+                // Calculate estimated video cost
+                const hasInputImage = normalizedInputImages.length > 0;
+                const inputImageCost = hasInputImage ? 0.002 : 0;
+                const outputVideoCost = normalizedDuration * 0.05;
+                const videoCost = outputVideoCost + inputImageCost;
 
-                    const pollResponse = await fetch(`https://api.x.ai/v1/videos/${requestId}`, {
-                        headers: {
-                            Authorization: `Bearer ${XAI_API_KEY}`,
-                        },
-                    });
-
-                    if (!pollResponse.ok) {
-                        const errorText = await pollResponse.text();
-                        return res.status(pollResponse.status).json({
-                            error: 'Failed to retrieve video generation status',
-                            details: redactKey(errorText),
-                        });
-                    }
-
-                    const pollData = await pollResponse.json();
-                    const videoUrl =
-                        pollData?.url ||
-                        pollData?.video?.url ||
-                        pollData?.response?.video?.url ||
-                        pollData?.response?.url ||
-                        null;
-                    const status = String(pollData?.status || pollData?.state || '').toUpperCase();
-
-                    if (videoUrl) {
-                        return res.status(200).json({
-                            images: [
-                                {
-                                    url: videoUrl,
-                                    model,
-                                    cost: 0,
-                                    provider: 'xai',
-                                    media_type: 'video',
-                                },
-                            ],
-                            meta: {
-                                total_usage: 0,
-                                requests: [],
-                                usage_pending: false,
-                            },
-                        });
-                    }
-
-                    if (['FAILED', 'ERROR', 'EXPIRED'].includes(status)) {
-                        return res.status(502).json({ error: 'xAI video generation failed' });
-                    }
-                }
-
-                return res.status(504).json({ error: 'xAI video generation timed out' });
+                // Return immediately with the request ID — the client will poll /api/video-status
+                return res.status(202).json({
+                    status: 'pending',
+                    request_id: requestId,
+                    model,
+                    estimated_cost: videoCost,
+                });
             }
         } catch (error) {
             console.error('xAI API error:', redactKey(error));
@@ -371,7 +287,9 @@ module.exports = async function handler(req, res) {
                     content: userContent,
                 },
             ],
-            modalities: ['image', 'text'],
+            // Gemini models can return both image + text; pure image models (Seedream, Flux, etc.)
+            // only support the 'image' modality — requesting 'text' causes endpoint lookup failures.
+            modalities: isGeminiModel ? ['image', 'text'] : ['image'],
             stream: false,
         };
 
@@ -636,4 +554,4 @@ module.exports = async function handler(req, res) {
         console.error('Server error:', redactKey(error));
         return res.status(500).json({ error: 'Internal server error' });
     }
-}
+});
