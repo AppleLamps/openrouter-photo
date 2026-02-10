@@ -7,6 +7,7 @@ const ENHANCE_ENDPOINT = '/api/enhance';
 const TEST_KEY_ENDPOINT = '/api/test-key';
 const RANDOM_PROMPT_ENDPOINT = '/api/random-prompt';
 const OPENROUTER_API_KEY_STORAGE_KEY = 'openrouter_api_key';
+const XAI_API_KEY_STORAGE_KEY = 'xai_api_key';
 
 /**
  * Read the user's OpenRouter API key from localStorage (if set).
@@ -16,6 +17,21 @@ const OPENROUTER_API_KEY_STORAGE_KEY = 'openrouter_api_key';
 function getOpenRouterApiKey() {
     try {
         const raw = localStorage.getItem(OPENROUTER_API_KEY_STORAGE_KEY);
+        if (!raw) return null;
+        const trimmed = raw.trim();
+        return trimmed.length > 0 ? trimmed : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Read the user's xAI API key from localStorage (if set).
+ * @returns {string | null}
+ */
+function getXaiApiKey() {
+    try {
+        const raw = localStorage.getItem(XAI_API_KEY_STORAGE_KEY);
         if (!raw) return null;
         const trimmed = raw.trim();
         return trimmed.length > 0 ? trimmed : null;
@@ -47,6 +63,10 @@ function getOpenRouterApiKey() {
  * @property {string} [resolution] - Resolution (1K, 2K, 4K) for Nano Banana Pro
  * @property {boolean} [limit_generations] - Limit generations per prompt to 1 (Nano Banana Pro)
  * @property {boolean} [enable_web_search] - Enable web search for image generation (Nano Banana Pro)
+ * @property {string} [xai_image_size] - xAI image size (e.g., 1024x1024)
+ * @property {string} [xai_image_quality] - xAI image quality (standard, high)
+ * @property {number} [xai_video_length] - xAI video duration (seconds)
+ * @property {string} [xai_video_quality] - xAI video resolution (720p, 480p)
  */
 
 /**
@@ -55,6 +75,7 @@ function getOpenRouterApiKey() {
  * @property {string} model - Model used for generation
  * @property {number} cost - Cost in USD for this image
  * @property {string|null} provider - Provider name
+ * @property {string} [media_type] - Media type (image or video)
  */
 
 /**
@@ -92,11 +113,13 @@ export async function generateImage(prompt, options = {}, signal = null) {
 
     try {
         const openRouterApiKey = getOpenRouterApiKey();
+        const xaiApiKey = getXaiApiKey();
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
+                ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
             },
             body: JSON.stringify(requestBody),
             ...(signal ? { signal } : {})

@@ -16,6 +16,8 @@ const FOLDERS_STORE = 'folders';
  * @property {Object} [settings] - Generation settings
  * @property {string|null} [folderId] - Folder ID or null for uncategorized
  * @property {Object} [generation] - Generation metadata (model, cost, provider)
+ * @property {string} [mediaType] - Media type (image or video)
+ * @property {string} [sourceUrl] - Original media URL (used for videos)
  * @property {string} thumbnailBlobId - Reference to thumbnail in blobs store
  * @property {string} fullImageBlobId - Reference to full image in blobs store
  */
@@ -89,9 +91,9 @@ export class ImageStorage {
      * @param {Blob} thumbnailBlob - Thumbnail image
      * @returns {Promise<void>}
      */
-    async saveImage(metadata, fullBlob, thumbnailBlob) {
-        const thumbnailBlobId = `${metadata.id}-thumb`;
-        const fullImageBlobId = `${metadata.id}-full`;
+    async saveImage(metadata, fullBlob = null, thumbnailBlob = null) {
+        const thumbnailBlobId = thumbnailBlob ? `${metadata.id}-thumb` : null;
+        const fullImageBlobId = fullBlob ? `${metadata.id}-full` : null;
 
         const tx = this.db.transaction([IMAGES_STORE, BLOBS_STORE], 'readwrite');
         const imagesStore = tx.objectStore(IMAGES_STORE);
@@ -104,9 +106,13 @@ export class ImageStorage {
             fullImageBlobId
         });
 
-        // Store blobs
-        blobsStore.put({ id: thumbnailBlobId, blob: thumbnailBlob, size: thumbnailBlob.size });
-        blobsStore.put({ id: fullImageBlobId, blob: fullBlob, size: fullBlob.size });
+        // Store blobs when available
+        if (thumbnailBlob && thumbnailBlobId) {
+            blobsStore.put({ id: thumbnailBlobId, blob: thumbnailBlob, size: thumbnailBlob.size });
+        }
+        if (fullBlob && fullImageBlobId) {
+            blobsStore.put({ id: fullImageBlobId, blob: fullBlob, size: fullBlob.size });
+        }
 
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
@@ -207,6 +213,9 @@ export class ImageStorage {
         // Attach thumbnail blobs
         const results = await Promise.all(
             images.map(async (img) => {
+                if (!img.thumbnailBlobId) {
+                    return { ...img, thumbnailBlob: null };
+                }
                 const thumbRequest = blobsStore.get(img.thumbnailBlobId);
                 const thumbBlob = await new Promise((resolve) => {
                     thumbRequest.onsuccess = () => resolve(thumbRequest.result?.blob || null);

@@ -237,6 +237,12 @@
                                 <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
                                     role="option" data-value="openai/gpt-5-image">openai/gpt-5-image</button>
                                 <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
+                                    role="option" data-value="grok-imagine-image">grok-imagine-image</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
+                                    role="option" data-value="grok-imagine-image-pro">grok-imagine-image-pro</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
+                                    role="option" data-value="grok-imagine-video">grok-imagine-video</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
                                     role="option"
                                     data-value="sourceful/riverflow-v2-max-preview">sourceful/riverflow-v2-max-preview</button>
                                 <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
@@ -329,11 +335,32 @@
                     </p>
                 </div>
 
+                <!-- xAI API Key -->
+                <div class="settings-group">
+                    <label class="settings-label" for="setting-xai-key">xAI API Key</label>
+                    <div class="settings-inline">
+                        <input type="password" id="setting-xai-key" class="settings-input settings-inline__input"
+                            placeholder="Paste your xAI key (stored locally in your browser)">
+                        <button type="button" id="setting-xai-save"
+                            class="settings-btn settings-btn--inline settings-btn--sm">
+                            Save
+                        </button>
+                    </div>
+                    <label class="settings-checkbox" style="margin-top: 8px;">
+                        <input type="checkbox" id="setting-xai-key-show">
+                        <span>Show API key</span>
+                    </label>
+                    <span id="setting-xai-save-status" class="settings-hint" style="margin-top: 8px;"></span>
+                    <p class="settings-hint" style="margin-top: 8px;">
+                        Stored in <code>localStorage</code> and sent to <code>/api</code> when using Grok models.
+                    </p>
+                </div>
+
                 <!-- Model Selection -->
                 <div class="settings-group">
                     <label class="settings-label">Advanced</label>
-                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio is supported for Gemini and Seedream
-                        models. Image size is Gemini only.</p>
+                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio is supported for Gemini, Seedream, and
+                        xAI models. Gemini image size is Gemini only; Grok models use their own size settings.</p>
                 </div>
 
                 <!-- Aspect Ratio (Gemini and Seedream) -->
@@ -362,6 +389,44 @@
                         <option value="4K">4K</option>
                     </select>
                     <p class="settings-hint">Only applied for Gemini image-generation models.</p>
+                </div>
+
+                <!-- xAI Image Size -->
+                <div class="settings-group settings-group--hidden" id="xai-image-size-group">
+                    <label class="settings-label">xAI Image Size</label>
+                    <select id="setting-xai-image-size" class="settings-select">
+                        <option value="1024x1024" selected>1024 × 1024</option>
+                        <option value="1024x1536">1024 × 1536</option>
+                        <option value="1536x1024">1536 × 1024</option>
+                    </select>
+                    <p class="settings-hint">Optional size for Grok image generation.</p>
+                </div>
+
+                <!-- xAI Image Quality -->
+                <div class="settings-group settings-group--hidden" id="xai-image-quality-group">
+                    <label class="settings-label">xAI Image Quality</label>
+                    <select id="setting-xai-image-quality" class="settings-select">
+                        <option value="standard" selected>Standard</option>
+                        <option value="high">High</option>
+                    </select>
+                    <p class="settings-hint">Optional quality setting for Grok image generation.</p>
+                </div>
+
+                <!-- xAI Video Length -->
+                <div class="settings-group settings-group--hidden" id="xai-video-length-group">
+                    <label class="settings-label" for="setting-xai-video-length">xAI Video Length (seconds)</label>
+                    <input type="number" id="setting-xai-video-length" class="settings-input" min="1" max="15" value="5">
+                    <p class="settings-hint">Supported range is 1–15 seconds.</p>
+                </div>
+
+                <!-- xAI Video Quality -->
+                <div class="settings-group settings-group--hidden" id="xai-video-quality-group">
+                    <label class="settings-label">xAI Video Quality</label>
+                    <select id="setting-xai-video-quality" class="settings-select">
+                        <option value="720p" selected>720p</option>
+                        <option value="480p">480p</option>
+                    </select>
+                    <p class="settings-hint">Optional resolution for Grok video generation.</p>
                 </div>
 
                 <!-- Photo Visibility Mode -->
@@ -404,7 +469,8 @@
                 </svg>
             </button>
             <div class="modal__content">
-                <img class="modal__image" src="" alt="">
+                <img class="modal__image modal__image--photo" src="" alt="">
+                <video class="modal__image modal__image--video" controls playsinline style="display: none;"></video>
                 <div class="modal__info">
                     <div class="modal__metadata">
                         <div class="modal__metadata-item">

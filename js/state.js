@@ -13,6 +13,8 @@ const FALLBACK_ID_PREFIX = 'legacy';
  * @typedef {Object} ImageData
  * @property {string} id - Unique identifier
  * @property {string} url - Image URL (thumbnail for display, use getFullImageUrl for full)
+ * @property {string} [mediaType] - Media type (image or video)
+ * @property {string} [sourceUrl] - Original media URL (used for videos)
  * @property {string} prompt - Generation prompt
  * @property {number} createdAt - Timestamp
  * @property {Object} [settings] - Generation settings
@@ -97,9 +99,21 @@ const normalizeStoredImages = (stored) => {
             didNormalize = true;
         }
 
+        const mediaType = raw.mediaType === 'video' ? 'video' : 'image';
+        if (raw.mediaType && raw.mediaType !== mediaType) {
+            didNormalize = true;
+        }
+
+        const sourceUrl = typeof raw.sourceUrl === 'string' ? raw.sourceUrl : null;
+        if (sourceUrl !== raw.sourceUrl) {
+            didNormalize = true;
+        }
+
         images.push({
             id,
             url,
+            mediaType,
+            sourceUrl,
             prompt,
             createdAt,
             settings,
@@ -227,9 +241,15 @@ class State {
                 this.blobUrls.set(`${img.id}-thumb`, thumbnailUrl);
             }
 
+            const mediaType = img.mediaType === 'video' ? 'video' : 'image';
+            const sourceUrl = typeof img.sourceUrl === 'string' ? img.sourceUrl : null;
+            const displayUrl = mediaType === 'video' ? sourceUrl || '' : (thumbnailUrl || '');
+
             return {
                 id: img.id,
-                url: thumbnailUrl || '', // Use thumbnail URL for display
+                url: displayUrl,
+                mediaType,
+                sourceUrl,
                 prompt: img.prompt,
                 createdAt: img.createdAt,
                 settings: img.settings,
@@ -311,15 +331,48 @@ class State {
     async addImage(imageData) {
         await this.ready;
 
+        const mediaType = imageData.mediaType === 'video' ? 'video' : 'image';
+        const isDataImage = typeof imageData.url === 'string' && imageData.url.startsWith('data:image/');
+        const isVideo = mediaType === 'video' || !isDataImage;
+
         if (this.useFallback) {
             // Fallback: store directly in localStorage
-            this.images.unshift(imageData);
+            const entry = {
+                ...imageData,
+                mediaType,
+                sourceUrl: imageData.sourceUrl || (isVideo ? imageData.url : null)
+            };
+            this.images.unshift(entry);
             this.saveToLocalStorage();
-            this.notifyListeners('add', imageData);
+            this.notifyListeners('add', entry);
             return;
         }
 
         try {
+            if (isVideo) {
+                const metadata = {
+                    id: imageData.id,
+                    prompt: imageData.prompt,
+                    createdAt: imageData.createdAt,
+                    settings: imageData.settings,
+                    folderId: imageData.folderId || null,
+                    generation: imageData.generation || null,
+                    mediaType,
+                    sourceUrl: imageData.sourceUrl || imageData.url,
+                };
+
+                await this.storage.saveImage(metadata, null, null);
+
+                const inMemoryVideo = {
+                    ...metadata,
+                    url: metadata.sourceUrl || ''
+                };
+
+                this.images.unshift(inMemoryVideo);
+                this.notifyListeners('add', inMemoryVideo);
+                return;
+            }
+
             const dataUri = imageData.url;
             const fullBlob = dataUriToBlob(dataUri);
             const thumbnailBlob = await generateThumbnail(fullBlob);
@@ -330,7 +383,9 @@ class State {
                 createdAt: imageData.createdAt,
                 settings: imageData.settings,
                 folderId: imageData.folderId || null,
-                generation: imageData.generation || null
+                generation: imageData.generation || null,
+                mediaType,
+                sourceUrl: imageData.sourceUrl || null,
             };
 
             await this.storage.saveImage(metadata, fullBlob, thumbnailBlob);
@@ -349,8 +404,13 @@ class State {
         } catch (error) {
             console.error('Failed to add image:', error);
             // Fallback: try to store the original data URI
-            this.images.unshift(imageData);
-            this.notifyListeners('add', imageData);
+            const entry = {
+                ...imageData,
+                mediaType,
+                sourceUrl: imageData.sourceUrl || (isVideo ? imageData.url : null)
+            };
+            this.images.unshift(entry);
+            this.notifyListeners('add', entry);
         }
     }
 
@@ -366,6 +426,11 @@ class State {
             // In fallback mode, url is already the full image
             const image = this.images.find(img => img.id === id);
             return image ? image.url : null;
+        }
+
+        const image = this.images.find(img => img.id === id);
+        if (image?.mediaType === 'video') {
+            return image.sourceUrl || image.url || null;
         }
 
         // Check if we already have a blob URL for this full image

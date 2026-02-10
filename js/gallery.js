@@ -225,6 +225,12 @@ function shouldShowImageInCurrentView(image) {
  * @param {Object} image - Image data
  */
 function preloadAndShowImage(image) {
+    if (image.mediaType === 'video') {
+        prependImageCard(image, true);
+        updateEmptyState();
+        return;
+    }
+
     const img = new Image();
     img.src = image.url;
 
@@ -276,6 +282,8 @@ function renderGallery() {
 
 function getExtensionFromType(mimeType) {
     if (!mimeType) return 'png';
+    if (mimeType.includes('mp4')) return 'mp4';
+    if (mimeType.includes('webm')) return 'webm';
     if (mimeType.includes('jpeg')) return 'jpg';
     const [, subtype] = mimeType.split('/');
     if (!subtype) return 'png';
@@ -308,6 +316,20 @@ async function loadJSZip() {
 async function getImageBlobForDownload(imageId) {
     await state.ready;
 
+    const image = state.getImage(imageId);
+    if (!image || !image.url) return null;
+
+    if (image.mediaType === 'video') {
+        try {
+            const fullUrl = await state.getFullImageUrl(imageId);
+            const response = await fetch(fullUrl || image.url);
+            return await response.blob();
+        } catch (error) {
+            console.error(`Failed to fetch video ${imageId}:`, error);
+            return null;
+        }
+    }
+
     if (!state.useFallback && state.storage) {
         try {
             const blob = await state.storage.getFullImageBlob(imageId);
@@ -316,9 +338,6 @@ async function getImageBlobForDownload(imageId) {
             console.error(`Failed to read blob for image ${imageId}:`, error);
         }
     }
-
-    const image = state.getImage(imageId);
-    if (!image || !image.url) return null;
 
     try {
         const fullUrl = await state.getFullImageUrl(imageId);
@@ -345,7 +364,7 @@ async function downloadSelectedImages(button) {
             const blob = await getImageBlobForDownload(id);
             if (!blob) continue;
             const extension = getExtensionFromType(blob.type);
-            files.push({ id, blob, extension });
+            files.push({ id, blob, extension, type: blob.type });
         }
 
         if (files.length === 0) return;
@@ -355,8 +374,9 @@ async function downloadSelectedImages(button) {
             try {
                 const JSZip = await loadJSZip();
                 const zip = new JSZip();
-                files.forEach(({ id, blob, extension }) => {
-                    zip.file(`ai-image-${id}.${extension}`, blob);
+                files.forEach(({ id, blob, extension, type }) => {
+                    const prefix = type?.startsWith('video') ? 'ai-video' : 'ai-image';
+                    zip.file(`${prefix}-${id}.${extension}`, blob);
                 });
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
                 triggerBlobDownload(zipBlob, `ai-images-${files.length}.zip`);
@@ -366,8 +386,9 @@ async function downloadSelectedImages(button) {
             }
         }
 
-        files.forEach(({ id, blob, extension }) => {
-            triggerBlobDownload(blob, `ai-image-${id}.${extension}`);
+        files.forEach(({ id, blob, extension, type }) => {
+            const prefix = type?.startsWith('video') ? 'ai-video' : 'ai-image';
+            triggerBlobDownload(blob, `${prefix}-${id}.${extension}`);
         });
     } catch (error) {
         console.error('Failed to download selected images:', error);
@@ -541,6 +562,7 @@ function updateEmptyState() {
 function createImageCard(image, preloaded = false) {
     const isEditMode = state.editMode;
     const isSelected = state.selectedImageIds.has(image.id);
+    const isVideo = image.mediaType === 'video';
 
     const card = createElement('div', {
         className: `gallery__card${isEditMode ? ' gallery__card--edit-mode' : ''}${isSelected ? ' gallery__card--selected' : ''}`,
@@ -590,24 +612,35 @@ function createImageCard(image, preloaded = false) {
         }
     }, '✕');
 
-    // Image element
-    const img = createElement('img', {
-        className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
-        src: image.url,
-        alt: image.prompt,
-        loading: 'lazy'
-    });
+    // Image or video element
+    const media = isVideo
+        ? createElement('video', {
+            className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
+            src: image.url,
+            muted: true,
+            playsinline: true,
+            preload: 'metadata',
+            'aria-label': image.prompt
+        })
+        : createElement('img', {
+            className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
+            src: image.url,
+            alt: image.prompt,
+            loading: 'lazy'
+        });
 
     if (!preloaded) {
-        img.onload = () => {
-            // Use replace() for single reflow instead of remove+add
-            img.classList.replace('gallery__image--loading', 'gallery__image--loaded');
-            img.onload = null; // Clean up handler
+        const handleLoaded = () => {
+            media.classList.replace('gallery__image--loading', 'gallery__image--loaded');
+            media.removeEventListener('load', handleLoaded);
+            media.removeEventListener('loadeddata', handleLoaded);
         };
+        media.addEventListener('load', handleLoaded);
+        media.addEventListener('loadeddata', handleLoaded);
     }
 
     card.appendChild(deleteBtn);
-    card.appendChild(img);
+    card.appendChild(media);
 
     // Click to open lightbox (or toggle selection in edit mode)
     card.addEventListener('click', () => {
@@ -799,7 +832,8 @@ async function openLightbox(image) {
     const modal = document.getElementById('lightbox-modal');
     if (!modal) return;
 
-    const modalImage = modal.querySelector('.modal__image');
+    const modalImage = modal.querySelector('.modal__image--photo');
+    const modalVideo = modal.querySelector('.modal__image--video');
     const modalPrompt = modal.querySelector('.modal__prompt');
     const downloadBtn = modal.querySelector('.modal__download-btn');
     const shareBtn = modal.querySelector('.modal__share-btn');
@@ -815,11 +849,25 @@ async function openLightbox(image) {
     // Defensive: ensure any previous swipe/drag state is cleared before opening.
     resetLightboxSwipeState();
 
-    if (modalImage) {
-        // Show thumbnail first for instant feedback
+    if (image.mediaType === 'video') {
+        if (modalVideo) {
+            modalVideo.style.display = '';
+            modalVideo.src = image.url;
+            modalVideo.classList.add('modal__image--loading');
+        }
+        if (modalImage) {
+            modalImage.style.display = 'none';
+            modalImage.src = '';
+        }
+    } else if (modalImage) {
+        modalImage.style.display = '';
         modalImage.src = image.url;
         modalImage.alt = image.prompt;
         modalImage.classList.add('modal__image--loading');
+        if (modalVideo) {
+            modalVideo.style.display = 'none';
+            modalVideo.src = '';
+        }
     }
 
     if (modalPrompt) {
@@ -854,7 +902,10 @@ async function openLightbox(image) {
     if (downloadBtn) {
         downloadBtn.onclick = async () => {
             const fullUrl = await state.getFullImageUrl(image.id);
-            downloadImage(fullUrl || image.url, `ai-image-${image.id}.png`);    
+            const filename = image.mediaType === 'video'
+                ? `ai-video-${image.id}.mp4`
+                : `ai-image-${image.id}.png`;
+            downloadImage(fullUrl || image.url, filename);
         };
     }
 
@@ -871,12 +922,13 @@ async function openLightbox(image) {
                     const blob = await getImageBlobForDownload(image.id);
                     if (!blob) throw new Error('Missing image blob');
                     const extension = getExtensionFromType(blob.type);
-                    const file = new File([blob], `ai-image-${image.id}.${extension}`, {
-                        type: blob.type || 'image/png'
+                    const defaultType = image.mediaType === 'video' ? 'video/mp4' : 'image/png';
+                    const file = new File([blob], `ai-media-${image.id}.${extension}`, {
+                        type: blob.type || defaultType
                     });
                     const shareData = {
                         files: [file],
-                        title: 'AI Generated Image',
+                        title: image.mediaType === 'video' ? 'AI Generated Video' : 'AI Generated Image',
                         text: image.prompt
                     };
                     if (navigator.canShare && !navigator.canShare(shareData)) {
@@ -886,7 +938,10 @@ async function openLightbox(image) {
                 } catch (error) {
                     console.error('Share failed, falling back to download:', error);
                     const fullUrl = await state.getFullImageUrl(image.id);
-                    downloadImage(fullUrl || image.url, `ai-image-${image.id}.png`);
+                    const filename = image.mediaType === 'video'
+                        ? `ai-video-${image.id}.mp4`
+                        : `ai-image-${image.id}.png`;
+                    downloadImage(fullUrl || image.url, filename);
                 } finally {
                     shareBtn.textContent = originalText;
                     shareBtn.disabled = false;
@@ -943,10 +998,15 @@ async function openLightbox(image) {
         modal.focus({ preventScroll: true });
     }
 
-    // Load full resolution image after modal is visible
-    if (modalImage) {
+    // Load full resolution media after modal is visible
+    if (image.mediaType === 'video' && modalVideo) {
         const fullUrl = await state.getFullImageUrl(image.id);
-        // Only update if modal is still open and we got a full URL
+        if (fullUrl && modal.classList.contains('modal--active')) {
+            modalVideo.src = fullUrl;
+        }
+        modalVideo.classList.remove('modal__image--loading');
+    } else if (modalImage) {
+        const fullUrl = await state.getFullImageUrl(image.id);
         if (fullUrl && modal.classList.contains('modal--active')) {
             modalImage.src = fullUrl;
         }
@@ -960,6 +1020,13 @@ async function openLightbox(image) {
 export function closeLightbox() {
     const modal = document.getElementById('lightbox-modal');
     if (!modal) return;
+
+    const modalVideo = modal.querySelector('.modal__image--video');
+    if (modalVideo instanceof HTMLVideoElement) {
+        modalVideo.pause();
+        modalVideo.removeAttribute('src');
+        modalVideo.load();
+    }
 
     modal.classList.remove('modal--active');
     modal.classList.remove('modal--ui-hidden', 'modal--dragging');
@@ -997,7 +1064,8 @@ export function initLightbox() {
 
     const modalContent = modal.querySelector('.modal__content');
     lightboxModalContentElement = modalContent instanceof HTMLElement ? modalContent : null;
-    const modalImage = modal.querySelector('.modal__image');
+    const modalImage = modal.querySelector('.modal__image--photo');
+    const modalVideo = modal.querySelector('.modal__image--video');
 
     // Close on backdrop click
     modal.addEventListener('click', (e) => {
@@ -1007,11 +1075,17 @@ export function initLightbox() {
     });
 
     // Tap image to toggle UI (mobile-friendly "clean view")
+    const toggleUi = () => {
+        if (!modal.classList.contains('modal--active')) return;
+        modal.classList.toggle('modal--ui-hidden');
+    };
+
     if (modalImage) {
-        modalImage.addEventListener('click', () => {
-            if (!modal.classList.contains('modal--active')) return;
-            modal.classList.toggle('modal--ui-hidden');
-        });
+        modalImage.addEventListener('click', toggleUi);
+    }
+
+    if (modalVideo) {
+        modalVideo.addEventListener('click', toggleUi);
     }
 
     // Close on escape key

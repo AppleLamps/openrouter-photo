@@ -1,0 +1,348 @@
+#### Tools
+
+# X Search
+
+The X Search tool enables Grok to perform keyword search, semantic search, user search, and thread fetch on X (formerly Twitter). This powerful tool allows the model to access real-time social media content, analyze posts, and gather insights from X's vast data.
+
+## SDK Support
+
+| SDK/API | Tool Name |
+|---------|-----------|
+| xAI SDK | `x_search` |
+| OpenAI Responses API | `x_search` |
+| Vercel AI SDK | `xai.tools.xSearch()` |
+
+This tool is also supported in all Responses API compatible SDKs.
+
+## Basic Usage
+
+```pythonXAI
+import os
+
+from xai_sdk import Client
+from xai_sdk.chat import user
+from xai_sdk.tools import x_search
+
+client = Client(api_key=os.getenv("XAI_API_KEY"))
+chat = client.chat.create(
+    model="grok-4-1-fast-reasoning",  # reasoning model
+    tools=[x_search()],
+    include=["verbose_streaming"],
+)
+
+chat.append(user("What are people saying about xAI on X?"))
+
+is_thinking = True
+for response, chunk in chat.stream():
+    for tool_call in chunk.tool_calls:
+        print(f"\\nCalling tool: {tool_call.function.name} with arguments: {tool_call.function.arguments}")
+    if response.usage.reasoning_tokens and is_thinking:
+        print(f"\\rThinking... ({response.usage.reasoning_tokens} tokens)", end="", flush=True)
+    if chunk.content and is_thinking:
+        print("\\n\\nFinal Response:")
+        is_thinking = False
+    if chunk.content and not is_thinking:
+        print(chunk.content, end="", flush=True)
+
+print("\\n\\nCitations:")
+print(response.citations)
+```
+
+```pythonOpenAISDK
+import os
+from openai import OpenAI
+
+api_key = os.getenv("XAI_API_KEY")
+client = OpenAI(
+    api_key=api_key,
+    base_url="https://api.x.ai/v1",
+)
+
+response = client.responses.create(
+    model="grok-4-1-fast-reasoning",
+    input=[
+        {
+            "role": "user",
+            "content": "What are people saying about xAI on X?",
+        },
+    ],
+    tools=[
+        {
+            "type": "x_search",
+        },
+    ],
+)
+
+print(response)
+```
+
+```javascriptAISDK
+import { xai } from '@ai-sdk/xai';
+import { generateText } from 'ai';
+
+const { text, sources } = await generateText({
+  model: xai.responses('grok-4-1-fast-reasoning'),
+  prompt: 'What are people saying about xAI on X?',
+  tools: {
+    x_search: xai.tools.xSearch(),
+  },
+});
+
+console.log(text);
+console.log('Citations:', sources);
+```
+
+```bash
+curl https://api.x.ai/v1/responses \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer $XAI_API_KEY" \\
+  -d '{
+  "model": "grok-4-1-fast-reasoning",
+  "input": [
+    {
+      "role": "user",
+      "content": "What are people saying about xAI on X?"
+    }
+  ],
+  "tools": [
+    {
+      "type": "x_search"
+    }
+  ]
+}'
+```
+
+## X Search Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `allowed_x_handles` | Only consider posts from specific X handles (max 10) |
+| `excluded_x_handles` | Exclude posts from specific X handles (max 10) |
+| `from_date` | Start date for search range (ISO8601 format) |
+| `to_date` | End date for search range (ISO8601 format) |
+| `enable_image_understanding` | Enable analysis of images in posts |
+| `enable_video_understanding` | Enable analysis of videos in posts |
+
+### Only Consider Posts from Specific Handles
+
+Use `allowed_x_handles` to consider X posts only from a given list of X handles. The maximum number of handles you can include is 10.
+
+`allowed_x_handles` cannot be set together with `excluded_x_handles` in the same request.
+
+```pythonXAI
+import os
+
+from xai_sdk import Client
+from xai_sdk.chat import user
+from xai_sdk.tools import x_search
+
+client = Client(api_key=os.getenv("XAI_API_KEY"))
+chat = client.chat.create(
+    model="grok-4-1-fast-reasoning",
+    tools=[
+        x_search(allowed_x_handles=["elonmusk"]),
+    ],
+)
+
+chat.append(user("What is the current status of xAI?"))
+# stream or sample the response...
+```
+
+```pythonOpenAISDK
+response = client.responses.create(
+    model="grok-4-1-fast-reasoning",
+    input=[{"role": "user", "content": "What is the current status of xAI?"}],
+    tools=[
+        {
+            "type": "x_search",
+            "allowed_x_handles": ["elonmusk"],
+        },
+    ],
+)
+```
+
+```javascriptAISDK
+const { text } = await generateText({
+  model: xai.responses('grok-4-1-fast-reasoning'),
+  prompt: 'What is the current status of xAI?',
+  tools: {
+    x_search: xai.tools.xSearch({
+      allowedXHandles: ['elonmusk'],
+    }),
+  },
+});
+```
+
+### Exclude Posts from Specific Handles
+
+Use `excluded_x_handles` to prevent the model from including X posts from the specified handles in any X search tool invocations. The maximum number of handles you can exclude is 10.
+
+```pythonXAI
+chat = client.chat.create(
+    model="grok-4-1-fast-reasoning",
+    tools=[
+        x_search(excluded_x_handles=["elonmusk"]),
+    ],
+)
+```
+
+```pythonOpenAISDK
+response = client.responses.create(
+    model="grok-4-1-fast-reasoning",
+    input=[{"role": "user", "content": "What is the current status of xAI?"}],
+    tools=[
+        {
+            "type": "x_search",
+            "excluded_x_handles": ["elonmusk"],
+        },
+    ],
+)
+```
+
+```javascriptAISDK
+const { text } = await generateText({
+  model: xai.responses('grok-4-1-fast-reasoning'),
+  prompt: 'What is the current status of xAI?',
+  tools: {
+    x_search: xai.tools.xSearch({
+      excludedXHandles: ['elonmusk'],
+    }),
+  },
+});
+```
+
+### Date Range
+
+You can restrict the date range of search data used by specifying `from_date` and `to_date`. This limits the data to the period from `from_date` to `to_date`, including both dates.
+
+Both fields need to be in ISO8601 format, e.g., "YYYY-MM-DD". If you're using the xAI Python SDK, the `from_date` and `to_date` fields can be passed as `datetime.datetime` objects.
+
+```pythonXAI
+import os
+from datetime import datetime
+
+from xai_sdk import Client
+from xai_sdk.chat import user
+from xai_sdk.tools import x_search
+
+client = Client(api_key=os.getenv("XAI_API_KEY"))
+chat = client.chat.create(
+    model="grok-4-1-fast-reasoning",
+    tools=[
+        x_search(
+            from_date=datetime(2025, 10, 1),
+            to_date=datetime(2025, 10, 10),
+        ),
+    ],
+)
+
+chat.append(user("What is the current status of xAI?"))
+# stream or sample the response...
+```
+
+```pythonOpenAISDK
+response = client.responses.create(
+    model="grok-4-1-fast-reasoning",
+    input=[{"role": "user", "content": "What is the current status of xAI?"}],
+    tools=[
+        {
+            "type": "x_search",
+            "from_date": "2025-10-01",
+            "to_date": "2025-10-10",
+        },
+    ],
+)
+```
+
+```javascriptAISDK
+const { text } = await generateText({
+  model: xai.responses('grok-4-1-fast-reasoning'),
+  prompt: 'What is the current status of xAI?',
+  tools: {
+    x_search: xai.tools.xSearch({
+      fromDate: '2025-10-01',
+      toDate: '2025-10-10',
+    }),
+  },
+});
+```
+
+### Enable Image Understanding
+
+Setting `enable_image_understanding` to true allows the agent to analyze images in X posts encountered during the search process.
+
+```pythonXAI
+chat = client.chat.create(
+    model="grok-4-1-fast-reasoning",
+    tools=[
+        x_search(enable_image_understanding=True),
+    ],
+)
+```
+
+```pythonOpenAISDK
+response = client.responses.create(
+    model="grok-4-1-fast-reasoning",
+    input=[{"role": "user", "content": "Find X posts with images about AI"}],
+    tools=[
+        {
+            "type": "x_search",
+            "enable_image_understanding": True,
+        },
+    ],
+)
+```
+
+```javascriptAISDK
+const { text } = await generateText({
+  model: xai.responses('grok-4-1-fast-reasoning'),
+  prompt: 'Find X posts with images about AI',
+  tools: {
+    x_search: xai.tools.xSearch({
+      enableImageUnderstanding: true,
+    }),
+  },
+});
+```
+
+### Enable Video Understanding
+
+Setting `enable_video_understanding` to true allows the agent to analyze videos in X posts. This is only available for X Search (not Web Search).
+
+```pythonXAI
+chat = client.chat.create(
+    model="grok-4-1-fast-reasoning",
+    tools=[
+        x_search(enable_video_understanding=True),
+    ],
+)
+```
+
+```pythonOpenAISDK
+response = client.responses.create(
+    model="grok-4-1-fast-reasoning",
+    input=[{"role": "user", "content": "Find X posts with videos about AI"}],
+    tools=[
+        {
+            "type": "x_search",
+            "enable_video_understanding": True,
+        },
+    ],
+)
+```
+
+```javascriptAISDK
+const { text } = await generateText({
+  model: xai.responses('grok-4-1-fast-reasoning'),
+  prompt: 'Find X posts with videos about AI',
+  tools: {
+    x_search: xai.tools.xSearch({
+      enableVideoUnderstanding: true,
+    }),
+  },
+});
+```
+
+## Citations
+
+For details on how to retrieve and use citations from search results, see the [Citations](/developers/tools/citations) page.

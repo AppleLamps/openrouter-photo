@@ -607,8 +607,15 @@ function getGenerationSettings() {
     const numImagesSelect = document.getElementById('setting-num-images');
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
     const resolutionSelect = document.getElementById('setting-resolution');
+    const xaiImageSizeSelect = document.getElementById('setting-xai-image-size');
+    const xaiImageQualitySelect = document.getElementById('setting-xai-image-quality');
+    const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
+    const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
 
     const model = modelSelect?.value || 'black-forest-labs/flux.2-pro';
+
+    const parsedXaiVideoLength = parseInt(xaiVideoLengthInput?.value || 5, 10);
+    const xaiVideoLength = Number.isFinite(parsedXaiVideoLength) ? parsedXaiVideoLength : 5;
 
     const settings = {
         model,
@@ -616,6 +623,10 @@ function getGenerationSettings() {
         // OpenRouter image generation (used for Gemini via `image_config` in the backend)
         aspect_ratio: aspectRatioSelect?.value || '1:1',
         resolution: resolutionSelect?.value || '1K',
+        xai_image_size: xaiImageSizeSelect?.value || '1024x1024',
+        xai_image_quality: xaiImageQualitySelect?.value || 'standard',
+        xai_video_length: xaiVideoLength,
+        xai_video_quality: xaiVideoQualitySelect?.value || '720p',
     };
 
     return settings;
@@ -833,6 +844,10 @@ function initSettingsUI() {
     const openRouterSaveBtn = document.getElementById('setting-openrouter-save');
     const openRouterTestBtn = document.getElementById('setting-openrouter-test');
     const openRouterTestStatus = document.getElementById('setting-openrouter-test-status');
+    const xaiKeyInput = document.getElementById('setting-xai-key');
+    const xaiKeyShow = document.getElementById('setting-xai-key-show');
+    const xaiSaveBtn = document.getElementById('setting-xai-save');
+    const xaiSaveStatus = document.getElementById('setting-xai-save-status');
 
     // Toggle settings based on model selection
     if (modelSelect) {
@@ -861,6 +876,42 @@ function initSettingsUI() {
     if (openRouterKeyShow && openRouterKeyInput) {
         openRouterKeyShow.addEventListener('change', () => {
             openRouterKeyInput.type = openRouterKeyShow.checked ? 'text' : 'password';
+        });
+    }
+
+    // Load xAI key into the settings input and persist changes to localStorage
+    if (xaiKeyInput) {
+        try {
+            xaiKeyInput.value = localStorage.getItem('xai_api_key') || '';
+        } catch {
+            xaiKeyInput.value = '';
+        }
+
+        xaiKeyInput.addEventListener('input', () => {
+            try {
+                localStorage.setItem('xai_api_key', xaiKeyInput.value.trim());
+                if (xaiSaveStatus) xaiSaveStatus.textContent = '';
+            } catch {
+                // ignore storage failures (private mode, disabled storage, etc.)
+            }
+        });
+    }
+
+    if (xaiKeyShow && xaiKeyInput) {
+        xaiKeyShow.addEventListener('change', () => {
+            xaiKeyInput.type = xaiKeyShow.checked ? 'text' : 'password';
+        });
+    }
+
+    if (xaiSaveBtn && xaiKeyInput) {
+        xaiSaveBtn.addEventListener('click', () => {
+            try {
+                localStorage.setItem('xai_api_key', xaiKeyInput.value.trim());
+                if (xaiSaveStatus) xaiSaveStatus.textContent = 'Saved';
+                showSuccess('xAI API key saved.');
+            } catch {
+                showError('Failed to save xAI API key (storage unavailable).');
+            }
         });
     }
 
@@ -1187,12 +1238,19 @@ function removeMultiImagePreview(index, container) {
 function updateSettingsForModel(model) {
     const resolutionGroup = document.getElementById('resolution-group');
     const aspectRatioGroup = document.getElementById('aspect-ratio-group');
+    const xaiImageSizeGroup = document.getElementById('xai-image-size-group');
+    const xaiImageQualityGroup = document.getElementById('xai-image-quality-group');
+    const xaiVideoLengthGroup = document.getElementById('xai-video-length-group');
+    const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
 
     const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedream = typeof model === 'string' && model.includes('seedream');
+    const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
+    const isXaiVideo = model === 'grok-imagine-video';
+    const isXai = isXaiImage || isXaiVideo;
 
-    // Show aspect ratio for Gemini and Seedream models
-    if (isGemini || isSeedream) {
+    // Show aspect ratio for Gemini, Seedream, and xAI models
+    if (isGemini || isSeedream || isXai) {
         aspectRatioGroup?.classList.remove('settings-group--hidden');
     } else {
         aspectRatioGroup?.classList.add('settings-group--hidden');
@@ -1203,6 +1261,22 @@ function updateSettingsForModel(model) {
         resolutionGroup?.classList.remove('settings-group--hidden');
     } else {
         resolutionGroup?.classList.add('settings-group--hidden');
+    }
+
+    if (isXaiImage) {
+        xaiImageSizeGroup?.classList.remove('settings-group--hidden');
+        xaiImageQualityGroup?.classList.remove('settings-group--hidden');
+    } else {
+        xaiImageSizeGroup?.classList.add('settings-group--hidden');
+        xaiImageQualityGroup?.classList.add('settings-group--hidden');
+    }
+
+    if (isXaiVideo) {
+        xaiVideoLengthGroup?.classList.remove('settings-group--hidden');
+        xaiVideoQualityGroup?.classList.remove('settings-group--hidden');
+    } else {
+        xaiVideoLengthGroup?.classList.add('settings-group--hidden');
+        xaiVideoQualityGroup?.classList.add('settings-group--hidden');
     }
 }
 
@@ -1309,6 +1383,8 @@ async function handleGenerate(input, button) {
                     placeholderMetadata.delete(placeholderIds[index]);
                 }
 
+                const mediaType = image.media_type || image.mediaType || 'image';
+
                 state.addImage({
                     id: generateId(),
                     url: image.url,
@@ -1316,6 +1392,7 @@ async function handleGenerate(input, button) {
                     createdAt: Date.now(),
                     settings: storableSettings,
                     folderId: folderId,
+                    mediaType,
                     generation: {
                         model: image.model || null,
                         cost: image.cost || 0,
@@ -1380,6 +1457,10 @@ async function handleGenerate(input, button) {
 
         if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
             showOpenRouterApiKeyPopup(error?.help);
+            return;
+        }
+        if (error?.code === 'XAI_API_KEY_REQUIRED') {
+            showError(error?.message || 'xAI API key required.');
             return;
         }
         showError(error.message || 'Failed to generate image. Please try again.');
@@ -1664,6 +1745,26 @@ function restoreSettings(settings) {
     const resolutionSelect = document.getElementById('setting-resolution');
     if (resolutionSelect && settings.resolution) {
         resolutionSelect.value = settings.resolution;
+    }
+
+    const xaiImageSizeSelect = document.getElementById('setting-xai-image-size');
+    if (xaiImageSizeSelect && settings.xai_image_size) {
+        xaiImageSizeSelect.value = settings.xai_image_size;
+    }
+
+    const xaiImageQualitySelect = document.getElementById('setting-xai-image-quality');
+    if (xaiImageQualitySelect && settings.xai_image_quality) {
+        xaiImageQualitySelect.value = settings.xai_image_quality;
+    }
+
+    const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
+    if (xaiVideoLengthInput && Number.isFinite(settings.xai_video_length)) {
+        xaiVideoLengthInput.value = settings.xai_video_length;
+    }
+
+    const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
+    if (xaiVideoQualitySelect && settings.xai_video_quality) {
+        xaiVideoQualitySelect.value = settings.xai_video_quality;
     }
 
     // Number of images

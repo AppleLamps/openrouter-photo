@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
         res.setHeader('Vary', 'Origin');
     }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key');
 
     // Handle preflight request
     if (req.method === 'OPTIONS') {
@@ -53,6 +53,10 @@ module.exports = async function handler(req, res) {
         aspect_ratio,
         image_size, // legacy "preset" from UI; used to derive aspect ratio if aspect_ratio isn't set
         resolution, // legacy UI field; repurposed as Gemini image_config.image_size (1K/2K/4K)
+        xai_image_size,
+        xai_image_quality,
+        xai_video_length,
+        xai_video_quality,
         image_urls = [], // optional image inputs (data URLs) for all models
     } = req.body;
 
@@ -66,11 +70,28 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: '`num_images` must be an integer between 1 and 4' });
     }
 
+    const isXaiImageModel = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
+    const isXaiVideoModel = model === 'grok-imagine-video';
+    const isXaiModel = isXaiImageModel || isXaiVideoModel;
+
+    const XAI_API_KEY =
+        req.headers['x-xai-api-key'] ||
+        req.headers['x-xai-api_key'] ||
+        process.env.XAI_API_KEY;
+
+    const redactKey = (text) => {
+        if (!text) return text;
+        const str = String(text);
+        return str.replace(/sk-or-v1-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]');
+    };
+
+    const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
     const OPENROUTER_API_KEY =
         req.headers['x-openrouter-api-key'] ||
         req.headers['x-openrouter-api_key'];
 
-    if (!OPENROUTER_API_KEY) {
+    if (!isXaiModel && !OPENROUTER_API_KEY) {
         return res.status(401).json({
             code: 'OPENROUTER_API_KEY_REQUIRED',
             error: 'OpenRouter API key required',
@@ -81,13 +102,16 @@ module.exports = async function handler(req, res) {
         });
     }
 
-    const redactKey = (text) => {
-        if (!text) return text;
-        const str = String(text);
-        return str.replace(/sk-or-v1-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]');
-    };
-
-    const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+    if (isXaiModel && !XAI_API_KEY) {
+        return res.status(401).json({
+            code: 'XAI_API_KEY_REQUIRED',
+            error: 'xAI API key required',
+            help: {
+                message: 'Open Settings → paste your xAI API key. Create one at console.x.ai.',
+                url: 'https://console.x.ai'
+            }
+        });
+    }
 
     const isGeminiModel = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedreamModel = typeof model === 'string' && model.includes('seedream');
@@ -119,6 +143,209 @@ module.exports = async function handler(req, res) {
             .filter((u) => typeof u === 'string' && u.startsWith('data:image/'))
             .slice(0, 3)
         : [];
+
+    if (isXaiModel) {
+        const xaiPrompt = prompt.trim();
+        const xaiHeaders = {
+            Authorization: `Bearer ${XAI_API_KEY}`,
+            'Content-Type': 'application/json',
+        };
+
+        const extractXaiImageUrls = (payload) => {
+            const images = [];
+            const dataArray = Array.isArray(payload?.data) ? payload.data : null;
+            const candidates = dataArray || (Array.isArray(payload?.images) ? payload.images : []);
+
+            if (Array.isArray(candidates)) {
+                candidates.forEach((item) => {
+                    const base64 = item?.b64_json || item?.b64 || item?.image_base64 || null;
+                    const url = item?.url || item?.image_url || item?.imageUrl || null;
+                    if (base64) {
+                        images.push(`data:image/png;base64,${base64}`);
+                    } else if (url) {
+                        images.push(url);
+                    }
+                });
+            }
+
+            const singleBase64 = payload?.b64_json || payload?.image;
+            if (singleBase64 && images.length === 0) {
+                images.push(`data:image/png;base64,${singleBase64}`);
+            }
+
+            const singleUrl = payload?.url || payload?.image_url || payload?.imageUrl;
+            if (singleUrl && images.length === 0) {
+                images.push(singleUrl);
+            }
+
+            return images;
+        };
+
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        try {
+            if (isXaiImageModel) {
+                const normalizedXaiImageSize =
+                    typeof xai_image_size === 'string' && xai_image_size.trim() !== ''
+                        ? xai_image_size.trim()
+                        : null;
+                const normalizedXaiImageQuality =
+                    typeof xai_image_quality === 'string' && xai_image_quality.trim() !== ''
+                        ? xai_image_quality.trim()
+                        : null;
+                const normalizedXaiAspectRatio =
+                    typeof aspect_ratio === 'string' && aspect_ratio.trim() !== ''
+                        ? aspect_ratio.trim()
+                        : null;
+
+                const xaiPayload = {
+                    model,
+                    prompt: xaiPrompt,
+                    response_format: 'b64_json',
+                    n: parsedNumImages,
+                    ...(normalizedXaiImageSize ? { size: normalizedXaiImageSize } : {}),
+                    ...(normalizedXaiImageQuality ? { quality: normalizedXaiImageQuality } : {}),
+                    ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
+                };
+
+                const response = await fetch('https://api.x.ai/v1/images/generations', {
+                    method: 'POST',
+                    headers: xaiHeaders,
+                    body: JSON.stringify(xaiPayload),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    return res.status(response.status).json({
+                        error: 'Failed to generate image',
+                        details: redactKey(errorText),
+                    });
+                }
+
+                const data = await response.json();
+                const images = extractXaiImageUrls(data);
+
+                if (images.length === 0) {
+                    return res.status(502).json({ error: 'No images returned from xAI' });
+                }
+
+                return res.status(200).json({
+                    images: images.slice(0, parsedNumImages).map((url) => ({
+                        url,
+                        model,
+                        cost: 0,
+                        provider: 'xai',
+                    })),
+                    meta: {
+                        total_usage: 0,
+                        requests: [],
+                        usage_pending: false,
+                    },
+                });
+            }
+
+            if (isXaiVideoModel) {
+                const parsedDuration = parseInt(xai_video_length, 10);
+                const normalizedDuration =
+                    Number.isFinite(parsedDuration) && parsedDuration >= 1 && parsedDuration <= 15
+                        ? parsedDuration
+                        : 5;
+                const normalizedResolution =
+                    typeof xai_video_quality === 'string' && ['720p', '480p'].includes(xai_video_quality)
+                        ? xai_video_quality
+                        : '720p';
+                const normalizedXaiAspectRatio =
+                    typeof aspect_ratio === 'string' && aspect_ratio.trim() !== ''
+                        ? aspect_ratio.trim()
+                        : null;
+
+                const startPayload = {
+                    model,
+                    prompt: xaiPrompt,
+                    duration: normalizedDuration,
+                    resolution: normalizedResolution,
+                    ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
+                };
+
+                const startResponse = await fetch('https://api.x.ai/v1/videos/generations', {
+                    method: 'POST',
+                    headers: xaiHeaders,
+                    body: JSON.stringify(startPayload),
+                });
+
+                if (!startResponse.ok) {
+                    const errorText = await startResponse.text();
+                    return res.status(startResponse.status).json({
+                        error: 'Failed to start video generation',
+                        details: redactKey(errorText),
+                    });
+                }
+
+                const startData = await startResponse.json();
+                const requestId = startData?.request_id || startData?.requestId || startData?.id;
+
+                if (!requestId) {
+                    return res.status(502).json({ error: 'xAI video request did not return a request ID' });
+                }
+
+                const maxAttempts = 20;
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    await sleep(2000);
+
+                    const pollResponse = await fetch(`https://api.x.ai/v1/videos/${requestId}`, {
+                        headers: {
+                            Authorization: `Bearer ${XAI_API_KEY}`,
+                        },
+                    });
+
+                    if (!pollResponse.ok) {
+                        const errorText = await pollResponse.text();
+                        return res.status(pollResponse.status).json({
+                            error: 'Failed to retrieve video generation status',
+                            details: redactKey(errorText),
+                        });
+                    }
+
+                    const pollData = await pollResponse.json();
+                    const videoUrl =
+                        pollData?.url ||
+                        pollData?.video?.url ||
+                        pollData?.response?.video?.url ||
+                        pollData?.response?.url ||
+                        null;
+                    const status = String(pollData?.status || pollData?.state || '').toUpperCase();
+
+                    if (videoUrl) {
+                        return res.status(200).json({
+                            images: [
+                                {
+                                    url: videoUrl,
+                                    model,
+                                    cost: 0,
+                                    provider: 'xai',
+                                    media_type: 'video',
+                                },
+                            ],
+                            meta: {
+                                total_usage: 0,
+                                requests: [],
+                                usage_pending: false,
+                            },
+                        });
+                    }
+
+                    if (['FAILED', 'ERROR', 'EXPIRED'].includes(status)) {
+                        return res.status(502).json({ error: 'xAI video generation failed' });
+                    }
+                }
+
+                return res.status(504).json({ error: 'xAI video generation timed out' });
+            }
+        } catch (error) {
+            console.error('xAI API error:', redactKey(error));
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
 
     const buildPayload = (options = {}) => {
         const { includeAspectRatio = true } = options;
