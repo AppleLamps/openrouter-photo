@@ -549,7 +549,7 @@ function showMoveToFolderMenu(anchor) {
 function updateEmptyState() {
     if (!emptyStateElement) return;
 
-    const hasImages = state.getImages().length > 0 || placeholderElements.size > 0;
+    const hasImages = state.getImageCount() > 0 || placeholderElements.size > 0;
     emptyStateElement.style.display = hasImages ? 'none' : 'flex';
 }
 

@@ -325,6 +325,14 @@ class State {
     }
 
     /**
+     * Get total image count without cloning image data
+     * @returns {number}
+     */
+    getImageCount() {
+        return this.images.length;
+    }
+
+    /**
      * Add a new image (prepend to start)
      * @param {Object} imageData - Image data with url (data URI)
      */

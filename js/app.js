@@ -28,6 +28,9 @@ let generationAbortController = null;
 
 /** @type {Map<string, {prompt: string, settings: Object}>} - Track placeholder metadata for retry */
 let placeholderMetadata = new Map();
+let storageIndicatorQueued = false;
+let storageIndicatorInFlight = false;
+let storageIndicatorNeedsRerun = false;
 
 function renderPromptAttachments() {
     const container = document.getElementById('prompt-attachments');
@@ -207,6 +210,39 @@ function updateSpendTrackerUI() {
         ? `Spent: ~${formatUsd(spend.total)}`
         : `Spent: ${formatUsd(spend.total)}`;
     pill.title = spend.pending ? 'Some costs are pending from OpenRouter.' : '';
+}
+
+function scheduleStorageIndicatorUpdate() {
+    if (storageIndicatorQueued) return;
+    storageIndicatorQueued = true;
+
+    const run = async () => {
+        storageIndicatorQueued = false;
+        if (storageIndicatorInFlight) {
+            storageIndicatorNeedsRerun = true;
+            return;
+        }
+        storageIndicatorInFlight = true;
+        try {
+            await updateStorageIndicator();
+        } finally {
+            storageIndicatorInFlight = false;
+            if (storageIndicatorNeedsRerun) {
+                storageIndicatorNeedsRerun = false;
+                scheduleStorageIndicatorUpdate();
+            }
+        }
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => {
+            run();
+        });
+    } else {
+        setTimeout(() => {
+            run();
+        }, 16);
+    }
 }
 
 /**
@@ -772,11 +808,15 @@ async function init() {
     // Listen for remix-image event from lightbox
     window.addEventListener('remix-image', handleRemixImage);
 
-    // Subscribe to state changes to update storage indicator
-    state.subscribe(() => updateStorageIndicator());
+    // Subscribe to image state changes only (avoid expensive updates on selection/edit events)
+    state.subscribe((action) => {
+        if (action === 'add' || action === 'remove' || action === 'clear') {
+            scheduleStorageIndicatorUpdate();
+        }
+    });
 
     // Initial storage indicator update
-    updateStorageIndicator();
+    scheduleStorageIndicatorUpdate();
 
     console.log('AI Image Generator initialized');
 }
@@ -793,10 +833,10 @@ async function updateStorageIndicator() {
 
     try {
         const estimate = await state.getStorageEstimate();
-        const images = state.getImages();
+        const imageTotal = state.getImageCount();
 
         if (imageCount) {
-            imageCount.textContent = `${images.length} image${images.length !== 1 ? 's' : ''}`;
+            imageCount.textContent = `${imageTotal} image${imageTotal !== 1 ? 's' : ''}`;
         }
 
         if (estimate.quota > 0) {
@@ -816,13 +856,13 @@ async function updateStorageIndicator() {
                 storageText.textContent = `${formatBytes(estimate.used)} / ${formatBytes(estimate.quota)}`;
             }
         } else if (storageText) {
-            storageText.textContent = `${images.length} image${images.length !== 1 ? 's' : ''} stored`;
+            storageText.textContent = `${imageTotal} image${imageTotal !== 1 ? 's' : ''} stored`;
         }
     } catch (error) {
         console.error('Failed to update storage indicator:', error);
         if (storageText) {
-            const images = state.getImages();
-            storageText.textContent = `${images.length} image${images.length !== 1 ? 's' : ''} stored`;
+            const imageTotal = state.getImageCount();
+            storageText.textContent = `${imageTotal} image${imageTotal !== 1 ? 's' : ''} stored`;
         }
     }
 }
@@ -831,10 +871,10 @@ async function updateStorageIndicator() {
  * Handle clear all images button
  */
 async function handleClearAll() {
-    const images = state.getImages();
-    if (images.length === 0) return;
+    const imageTotal = state.getImageCount();
+    if (imageTotal === 0) return;
 
-    const confirmed = confirm(`Are you sure you want to delete all ${images.length} images? This cannot be undone.`);
+    const confirmed = confirm(`Are you sure you want to delete all ${imageTotal} images? This cannot be undone.`);
     if (!confirmed) return;
 
     await state.clearAll();
