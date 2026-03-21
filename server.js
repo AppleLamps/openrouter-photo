@@ -5,6 +5,7 @@ const generateHandler = require('./api/generate');
 const enhanceHandler = require('./api/enhance');
 const testKeyHandler = require('./api/test-key');
 const testXaiKeyHandler = require('./api/test-xai-key');
+const testFalKeyHandler = require('./api/test-fal-key');
 const randomPromptHandler = require('./api/random-prompt');
 const videoStatusHandler = require('./api/video-status');
 
@@ -19,7 +20,7 @@ app.use(express.json({ limit: '4.5mb' }));
 app.use('/api', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key');
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
@@ -48,6 +49,10 @@ app.post('/api/test-key', (req, res) => {
 
 app.post('/api/test-xai-key', (req, res) => {
     return testXaiKeyHandler(req, res);
+});
+
+app.post('/api/test-fal-key', (req, res) => {
+    return testFalKeyHandler(req, res);
 });
 
 app.post('/api/random-prompt', (req, res) => {

@@ -53,13 +53,15 @@ A modern, lightweight AI image generator powered by OpenRouter. Built with vanil
 
 ## Supported Models
 
-| Provider | Models |
-|----------|--------|
-| Black Forest Labs | FLUX.2 Pro, FLUX.2 Max, FLUX.2 Flex |
-| Google | Gemini 3 Pro Image, Gemini 2.5 Flash Image |
-| OpenAI | GPT-5 Image, GPT-5 Image Mini |
-| ByteDance | Seedream 4.5 |
-| Sourceful | Riverflow v2 (Max, Standard, Fast) |
+| Provider | Models | API Key |
+|----------|--------|---------|
+| Black Forest Labs | FLUX.2 Pro, FLUX.2 Max, FLUX.2 Flex | OpenRouter |
+| Google | Gemini 3 Pro Image, Gemini 2.5 Flash Image | OpenRouter |
+| OpenAI | GPT-5 Image, GPT-5 Image Mini | OpenRouter |
+| ByteDance | Seedream 4.5 (via OpenRouter) | OpenRouter |
+| ByteDance (Fal) | Seedream 4.5 T2I, Seedream 4.5 Edit, Seedream 5 Lite T2I, Seedream 5 Lite Edit | Fal |
+| xAI | Grok Imagine Image, Grok Imagine Image Pro, Grok Imagine Video | xAI |
+| Sourceful | Riverflow v2 (Max, Standard, Fast) | OpenRouter |
 
 ---
 

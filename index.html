@@ -218,6 +218,18 @@
                                     role="option"
                                     data-value="bytedance-seed/seedream-4.5">bytedance-seed/seedream-4.5</button>
                                 <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
+                                    role="option" data-value="fal-ai/bytedance/seedream/v4.5/text-to-image">fal:
+                                    seedream-4.5 text-to-image</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
+                                    role="option" data-value="fal-ai/bytedance/seedream/v4.5/edit">fal: seedream-4.5
+                                    edit</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
+                                    role="option" data-value="fal-ai/bytedance/seedream/v5/lite/text-to-image">fal:
+                                    seedream-5 lite text-to-image</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
+                                    role="option" data-value="fal-ai/bytedance/seedream/v5/lite/edit">fal: seedream-5
+                                    lite edit</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
                                     role="option"
                                     data-value="black-forest-labs/flux.2-max">black-forest-labs/flux.2-max</button>
                                 <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
@@ -360,11 +372,37 @@
                     </p>
                 </div>
 
+                <!-- Fal API Key -->
+                <div class="settings-group">
+                    <label class="settings-label" for="setting-fal-key">Fal API Key</label>
+                    <div class="settings-inline">
+                        <input type="password" id="setting-fal-key" class="settings-input settings-inline__input"
+                            placeholder="Paste your Fal key (stored locally in your browser)">
+                        <button type="button" id="setting-fal-save"
+                            class="settings-btn settings-btn--inline settings-btn--sm">
+                            Save
+                        </button>
+                        <button type="button" id="setting-fal-test"
+                            class="settings-btn settings-btn--inline settings-btn--sm">
+                            Test
+                        </button>
+                    </div>
+                    <label class="settings-checkbox" style="margin-top: 8px;">
+                        <input type="checkbox" id="setting-fal-key-show">
+                        <span>Show API key</span>
+                    </label>
+                    <span id="setting-fal-save-status" class="settings-hint" style="margin-top: 8px;"></span>
+                    <p class="settings-hint" style="margin-top: 8px;">
+                        Stored in <code>localStorage</code> and sent to <code>/api</code> when using Fal Seedream
+                        models.
+                    </p>
+                </div>
+
                 <!-- Model Selection -->
                 <div class="settings-group">
                     <label class="settings-label">Advanced</label>
-                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio is supported for Gemini, Seedream, and
-                        xAI models. Gemini image size is Gemini only; Grok models use their own size settings.</p>
+                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio is supported for Gemini, Seedream, Fal,
+                        and xAI models. Gemini image size is Gemini only; Grok models use their own size settings.</p>
                 </div>
 
                 <!-- Aspect Ratio (Gemini and Seedream) -->
@@ -381,7 +419,7 @@
                         <option value="21:9">21:9 (Ultrawide)</option>
                         <option value="9:21">9:21</option>
                     </select>
-                    <p class="settings-hint">Applied for Gemini and Seedream models.</p>
+                    <p class="settings-hint">Applied for Gemini, Seedream, and Fal models.</p>
                 </div>
 
                 <!-- Resolution (Gemini only) -->

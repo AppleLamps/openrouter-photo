@@ -2,7 +2,7 @@
  * Main application entry point
  */
 
-import { generateImage, enhancePrompt, testOpenRouterKey, testXaiKey, getRandomPromptFromAI, pollVideoStatus } from './api.js';
+import { generateImage, enhancePrompt, testOpenRouterKey, testXaiKey, testFalKey, getRandomPromptFromAI, pollVideoStatus } from './api.js';
 import {
     PROMPT_ATTACHMENTS_MAX,
     PROMPT_ATTACHMENT_MAX_BYTES,
@@ -896,6 +896,11 @@ function initSettingsUI() {
     const xaiSaveBtn = document.getElementById('setting-xai-save');
     const xaiTestBtn = document.getElementById('setting-xai-test');
     const xaiSaveStatus = document.getElementById('setting-xai-save-status');
+    const falKeyInput = document.getElementById('setting-fal-key');
+    const falKeyShow = document.getElementById('setting-fal-key-show');
+    const falSaveBtn = document.getElementById('setting-fal-save');
+    const falTestBtn = document.getElementById('setting-fal-test');
+    const falSaveStatus = document.getElementById('setting-fal-save-status');
 
     // Toggle settings based on model selection
     if (modelSelect) {
@@ -979,6 +984,62 @@ function initSettingsUI() {
                 showError(error?.message || 'xAI API key test failed.');
             } finally {
                 xaiTestBtn.disabled = false;
+            }
+        });
+    }
+
+    // Load Fal key into the settings input and persist changes to localStorage
+    if (falKeyInput) {
+        try {
+            falKeyInput.value = localStorage.getItem('fal_api_key') || '';
+        } catch {
+            falKeyInput.value = '';
+        }
+
+        falKeyInput.addEventListener('input', () => {
+            try {
+                localStorage.setItem('fal_api_key', falKeyInput.value.trim());
+                if (falSaveStatus) falSaveStatus.textContent = '';
+            } catch {
+                // ignore storage failures
+            }
+        });
+    }
+
+    if (falKeyShow && falKeyInput) {
+        falKeyShow.addEventListener('change', () => {
+            falKeyInput.type = falKeyShow.checked ? 'text' : 'password';
+        });
+    }
+
+    if (falSaveBtn && falKeyInput) {
+        falSaveBtn.addEventListener('click', () => {
+            try {
+                localStorage.setItem('fal_api_key', falKeyInput.value.trim());
+                if (falSaveStatus) falSaveStatus.textContent = 'Saved';
+                showSuccess('Fal API key saved.');
+            } catch {
+                showError('Failed to save Fal API key (storage unavailable).');
+            }
+        });
+    }
+
+    if (falTestBtn) {
+        falTestBtn.addEventListener('click', async () => {
+            if (falTestBtn.disabled) return;
+
+            if (falSaveStatus) falSaveStatus.textContent = 'Testing...';
+            falTestBtn.disabled = true;
+
+            try {
+                await testFalKey();
+                if (falSaveStatus) falSaveStatus.textContent = 'Key works';
+                showSuccess('Fal API key is valid.');
+            } catch (error) {
+                if (falSaveStatus) falSaveStatus.textContent = '';
+                showError(error?.message || 'Fal API key test failed.');
+            } finally {
+                falTestBtn.disabled = false;
             }
         });
     }
@@ -1311,12 +1372,13 @@ function updateSettingsForModel(model) {
 
     const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedream = typeof model === 'string' && model.includes('seedream');
+    const isFalModel = typeof model === 'string' && model.startsWith('fal-ai/');
     const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
     const isXaiVideo = model === 'grok-imagine-video';
     const isXai = isXaiImage || isXaiVideo;
 
-    // Show aspect ratio for Gemini, Seedream, and xAI models
-    if (isGemini || isSeedream || isXai) {
+    // Show aspect ratio for Gemini, Seedream, Fal, and xAI models
+    if (isGemini || isSeedream || isFalModel || isXai) {
         aspectRatioGroup?.classList.remove('settings-group--hidden');
     } else {
         aspectRatioGroup?.classList.add('settings-group--hidden');
@@ -1577,6 +1639,10 @@ async function handleGenerate(input, button) {
             showError(error?.message || 'xAI API key required.');
             return;
         }
+        if (error?.code === 'FAL_API_KEY_REQUIRED') {
+            showFalApiKeyPopup(error?.help);
+            return;
+        }
         showError(error.message || 'Failed to generate image. Please try again.');
     } finally {
         isGenerating = false;
@@ -1701,6 +1767,69 @@ function showOpenRouterApiKeyPopup(help) {
         <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="OpenRouter API key required">
             <div class="openrouter-key-modal__header">
                 <div class="openrouter-key-modal__title">OpenRouter API key required</div>
+                <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
+            </div>
+            <div class="openrouter-key-modal__body">
+                <p class="openrouter-key-modal__message"></p>
+                <div class="openrouter-key-modal__actions">
+                    <a class="openrouter-key-modal__link" target="_blank" rel="noopener noreferrer">Get API key</a>
+                    <button type="button" class="openrouter-key-modal__ok">I pasted it</button>
+                </div>
+                <p class="openrouter-key-modal__hint">Your key is stored locally in your browser and sent with each request.</p>
+            </div>
+        </div>
+    `;
+
+    overlay.querySelector('.openrouter-key-modal__message').textContent = message;
+    overlay.querySelector('.openrouter-key-modal__link').href = url;
+
+    const close = () => overlay.classList.remove('openrouter-key-modal--active');
+    overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
+    overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
+    overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
+
+    document.body.appendChild(overlay);
+}
+
+/**
+ * Show a popup explaining how to get a Fal API key, and focus the Settings key input.
+ * @param {{ message?: string, url?: string } | undefined} help
+ */
+function showFalApiKeyPopup(help) {
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsPanel = document.getElementById('settings-panel');
+
+    if (settingsBtn && settingsPanel) {
+        openSettings(settingsBtn, settingsPanel);
+    }
+
+    const keyInput = document.getElementById('setting-fal-key');
+    if (keyInput) {
+        keyInput.focus();
+        keyInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
+    const url = help?.url || 'https://fal.ai/dashboard/keys';
+    const message =
+        help?.message ||
+        'You need a Fal API key to use Fal Seedream models. Create one at fal.ai/dashboard/keys, then paste it into Settings.';
+
+    const existing = document.getElementById('fal-key-modal');
+    if (existing) {
+        existing.querySelector('.openrouter-key-modal__message').textContent = message;
+        existing.querySelector('.openrouter-key-modal__link').href = url;
+        existing.classList.add('openrouter-key-modal--active');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'fal-key-modal';
+    overlay.className = 'openrouter-key-modal openrouter-key-modal--active';
+    overlay.innerHTML = `
+        <div class="openrouter-key-modal__backdrop" role="presentation"></div>
+        <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="Fal API key required">
+            <div class="openrouter-key-modal__header">
+                <div class="openrouter-key-modal__title">Fal API key required</div>
                 <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
             </div>
             <div class="openrouter-key-modal__body">

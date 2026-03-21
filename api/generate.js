@@ -28,10 +28,24 @@ module.exports = withMiddleware(async function handler(req, res) {
     const isXaiVideoModel = model === 'grok-imagine-video';
     const isXaiModel = isXaiImageModel || isXaiVideoModel;
 
+    const FAL_MODEL_IDS = [
+        'fal-ai/bytedance/seedream/v4.5/text-to-image',
+        'fal-ai/bytedance/seedream/v4.5/edit',
+        'fal-ai/bytedance/seedream/v5/lite/text-to-image',
+        'fal-ai/bytedance/seedream/v5/lite/edit',
+    ];
+    const isFalModel = FAL_MODEL_IDS.includes(model);
+    const isFalEditModel = model === 'fal-ai/bytedance/seedream/v4.5/edit' || model === 'fal-ai/bytedance/seedream/v5/lite/edit';
+
     const XAI_API_KEY =
         req.headers['x-xai-api-key'] ||
         req.headers['x-xai-api_key'] ||
         process.env.XAI_API_KEY;
+
+    const FAL_KEY =
+        req.headers['x-fal-api-key'] ||
+        req.headers['x-fal-api_key'] ||
+        process.env.FAL_KEY;
 
     const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -39,7 +53,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         req.headers['x-openrouter-api-key'] ||
         req.headers['x-openrouter-api_key'];
 
-    if (!isXaiModel && !OPENROUTER_API_KEY) {
+    if (!isXaiModel && !isFalModel && !OPENROUTER_API_KEY) {
         return res.status(401).json({
             code: 'OPENROUTER_API_KEY_REQUIRED',
             error: 'OpenRouter API key required',
@@ -57,6 +71,17 @@ module.exports = withMiddleware(async function handler(req, res) {
             help: {
                 message: 'Open Settings → paste your xAI API key. Create one at console.x.ai.',
                 url: 'https://console.x.ai'
+            }
+        });
+    }
+
+    if (isFalModel && !FAL_KEY) {
+        return res.status(401).json({
+            code: 'FAL_API_KEY_REQUIRED',
+            error: 'Fal API key required',
+            help: {
+                message: 'Open Settings → paste your Fal API key. Create one at fal.ai/dashboard/keys.',
+                url: 'https://fal.ai/dashboard/keys'
             }
         });
     }
@@ -91,6 +116,96 @@ module.exports = withMiddleware(async function handler(req, res) {
             .filter((u) => typeof u === 'string' && u.startsWith('data:image/'))
             .slice(0, 3)
         : [];
+
+    // ---------- Fal Seedream models ----------
+    if (isFalModel) {
+        // Edit models require at least one input image
+        if (isFalEditModel && normalizedInputImages.length === 0) {
+            return res.status(400).json({
+                error: 'Edit models require at least one attached image. Please attach an image and try again.',
+            });
+        }
+
+        // Map UI aspect ratio (e.g. "1:1", "4:3") to Fal image_size enum
+        const aspectRatioToFalImageSize = (ar) => {
+            switch (ar) {
+                case '1:1': return 'square_hd';
+                case '4:3': return 'landscape_4_3';
+                case '3:4': return 'portrait_4_3';
+                case '16:9': return 'landscape_16_9';
+                case '9:16': return 'portrait_16_9';
+                default: return 'auto_2K';
+            }
+        };
+
+        const falImageSize = aspectRatioToFalImageSize(normalizedAspectRatio);
+
+        const falPayload = {
+            prompt: prompt.trim(),
+            image_size: falImageSize,
+            num_images: parsedNumImages,
+            enable_safety_checker: false,
+        };
+
+        if (isFalEditModel) {
+            falPayload.image_urls = normalizedInputImages;
+        }
+
+        try {
+            // Use Fal sync endpoint for immediate results
+            const falUrl = `https://fal.run/${model}`;
+            const response = await fetch(falUrl, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Key ${FAL_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(falPayload),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                return res.status(response.status).json({
+                    error: 'Failed to generate image via Fal',
+                    details: redactKey(errorText),
+                });
+            }
+
+            const data = await response.json();
+            const falImages = Array.isArray(data?.images) ? data.images : [];
+
+            if (falImages.length === 0) {
+                return res.status(502).json({ error: 'No images returned from Fal' });
+            }
+
+            // Fal pricing: $0.04 per image for Seedream models
+            const costPerImage = 0.04;
+            const limited = falImages.slice(0, parsedNumImages);
+            const totalCost = costPerImage * limited.length;
+
+            return res.status(200).json({
+                images: limited.map((img) => ({
+                    url: img.url,
+                    model,
+                    cost: costPerImage,
+                    provider: 'fal',
+                })),
+                meta: {
+                    total_usage: totalCost,
+                    requests: [{
+                        model,
+                        provider_name: 'fal',
+                        usage: totalCost,
+                        imageCount: limited.length,
+                    }],
+                    usage_pending: false,
+                },
+            });
+        } catch (error) {
+            console.error('Fal API error:', redactKey(error));
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
 
     if (isXaiModel) {
         const xaiPrompt = prompt.trim();

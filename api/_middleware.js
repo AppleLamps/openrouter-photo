@@ -40,7 +40,7 @@ const redactKey = (text) => {
  */
 function withMiddleware(handler, options = {}) {
     const {
-        allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key',
+        allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key',
         skipBodyParse = false,
     } = options;
 

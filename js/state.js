@@ -341,7 +341,9 @@ class State {
 
         const mediaType = imageData.mediaType === 'video' ? 'video' : 'image';
         const isDataImage = typeof imageData.url === 'string' && imageData.url.startsWith('data:image/');
-        const isVideo = mediaType === 'video' || !isDataImage;
+        const isHostedImage = !isDataImage && mediaType !== 'video' && typeof imageData.url === 'string' &&
+            (imageData.url.startsWith('http://') || imageData.url.startsWith('https://'));
+        const isVideo = mediaType === 'video';
 
         if (this.useFallback) {
             // Fallback: store directly in localStorage
@@ -381,8 +383,16 @@ class State {
                 return;
             }
 
-            const dataUri = imageData.url;
-            const fullBlob = dataUriToBlob(dataUri);
+            let fullBlob;
+            if (isHostedImage) {
+                // Fetch hosted image URL (e.g., from Fal CDN) and convert to blob
+                const imgResponse = await fetch(imageData.url);
+                if (!imgResponse.ok) throw new Error(`Failed to fetch image: ${imgResponse.status}`);
+                fullBlob = await imgResponse.blob();
+            } else {
+                const dataUri = imageData.url;
+                fullBlob = dataUriToBlob(dataUri);
+            }
             const thumbnailBlob = await generateThumbnail(fullBlob);
 
             const metadata = {
@@ -393,7 +403,7 @@ class State {
                 folderId: imageData.folderId || null,
                 generation: imageData.generation || null,
                 mediaType,
-                sourceUrl: imageData.sourceUrl || null,
+                sourceUrl: imageData.sourceUrl || (isHostedImage ? imageData.url : null),
             };
 
             await this.storage.saveImage(metadata, fullBlob, thumbnailBlob);
