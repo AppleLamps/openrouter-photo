@@ -1375,7 +1375,9 @@ function updateSettingsForModel(model) {
     const isFalModel = typeof model === 'string' && model.startsWith('fal-ai/');
     const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
     const isXaiVideo = model === 'grok-imagine-video';
+    const isFalVideo = model === 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
     const isXai = isXaiImage || isXaiVideo;
+    const isVideoModel = isXaiVideo || isFalVideo;
 
     // Show aspect ratio for Gemini, Seedream, Fal, and xAI models
     if (isGemini || isSeedream || isFalModel || isXai) {
@@ -1393,7 +1395,7 @@ function updateSettingsForModel(model) {
 
 
 
-    if (isXaiVideo) {
+    if (isVideoModel) {
         xaiVideoLengthGroup?.classList.remove('settings-group--hidden');
         xaiVideoQualityGroup?.classList.remove('settings-group--hidden');
     } else {
@@ -1502,7 +1504,10 @@ async function handleGenerate(input, button) {
                 await new Promise(r => setTimeout(r, VIDEO_POLL_INTERVAL));
                 pollCount++;
 
-                const poll = await pollVideoStatus(response.request_id, generationAbortController.signal);
+                const poll = await pollVideoStatus(response.request_id, generationAbortController.signal, {
+                    provider: response.provider,
+                    model: response.model,
+                });
 
                 if (poll.status === 'completed' && poll.url) {
                     response = {
