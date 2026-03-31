@@ -398,18 +398,25 @@ export async function getRandomPromptFromAI() {
  * Poll for video generation status (client-side polling).
  * @param {string} requestId - The video request ID from the initial generate call
  * @param {AbortSignal} [signal] - Optional abort signal for cancellation
+ * @param {{ provider?: string, model?: string }} [meta] - Optional provider and model info
  * @returns {Promise<{status: string, url?: string}>}
  * @throws {Error} If polling fails
  */
-export async function pollVideoStatus(requestId, signal = null) {
+export async function pollVideoStatus(requestId, signal = null, meta = {}) {
     const xaiApiKey = getXaiApiKey();
+    const falApiKey = getFalApiKey();
     const response = await fetch(VIDEO_STATUS_ENDPOINT, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
+            ...(falApiKey ? { 'X-FAL-Api-Key': falApiKey } : {}),
         },
-        body: JSON.stringify({ request_id: requestId }),
+        body: JSON.stringify({
+            request_id: requestId,
+            ...(meta.provider ? { provider: meta.provider } : {}),
+            ...(meta.model ? { model: meta.model } : {}),
+        }),
         ...(signal ? { signal } : {}),
     });
 

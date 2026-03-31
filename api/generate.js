@@ -34,7 +34,11 @@ module.exports = withMiddleware(async function handler(req, res) {
         'fal-ai/bytedance/seedream/v5/lite/text-to-image',
         'fal-ai/bytedance/seedream/v5/lite/edit',
     ];
+    const FAL_VIDEO_MODEL_IDS = [
+        'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',
+    ];
     const isFalModel = FAL_MODEL_IDS.includes(model);
+    const isFalVideoModel = FAL_VIDEO_MODEL_IDS.includes(model);
     const isFalEditModel = model === 'fal-ai/bytedance/seedream/v4.5/edit' || model === 'fal-ai/bytedance/seedream/v5/lite/edit';
 
     const XAI_API_KEY =
@@ -53,7 +57,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         req.headers['x-openrouter-api-key'] ||
         req.headers['x-openrouter-api_key'];
 
-    if (!isXaiModel && !isFalModel && !OPENROUTER_API_KEY) {
+    if (!isXaiModel && !isFalModel && !isFalVideoModel && !OPENROUTER_API_KEY) {
         return res.status(401).json({
             code: 'OPENROUTER_API_KEY_REQUIRED',
             error: 'OpenRouter API key required',
@@ -75,7 +79,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         });
     }
 
-    if (isFalModel && !FAL_KEY) {
+    if ((isFalModel || isFalVideoModel) && !FAL_KEY) {
         return res.status(401).json({
             code: 'FAL_API_KEY_REQUIRED',
             error: 'Fal API key required',
@@ -203,6 +207,81 @@ module.exports = withMiddleware(async function handler(req, res) {
             });
         } catch (error) {
             console.error('Fal API error:', redactKey(error));
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    // ---------- Fal Seedance video model ----------
+    if (isFalVideoModel) {
+        // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
+        const parsedDuration = parseInt(xai_video_length, 10);
+        // Seedance supports duration 4–12 seconds
+        const normalizedDuration =
+            Number.isFinite(parsedDuration) && parsedDuration >= 4 && parsedDuration <= 12
+                ? String(parsedDuration)
+                : '5';
+        const validResolutions = ['480p', '720p', '1080p'];
+        const normalizedResolution =
+            typeof xai_video_quality === 'string' && validResolutions.includes(xai_video_quality)
+                ? xai_video_quality
+                : '720p';
+
+        // Seedance supports: 21:9, 16:9, 4:3, 1:1, 3:4, 9:16, auto
+        const validAspectRatios = ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16', 'auto'];
+        const falAspectRatio =
+            typeof aspect_ratio === 'string' && validAspectRatios.includes(aspect_ratio.trim())
+                ? aspect_ratio.trim()
+                : '16:9';
+
+        const falVideoPayload = {
+            prompt: prompt.trim(),
+            aspect_ratio: falAspectRatio,
+            resolution: normalizedResolution,
+            duration: normalizedDuration,
+            enable_safety_checker: false,
+            generate_audio: true,
+        };
+
+        try {
+            // Use Fal queue endpoint for async video generation
+            const falQueueUrl = `https://queue.fal.run/${model}`;
+            const submitResponse = await fetch(falQueueUrl, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Key ${FAL_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(falVideoPayload),
+            });
+
+            if (!submitResponse.ok) {
+                const errorText = await submitResponse.text();
+                return res.status(submitResponse.status).json({
+                    error: 'Failed to start video generation via Fal',
+                    details: redactKey(errorText),
+                });
+            }
+
+            const submitData = await submitResponse.json();
+            const requestId = submitData?.request_id;
+
+            if (!requestId) {
+                return res.status(502).json({ error: 'Fal video request did not return a request ID' });
+            }
+
+            // Estimated cost for Seedance video generation (flat approximation per request)
+            const videoCost = 0.10;
+
+            // Return immediately — client will poll /api/video-status
+            return res.status(202).json({
+                status: 'pending',
+                request_id: requestId,
+                model,
+                provider: 'fal',
+                estimated_cost: videoCost,
+            });
+        } catch (error) {
+            console.error('Fal video API error:', redactKey(error));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }

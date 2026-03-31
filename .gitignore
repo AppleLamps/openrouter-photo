@@ -26,3 +26,4 @@ npm-debug.log*
 # Build outputs
 dist/
 build/
+node_modules/
