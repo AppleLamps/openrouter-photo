@@ -1507,6 +1507,8 @@ async function handleGenerate(input, button) {
                 const poll = await pollVideoStatus(response.request_id, generationAbortController.signal, {
                     provider: response.provider,
                     model: response.model,
+                    fal_status_url: response.fal_status_url,
+                    fal_response_url: response.fal_response_url,
                 });
 
                 if (poll.status === 'completed' && poll.url) {

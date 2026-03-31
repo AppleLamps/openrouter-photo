@@ -1,7 +1,7 @@
 const { withMiddleware, redactKey } = require('./_middleware');
 
 module.exports = withMiddleware(async function handler(req, res) {
-    const { request_id, provider, model } = req.body;
+    const { request_id, provider, model, fal_status_url, fal_response_url } = req.body;
 
     if (!request_id || typeof request_id !== 'string') {
         return res.status(400).json({ error: 'request_id is required' });
@@ -28,8 +28,8 @@ module.exports = withMiddleware(async function handler(req, res) {
         const falModel = model || 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
 
         try {
-            // Check status first
-            const statusUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}/status`;
+            // Use Fal-provided status_url if available, otherwise construct it
+            const statusUrl = fal_status_url || `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}/status`;
             const statusResponse = await fetch(statusUrl, {
                 headers: { Authorization: `Key ${FAL_KEY}` },
             });
@@ -46,8 +46,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             const status = String(statusData?.status || '').toUpperCase();
 
             if (status === 'COMPLETED') {
-                // Fetch the result to get the video URL
-                const resultUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}`;
+                // Use Fal-provided response_url if available, otherwise construct it
+                const resultUrl = fal_response_url || `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}`;
                 const resultResponse = await fetch(resultUrl, {
                     headers: { Authorization: `Key ${FAL_KEY}` },
                 });

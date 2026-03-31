@@ -416,6 +416,8 @@ export async function pollVideoStatus(requestId, signal = null, meta = {}) {
             request_id: requestId,
             ...(meta.provider ? { provider: meta.provider } : {}),
             ...(meta.model ? { model: meta.model } : {}),
+            ...(meta.fal_status_url ? { fal_status_url: meta.fal_status_url } : {}),
+            ...(meta.fal_response_url ? { fal_response_url: meta.fal_response_url } : {}),
         }),
         ...(signal ? { signal } : {}),
     });

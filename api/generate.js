@@ -279,6 +279,8 @@ module.exports = withMiddleware(async function handler(req, res) {
                 model,
                 provider: 'fal',
                 estimated_cost: videoCost,
+                fal_status_url: submitData?.status_url || null,
+                fal_response_url: submitData?.response_url || null,
             });
         } catch (error) {
             console.error('Fal video API error:', redactKey(error));
