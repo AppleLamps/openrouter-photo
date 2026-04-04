@@ -370,6 +370,29 @@ function syncModelDropdownUI() {
     }
 }
 
+const MODEL_SHORT_NAMES = {
+    'bytedance-seed/seedream-4.5': 'seedream v4.5',
+    'fal-ai/bytedance/seedream/v4.5/text-to-image': 'seedream v4.5 text',
+    'fal-ai/bytedance/seedream/v4.5/edit': 'seedream v4.5 edit',
+    'fal-ai/bytedance/seedream/v5/lite/text-to-image': 'seedream v5 lite text',
+    'fal-ai/bytedance/seedream/v5/lite/edit': 'seedream v5 lite edit',
+    'black-forest-labs/flux.2-max': 'flux.2 max',
+    'black-forest-labs/flux.2-flex': 'flux.2 flex',
+    'black-forest-labs/flux.2-pro': 'flux.2 pro',
+    'google/gemini-3-pro-image-preview': 'gemini 3 pro image',
+    'google/gemini-2.5-flash-image': 'gemini 2.5 flash image',
+    'openai/gpt-5-image-mini': 'gpt-5 image mini',
+    'openai/gpt-5-image': 'gpt-5 image',
+    'grok-imagine-image': 'grok image',
+    'grok-imagine-image-pro': 'grok image pro',
+    'grok-imagine-video': 'grok video',
+    'fal-ai/bytedance/seedance/v1.5/pro/text-to-video': 'seedance v1.5 text-to-video',
+    'fal-ai/bytedance/seedance/v1.5/pro/image-to-video': 'seedance v1.5 img-to-video',
+    'sourceful/riverflow-v2-max-preview': 'riverflow v2 max',
+    'sourceful/riverflow-v2-standard-preview': 'riverflow v2 standard',
+    'sourceful/riverflow-v2-fast-preview': 'riverflow v2 fast',
+};
+
 function initModelDropdown() {
     modelDropdown = createDropdown({
         dropdownId: 'model-dropdown',
@@ -379,7 +402,8 @@ function initModelDropdown() {
         defaultValue: true,
         placeholder: 'Select model',
         showTitle: true,
-        dispatchChange: true
+        dispatchChange: true,
+        formatDisplay: (v) => MODEL_SHORT_NAMES[v] || v || 'Select model'
     });
 }
 
@@ -708,6 +732,21 @@ async function init() {
     // Initialize sidebar
     initSidebar();
 
+    // Wire up suggestion chips (empty state)
+    const suggestionChips = document.getElementById('suggestion-chips');
+    if (suggestionChips && promptInput) {
+        suggestionChips.addEventListener('click', (e) => {
+            const chip = e.target.closest('.empty-state__chip');
+            if (!chip) return;
+            const prompt = chip.getAttribute('data-prompt');
+            if (prompt) {
+                promptInput.value = prompt;
+                autoResizeTextarea(promptInput);
+                promptInput.focus();
+            }
+        });
+    }
+
     // Set up event listeners
     if (generateBtn && promptInput) {
         generateBtn.addEventListener('click', () => handleGenerate(promptInput, generateBtn));
@@ -807,6 +846,9 @@ async function init() {
 
     // Listen for remix-image event from lightbox
     window.addEventListener('remix-image', handleRemixImage);
+
+    // Listen for animate-image event from lightbox
+    window.addEventListener('animate-image', handleAnimateImage);
 
     // Subscribe to image state changes only (avoid expensive updates on selection/edit events)
     state.subscribe((action) => {
@@ -1971,6 +2013,66 @@ function handleRemixImage(event) {
 
     // 4. Close the lightbox
     closeLightbox();
+
+    // 5. Flash input to indicate readiness
+    if (promptInput) {
+        flashInput(promptInput);
+        promptInput.focus();
+    }
+}
+
+/**
+ * Handle animate-image event from lightbox.
+ * Attaches the image, switches to seedance image-to-video model, and closes lightbox.
+ * @param {CustomEvent} event - Custom event with image data
+ */
+async function handleAnimateImage(event) {
+    const image = event.detail;
+    if (!image) return;
+
+    const promptInput = document.getElementById('prompt-input');
+
+    // 1. Close the lightbox first
+    closeLightbox();
+
+    // 2. Set prompt from image
+    if (promptInput) {
+        promptInput.value = image.prompt || '';
+        autoResizeTextarea(promptInput);
+    }
+
+    // 3. Switch model to seedance image-to-video
+    const modelSelect = document.getElementById('setting-model');
+    if (modelSelect) {
+        modelSelect.value = 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
+        syncModelDropdownUI();
+        updateSettingsForModel('fal-ai/bytedance/seedance/v1.5/pro/image-to-video');
+    }
+
+    // 4. Attach the image
+    try {
+        const fullUrl = await state.getFullImageUrl(image.id);
+        const imageUrl = fullUrl || image.url;
+        if (imageUrl) {
+            // Clear existing attachments and add this image
+            promptImageDataUrls = [];
+            // Fetch the image and convert to data URL
+            const resp = await fetch(imageUrl);
+            const blob = await resp.blob();
+            const reader = new FileReader();
+            const dataUrl = await new Promise((resolve, reject) => {
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            if (typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+                promptImageDataUrls.push(dataUrl);
+                renderPromptAttachments();
+            }
+        }
+    } catch (err) {
+        console.error('Failed to attach image for animation:', err);
+    }
 
     // 5. Flash input to indicate readiness
     if (promptInput) {

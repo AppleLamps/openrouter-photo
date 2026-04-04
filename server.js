@@ -12,9 +12,8 @@ const videoStatusHandler = require('./api/video-status');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Increase body size limit to handle base64 image attachments
-// Note: Vercel has a hard limit of 4.5MB for serverless functions
-app.use(express.json({ limit: '4.5mb' }));
+// Increase body size limit to handle base64 image attachments (image-to-video can send 2 frames)
+app.use(express.json({ limit: '20mb' }));
 
 // CORS + preflight handling for local dev (browser sends OPTIONS for custom headers like X-OpenRouter-Api-Key)
 app.use('/api', (req, res, next) => {

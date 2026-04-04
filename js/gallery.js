@@ -966,13 +966,17 @@ async function openLightbox(image) {
 
     // Add or update Remix button
     if (actionsContainer) {
-        // Remove existing remix button if any
+        // Remove existing dynamic buttons
         const existingRemixBtn = actionsContainer.querySelector('.modal__remix-btn');
         if (existingRemixBtn) {
             existingRemixBtn.remove();
         }
+        const existingAnimateBtn = actionsContainer.querySelector('.modal__animate-btn');
+        if (existingAnimateBtn) {
+            existingAnimateBtn.remove();
+        }
 
-        // Create new remix button
+        // Create Remix button
         const remixBtn = createElement('button', {
             className: 'modal__button modal__remix-btn',
             onClick: () => {
@@ -982,6 +986,20 @@ async function openLightbox(image) {
 
         // Insert before download button
         actionsContainer.insertBefore(remixBtn, downloadBtn);
+
+        // Create Animate button (only for images, not videos)
+        if (image.mediaType !== 'video') {
+            const animateBtn = createElement('button', {
+                className: 'modal__button modal__button--accent modal__animate-btn',
+                title: 'Animate this image into a video',
+                onClick: () => {
+                    window.dispatchEvent(new CustomEvent('animate-image', { detail: image }));
+                }
+            });
+            // Add video icon SVG
+            animateBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>Animate`;
+            actionsContainer.appendChild(animateBtn);
+        }
     }
 
     modal.classList.remove('modal--ui-hidden', 'modal--dragging');
