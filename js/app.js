@@ -2041,12 +2041,17 @@ async function handleAnimateImage(event) {
         autoResizeTextarea(promptInput);
     }
 
-    // 3. Switch model to seedance image-to-video
+    // 3. Switch model to seedance image-to-video and set qty to 1
     const modelSelect = document.getElementById('setting-model');
     if (modelSelect) {
         modelSelect.value = 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
         syncModelDropdownUI();
         updateSettingsForModel('fal-ai/bytedance/seedance/v1.5/pro/image-to-video');
+    }
+    const numImagesSelect = document.getElementById('setting-num-images');
+    if (numImagesSelect) {
+        numImagesSelect.value = '1';
+        syncNumImagesDropdownUI();
     }
 
     // 4. Attach the image

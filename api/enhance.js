@@ -10,41 +10,40 @@ module.exports = withMiddleware(async function handler(req, res) {
     // Validate image_urls if provided
     const hasImages = Array.isArray(image_urls) && image_urls.length > 0;
 
-    const OPENROUTER_API_KEY =
-        req.headers['x-openrouter-api-key'] ||
-        req.headers['x-openrouter-api_key'];
+    const XAI_API_KEY =
+        req.headers['x-xai-api-key'] ||
+        process.env.XAI_API_KEY;
 
-    if (!OPENROUTER_API_KEY) {
+    if (!XAI_API_KEY) {
         return res.status(401).json({
-            code: 'OPENROUTER_API_KEY_REQUIRED',
-            error: 'OpenRouter API key required',
+            code: 'XAI_API_KEY_REQUIRED',
+            error: 'xAI API key required',
             help: {
-                message: 'Open Settings → paste your OpenRouter API key. Create one at openrouter.ai/keys.',
-                url: 'https://openrouter.ai/keys'
+                message: 'Open Settings → paste your xAI API key. Create one at console.x.ai.',
+                url: 'https://console.x.ai/team/default/api-keys'
             }
         });
     }
 
     try {
-        // Use vision-capable model when images are attached
-        const model = 'x-ai/grok-4.20';
+        const model = 'grok-4.20-beta-latest-reasoning';
 
-        // Build user message content - multimodal format if images present
+        // Build user message content - xAI Responses API format
         let userContent;
         if (hasImages) {
-            // Multimodal content with text and images
+            // Multimodal: input_image + input_text
             userContent = [
-                { type: 'text', text: prompt.trim() },
                 ...image_urls.slice(0, 3).map(url => ({
-                    type: 'image_url',
-                    image_url: { url }
-                }))
+                    type: 'input_image',
+                    image_url: url,
+                    detail: 'high'
+                })),
+                { type: 'input_text', text: prompt.trim() }
             ];
         } else {
             userContent = prompt.trim();
         }
 
-        // Adjust system prompt when images are present
         const systemPrompt = `You are a specialized prompt engineer for **Grok Imagine**, xAI's image generation and editing tool. Your sole job is to take a user's idea, concept, or editing request and output a production-ready Grok Imagine prompt that will generate the best possible result on the first try.
 
 ---
@@ -255,17 +254,16 @@ For every request, respond with ONLY the complete, copy-paste-ready prompt text.
 6. Default to Quality Mode unless the request is clearly low-stakes or exploratory.
 7. Always recommend an aspect ratio. Never leave it to chance.`;
 
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        // xAI Responses API
+        const response = await fetch('https://api.x.ai/v1/responses', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'Authorization': `Bearer ${XAI_API_KEY}`,
                 'Content-Type': 'application/json',
-                'HTTP-Referer': req.headers.referer || 'https://ai-image-generator.vercel.app',
-                'X-Title': 'AI Image Generator'
             },
             body: JSON.stringify({
                 model,
-                messages: [
+                input: [
                     {
                         role: 'system',
                         content: systemPrompt
@@ -275,14 +273,13 @@ For every request, respond with ONLY the complete, copy-paste-ready prompt text.
                         content: userContent
                     }
                 ],
-                max_tokens: 1500,
-                temperature: 0.7
+                store: false
             }),
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('OpenRouter API error:', redactKey(errorText));
+            console.error('xAI API error:', redactKey(errorText));
             return res.status(response.status).json({
                 error: 'Failed to enhance prompt',
                 details: redactKey(errorText)
@@ -291,8 +288,22 @@ For every request, respond with ONLY the complete, copy-paste-ready prompt text.
 
         const data = await response.json();
 
-        // Extract the content from the response
-        const enhancedPrompt = data.choices?.[0]?.message?.content;
+        // Extract text from xAI Responses API format
+        // Response output contains items; find the message with output_text
+        let enhancedPrompt = null;
+        if (data.output && Array.isArray(data.output)) {
+            for (const item of data.output) {
+                if (item.type === 'message' && item.content && Array.isArray(item.content)) {
+                    for (const block of item.content) {
+                        if (block.type === 'output_text' && block.text) {
+                            enhancedPrompt = block.text;
+                            break;
+                        }
+                    }
+                    if (enhancedPrompt) break;
+                }
+            }
+        }
 
         if (!enhancedPrompt) {
             return res.status(500).json({ error: 'No content returned from API' });
