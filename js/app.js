@@ -1369,13 +1369,16 @@ function updateSettingsForModel(model) {
     const aspectRatioGroup = document.getElementById('aspect-ratio-group');
     const xaiVideoLengthGroup = document.getElementById('xai-video-length-group');
     const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
+    const falImageToVideoHintGroup = document.getElementById('fal-image-to-video-hint-group');
 
     const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedream = typeof model === 'string' && model.includes('seedream');
     const isFalModel = typeof model === 'string' && model.startsWith('fal-ai/');
     const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
     const isXaiVideo = model === 'grok-imagine-video';
-    const isFalVideo = model === 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
+    const isFalVideo = model === 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video' ||
+        model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
+    const isFalImageToVideo = model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
     const isXai = isXaiImage || isXaiVideo;
     const isVideoModel = isXaiVideo || isFalVideo;
 
@@ -1393,14 +1396,18 @@ function updateSettingsForModel(model) {
         resolutionGroup?.classList.add('settings-group--hidden');
     }
 
-
-
     if (isVideoModel) {
         xaiVideoLengthGroup?.classList.remove('settings-group--hidden');
         xaiVideoQualityGroup?.classList.remove('settings-group--hidden');
     } else {
         xaiVideoLengthGroup?.classList.add('settings-group--hidden');
         xaiVideoQualityGroup?.classList.add('settings-group--hidden');
+    }
+
+    if (isFalImageToVideo) {
+        falImageToVideoHintGroup?.classList.remove('settings-group--hidden');
+    } else {
+        falImageToVideoHintGroup?.classList.add('settings-group--hidden');
     }
 }
 

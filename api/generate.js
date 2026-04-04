@@ -36,6 +36,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     ];
     const FAL_VIDEO_MODEL_IDS = [
         'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',
+        'fal-ai/bytedance/seedance/v1.5/pro/image-to-video',
     ];
     const isFalModel = FAL_MODEL_IDS.includes(model);
     const isFalVideoModel = FAL_VIDEO_MODEL_IDS.includes(model);
@@ -233,6 +234,14 @@ module.exports = withMiddleware(async function handler(req, res) {
                 ? aspect_ratio.trim()
                 : '16:9';
 
+        const isFalImageToVideo = model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
+
+        if (isFalImageToVideo && normalizedInputImages.length === 0) {
+            return res.status(400).json({
+                error: 'Image-to-video requires at least one attached image (start frame). Please attach an image and try again.',
+            });
+        }
+
         const falVideoPayload = {
             prompt: prompt.trim(),
             aspect_ratio: falAspectRatio,
@@ -241,6 +250,13 @@ module.exports = withMiddleware(async function handler(req, res) {
             enable_safety_checker: false,
             generate_audio: true,
         };
+
+        if (isFalImageToVideo) {
+            falVideoPayload.image_url = normalizedInputImages[0];
+            if (normalizedInputImages[1]) {
+                falVideoPayload.end_image_url = normalizedInputImages[1];
+            }
+        }
 
         try {
             // Use Fal queue endpoint for async video generation

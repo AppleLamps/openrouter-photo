@@ -255,9 +255,13 @@
                                 <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
                                     role="option" data-value="grok-imagine-video">grok-imagine-video</button>
                                 <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="fal-ai/bytedance/seedance/v1.5/pro/text-to-video">fal: seedance-1.5
+                                    role="option" data-value="fal-ai/bytedance/seedance/v1.5/pro/text-to-video">fal:
+                                    seedance-1.5
                                     pro text-to-video</button>
+                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
+                                    role="option" data-value="fal-ai/bytedance/seedance/v1.5/pro/image-to-video">fal:
+                                    seedance-1.5
+                                    pro image-to-video</button>
                                 <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
                                     role="option"
                                     data-value="sourceful/riverflow-v2-max-preview">sourceful/riverflow-v2-max-preview</button>
@@ -456,6 +460,12 @@
                         <option value="1080p">1080p</option>
                     </select>
                     <p class="settings-hint">Resolution for video generation.</p>
+                </div>
+
+                <!-- Image-to-Video Frames Hint -->
+                <div class="settings-group settings-group--hidden" id="fal-image-to-video-hint-group">
+                    <p class="settings-hint">Use the image attachment button to attach the <strong>start frame</strong>
+                        (required). Attach a second image as the <strong>end frame</strong> (optional).</p>
                 </div>
 
                 <!-- Photo Visibility Mode -->
