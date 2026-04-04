@@ -683,8 +683,8 @@ function getGenerationSettings() {
 
     const model = modelSelect?.value || 'black-forest-labs/flux.2-pro';
 
-    const parsedXaiVideoLength = parseInt(xaiVideoLengthInput?.value || 5, 10);
-    const xaiVideoLength = Number.isFinite(parsedXaiVideoLength) ? parsedXaiVideoLength : 5;
+    const parsedXaiVideoLength = parseInt(xaiVideoLengthInput?.value || 10, 10);
+    const xaiVideoLength = Number.isFinite(parsedXaiVideoLength) ? parsedXaiVideoLength : 10;
 
     const settings = {
         model,

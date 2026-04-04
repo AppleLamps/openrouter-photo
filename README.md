@@ -20,14 +20,14 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 ### Image Editing
 
-- **Reference Images** - Attach up to 3 images for editing, variations, or video start/end frames
+- **Reference Images** - Attach up to 4 images for editing, variations, or video start/end frames
 - **Auto Compression** - Large uploads automatically compressed (1024px max, JPEG 85%)
 - **Model Interpretation** - Describe changes and let compatible models apply them
 - **Image-to-Video** - Use attached images as start frame (and optional end frame) for Seedance I2V
 
 ### Prompt Tools
 
-- **AI Enhancement** - Improve prompts with one click using Grok-4
+- **AI Enhancement** - Improve prompts with one click using Grok-4.20 (xAI Responses API)
 - **Surprise Me** - AI-generated random prompts combining subjects, styles, moods, settings, and lighting
 
 ### Gallery & Organization
@@ -86,7 +86,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 ```
 ├── api/
 │   ├── generate.js       # Image generation endpoint (OpenRouter proxy)
-│   ├── enhance.js        # Prompt enhancement endpoint
+│   ├── enhance.js        # Prompt enhancement endpoint (xAI Responses API)
 │   ├── random-prompt.js  # AI-generated random prompt endpoint
 │   └── test-key.js       # API key validation endpoint
 ├── css/
@@ -102,7 +102,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 │   ├── storage.js        # IndexedDB storage layer
 │   ├── gallery.js        # Gallery rendering & lightbox
 │   ├── sidebar.js        # Folder sidebar & navigation
-│   ├── image-utils.js    # Image compression & processing
+│   ├── image-utils.js    # Image compression (thumbnails + full-image WebP/JPEG)
 │   ├── prompts.js        # Random prompt suggestions
 │   └── utils.js          # Helper functions
 ├── public/
@@ -181,7 +181,7 @@ npx vercel --prod
 ### Image Attachments
 
 1. Click the attachment button or drag-and-drop images onto the input
-2. Attach up to 3 reference images (8MB max each)
+2. Attach up to 4 reference images (8MB max each)
 3. Images are automatically compressed if too large
 4. Describe the changes you want applied
 5. Generate with a compatible model (GPT-5, Gemini, Seedream Edit)
@@ -242,9 +242,10 @@ npx vercel --prod
 | Constraint | Limit |
 |------------|-------|
 | **Request/Response Body** | 4.5 MB (Vercel limit) |
-| **Image Attachments** | 3 images max per generation |
+| **Image Attachments** | 4 images max per generation |
 | **Attachment Size** | 8 MB max per image |
-| **Auto Compression** | Images > limits compressed to 1024px, JPEG 85% |
+| **Upload Compression** | Attachments > limits compressed to 1024px, JPEG 85% |
+| **Storage Compression** | Full-res images re-encoded to WebP/JPEG (92% quality) before IndexedDB storage |
 | **Batch Size** | 1-4 images per generation |
 
 ---
@@ -281,7 +282,7 @@ npx vercel --prod
 ### Attachments not working
 
 - Ensure images are under 8MB each
-- Maximum 3 images per generation
+- Maximum 4 images per generation
 - Try a different image format (PNG, JPEG, WebP supported)
 
 ### PWA not installing
