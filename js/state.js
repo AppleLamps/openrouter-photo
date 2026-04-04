@@ -4,7 +4,7 @@
  */
 
 import { ImageStorage } from './storage.js';
-import { dataUriToBlob, generateThumbnail, createBlobUrl, revokeBlobUrl } from './image-utils.js';
+import { dataUriToBlob, generateThumbnail, compressFullImage, createBlobUrl, revokeBlobUrl } from './image-utils.js';
 
 const LEGACY_STORAGE_KEY = 'ai-image-generator-images';
 const FALLBACK_ID_PREFIX = 'legacy';
@@ -201,7 +201,8 @@ class State {
             for (const img of legacyImages) {
                 if (img.url && img.url.startsWith('data:')) {
                     try {
-                        const fullBlob = dataUriToBlob(img.url);
+                        let fullBlob = dataUriToBlob(img.url);
+                        fullBlob = await compressFullImage(fullBlob);
                         const thumbnailBlob = await generateThumbnail(fullBlob);
 
                         await this.storage.saveImage(
@@ -393,6 +394,8 @@ class State {
                 const dataUri = imageData.url;
                 fullBlob = dataUriToBlob(dataUri);
             }
+            // Compress PNG → WebP/JPEG (typically 5-10x smaller)
+            fullBlob = await compressFullImage(fullBlob);
             const thumbnailBlob = await generateThumbnail(fullBlob);
 
             const metadata = {

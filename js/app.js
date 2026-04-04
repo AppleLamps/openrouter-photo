@@ -690,7 +690,7 @@ function getGenerationSettings() {
         model,
         num_images: parseInt(numImagesSelect?.value || 2, 10),
         // OpenRouter image generation (used for Gemini via `image_config` in the backend)
-        aspect_ratio: aspectRatioSelect?.value || '1:1',
+        aspect_ratio: aspectRatioSelect?.value || '3:4',
         resolution: resolutionSelect?.value || '1K',
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',

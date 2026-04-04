@@ -106,6 +106,67 @@ export async function generateThumbnail(imageBlob, maxSize = 512) {
 }
 
 /**
+ * Compress a full-resolution image blob by re-encoding as WebP/JPEG.
+ * Keeps original dimensions — only changes format from PNG to a lossy codec.
+ * @param {Blob} imageBlob - Original image (typically PNG from API)
+ * @param {number} quality - Compression quality 0-1 (default 0.92)
+ * @returns {Promise<Blob>} Compressed blob (WebP preferred, JPEG fallback)
+ */
+export async function compressFullImage(imageBlob, quality = 0.92) {
+    // Skip if already a lossy format and small (< 500KB)
+    if (imageBlob.size < 500 * 1024 && imageBlob.type !== 'image/png') {
+        return imageBlob;
+    }
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(imageBlob);
+
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            // Try WebP first, fallback to JPEG
+            canvas.toBlob(
+                (webpBlob) => {
+                    if (webpBlob && webpBlob.size < imageBlob.size) {
+                        resolve(webpBlob);
+                    } else {
+                        canvas.toBlob(
+                            (jpegBlob) => {
+                                if (jpegBlob && jpegBlob.size < imageBlob.size) {
+                                    resolve(jpegBlob);
+                                } else {
+                                    // Original was already smaller, keep it
+                                    resolve(imageBlob);
+                                }
+                            },
+                            'image/jpeg',
+                            quality
+                        );
+                    }
+                },
+                'image/webp',
+                quality
+            );
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            // On error, return original uncompressed
+            resolve(imageBlob);
+        };
+
+        img.src = url;
+    });
+}
+
+/**
  * Format bytes to human-readable string
  * @param {number} bytes
  * @returns {string}

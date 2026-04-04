@@ -33,7 +33,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         if (hasImages) {
             // Multimodal: input_image + input_text
             userContent = [
-                ...image_urls.slice(0, 3).map(url => ({
+                ...image_urls.slice(0, 4).map(url => ({
                     type: 'input_image',
                     image_url: url,
                     detail: 'high'
@@ -273,7 +273,8 @@ For every request, respond with ONLY the complete, copy-paste-ready prompt text.
                         content: userContent
                     }
                 ],
-                store: false
+                store: false,
+                safe_mode: false
             }),
         });
 
