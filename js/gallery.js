@@ -692,6 +692,7 @@ function removeImageCard(id) {
         // Fallback timeout in case transitionend doesn't fire
         setTimeout(() => {
             if (card.parentNode) {
+                card.removeEventListener('transitionend', handleTransitionEnd);
                 card.remove();
             }
         }, 300);

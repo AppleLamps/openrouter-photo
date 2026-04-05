@@ -687,8 +687,8 @@ class State {
      */
     getImageCountForFolder(folderId) {
         if (folderId === null) {
-            // All photos
-            return this.images.length;
+            // Uncategorized photos (no folder assigned)
+            return this.images.filter(img => !img.folderId).length;
         }
         return this.images.filter(img => img.folderId === folderId).length;
     }

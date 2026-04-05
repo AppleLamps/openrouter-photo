@@ -28,6 +28,12 @@ let generationAbortController = null;
 
 /** @type {Map<string, {prompt: string, settings: Object}>} - Track placeholder metadata for retry */
 let placeholderMetadata = new Map();
+
+/** @type {string|null} - Single image data URI for image-to-image models */
+let inputImageDataUri = null;
+
+/** @type {string[]} - Multiple image data URIs for multi-image models */
+let multiImageDataUris = [];
 let storageIndicatorQueued = false;
 let storageIndicatorInFlight = false;
 let storageIndicatorNeedsRerun = false;
@@ -246,6 +252,31 @@ function scheduleStorageIndicatorUpdate() {
 }
 
 /**
+ * Global registry of open dropdowns — a single document-level click/keydown
+ * handler closes them all, instead of attaching N×2 listeners per dropdown.
+ * @type {Set<{element: HTMLElement, close: Function}>}
+ */
+const _openDropdowns = new Set();
+
+// Single document-level handler: close any open dropdown on outside click
+document.addEventListener('click', (e) => {
+    for (const entry of _openDropdowns) {
+        if (!entry.element.classList.contains('is-open')) continue;
+        if (e.target instanceof Node && entry.element.contains(e.target)) continue;
+        entry.close();
+    }
+});
+
+// Single document-level handler: close any open dropdown on Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    for (const entry of _openDropdowns) {
+        if (!entry.element.classList.contains('is-open')) continue;
+        entry.close();
+    }
+});
+
+/**
  * Create a reusable dropdown controller
  * @param {Object} config - Dropdown configuration
  * @param {string} config.dropdownId - ID of the dropdown container element
@@ -339,17 +370,8 @@ function createDropdown(config) {
         close();
     });
 
-    document.addEventListener('click', (e) => {
-        if (!dropdown.classList.contains('is-open')) return;
-        if (e.target instanceof Node && dropdown.contains(e.target)) return;
-        close();
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        if (!dropdown.classList.contains('is-open')) return;
-        close();
-    });
+    // Register with global dropdown handler instead of per-dropdown document listeners
+    _openDropdowns.add({ element: dropdown, close });
 
     return { syncUI, setValue, close };
 }
@@ -541,17 +563,8 @@ function initFolderSelectorDropdown() {
         }
     });
 
-    document.addEventListener('click', (e) => {
-        if (!dropdown.classList.contains('is-open')) return;
-        if (e.target instanceof Node && dropdown.contains(e.target)) return;
-        close();
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        if (!dropdown.classList.contains('is-open')) return;
-        close();
-    });
+    // Register with global dropdown handler instead of per-dropdown document listeners
+    _openDropdowns.add({ element: dropdown, close });
 }
 
 function recordSpend(meta, imagesReturned) {
@@ -1152,8 +1165,8 @@ function initImageUpload() {
     const imagePreviewImg = document.getElementById('image-preview-img');
     const imageClearBtn = document.getElementById('image-preview-clear');
 
-    // Initialize global storage for image data URI
-    window.__inputImageDataUri = null;
+    // Reset image data URI on re-init
+    inputImageDataUri = null;
 
     if (!imageInput || !imageLabel || !imagePreview || !imagePreviewImg || !imageClearBtn) {
         return;
@@ -1223,7 +1236,7 @@ function handleImageFile(file, label, preview, previewImg) {
         const dataUri = e.target?.result;
         if (dataUri) {
             // Store the data URI globally
-            window.__inputImageDataUri = dataUri;
+            inputImageDataUri = dataUri;
             // Show preview
             previewImg.src = dataUri;
             preview.classList.remove('image-upload__preview--hidden');
@@ -1244,7 +1257,7 @@ function handleImageFile(file, label, preview, previewImg) {
  * @param {HTMLImageElement} previewImg - The preview image element
  */
 function clearImageUpload(input, label, preview, previewImg) {
-    window.__inputImageDataUri = null;
+    inputImageDataUri = null;
     input.value = '';
     previewImg.src = '';
     preview.classList.add('image-upload__preview--hidden');
@@ -1259,8 +1272,8 @@ function initMultiImageUpload() {
     const multiImageLabel = document.getElementById('multi-image-upload-label');
     const multiImagePreviews = document.getElementById('multi-image-previews');
 
-    // Initialize global storage for multiple image data URIs
-    window.__multiImageDataUris = [];
+    // Reset multi-image data URIs on re-init
+    multiImageDataUris = [];
 
     if (!multiImageInput || !multiImageLabel || !multiImagePreviews) {
         return;
@@ -1305,13 +1318,8 @@ function initMultiImageUpload() {
  * @param {HTMLElement} previewsContainer - The previews container
  */
 function handleMultipleImageFiles(files, previewsContainer) {
-    // Limit to 3 images for Wan v2.6
-    if (files.length > 3) {
-        showError('Maximum 3 images allowed');
-        files = files.slice(0, 3);
-    }
-
-    // Validate files
+    // Validate individual files first, filtering out invalid ones
+    const validFiles = [];
     for (const file of files) {
         if (!file.type.startsWith('image/')) {
             showError('Please select valid image files only');
@@ -1321,10 +1329,17 @@ function handleMultipleImageFiles(files, previewsContainer) {
             showError(`Image "${file.name}" is too large (max 10MB)`);
             return;
         }
+        validFiles.push(file);
     }
 
+    // Limit to 3 images for Wan v2.6 (after validation so all files are checked)
+    if (validFiles.length > 3) {
+        showError('Maximum 3 images allowed — using first 3');
+    }
+    files = validFiles.slice(0, 3);
+
     // Clear existing previews
-    window.__multiImageDataUris = [];
+    multiImageDataUris = [];
     previewsContainer.innerHTML = '';
 
     // Process each file
@@ -1333,7 +1348,7 @@ function handleMultipleImageFiles(files, previewsContainer) {
         reader.onload = (e) => {
             const dataUri = e.target?.result;
             if (dataUri) {
-                window.__multiImageDataUris.push(dataUri);
+                multiImageDataUris.push(dataUri);
                 addMultiImagePreview(dataUri, index + 1, previewsContainer);
             }
         };
@@ -1387,17 +1402,17 @@ function addMultiImagePreview(dataUri, index, container) {
  */
 function removeMultiImagePreview(index, container) {
     // Remove from data array
-    window.__multiImageDataUris.splice(index - 1, 1);
+    multiImageDataUris.splice(index - 1, 1);
 
     // Clear and rebuild previews
     container.innerHTML = '';
-    window.__multiImageDataUris.forEach((dataUri, i) => {
+    multiImageDataUris.forEach((dataUri, i) => {
         addMultiImagePreview(dataUri, i + 1, container);
     });
 
     // Update file input
     const multiImageInput = document.getElementById('setting-multi-images');
-    if (multiImageInput && window.__multiImageDataUris.length === 0) {
+    if (multiImageInput && multiImageDataUris.length === 0) {
         multiImageInput.value = '';
     }
 }
@@ -1527,10 +1542,14 @@ async function handleGenerate(input, button) {
                 : {}),
         };
 
-        let response = await generateImage(prompt, requestSettings, generationAbortController.signal);
+        // Cache the abort signal so we can safely check it even if
+        // generationAbortController is set to null by cancel/finally.
+        const abortSignal = generationAbortController.signal;
+
+        let response = await generateImage(prompt, requestSettings, abortSignal);
 
         // Check if generation was cancelled
-        if (generationAbortController.signal.aborted) {
+        if (abortSignal.aborted) {
             // Remove all placeholders on cancel
             placeholderIds.forEach(id => removePlaceholder(id));
             placeholderIds.forEach(id => placeholderMetadata.delete(id));
@@ -1544,7 +1563,7 @@ async function handleGenerate(input, button) {
             let pollCount = 0;
 
             while (pollCount < VIDEO_POLL_MAX) {
-                if (generationAbortController.signal.aborted) {
+                if (abortSignal.aborted) {
                     placeholderIds.forEach(id => removePlaceholder(id));
                     placeholderIds.forEach(id => placeholderMetadata.delete(id));
                     return;
@@ -1553,7 +1572,7 @@ async function handleGenerate(input, button) {
                 await new Promise(r => setTimeout(r, VIDEO_POLL_INTERVAL));
                 pollCount++;
 
-                const poll = await pollVideoStatus(response.request_id, generationAbortController.signal, {
+                const poll = await pollVideoStatus(response.request_id, abortSignal, {
                     provider: response.provider,
                     model: response.model,
                     fal_status_url: response.fal_status_url,
@@ -1910,12 +1929,19 @@ function showFalApiKeyPopup(help) {
     document.body.appendChild(overlay);
 }
 
+/** @type {number} - Cancellation token for surprise-me typing animation */
+let _surpriseTypingToken = 0;
+
 /**
  * Handle "Surprise Me" button - fill input with AI-generated random creative prompt
  * @param {HTMLTextAreaElement} input - Prompt input element
  */
 async function handleSurpriseMe(input) {
     const surpriseBtn = document.getElementById('surprise-btn');
+
+    // Cancel any in-progress typing animation from a previous click
+    _surpriseTypingToken++;
+    const myToken = _surpriseTypingToken;
 
     // Set loading state
     if (surpriseBtn) {
@@ -1927,6 +1953,9 @@ async function handleSurpriseMe(input) {
         // Get AI-generated random prompt
         const randomPrompt = await getRandomPromptFromAI();
 
+        // If another Surprise Me was triggered while we were fetching, bail out
+        if (myToken !== _surpriseTypingToken) return;
+
         // Clear existing text
         input.value = '';
 
@@ -1935,13 +1964,20 @@ async function handleSurpriseMe(input) {
         const typingSpeed = 15; // ms per character
 
         const typeNextChar = () => {
+            // Stop if a newer animation has started
+            if (myToken !== _surpriseTypingToken) return;
+
             if (index < randomPrompt.length) {
                 input.value += randomPrompt[index];
                 index++;
                 autoResizeTextarea(input);
                 setTimeout(typeNextChar, typingSpeed);
             } else {
-                // Done typing - flash and focus
+                // Done typing - re-enable button, flash and focus
+                if (surpriseBtn) {
+                    setSurpriseLoading(surpriseBtn, false);
+                }
+                input.disabled = false;
                 flashInput(input);
                 input.focus();
             }
@@ -1955,7 +1991,7 @@ async function handleSurpriseMe(input) {
         } else {
             showError(error.message || 'Failed to generate random prompt. Please try again.');
         }
-    } finally {
+        // Only re-enable on error; on success the typing callback handles it
         if (surpriseBtn) {
             setSurpriseLoading(surpriseBtn, false);
         }

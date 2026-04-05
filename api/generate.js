@@ -634,7 +634,6 @@ module.exports = withMiddleware(async function handler(req, res) {
         }
 
         const data = await response.json();
-        console.log('Completion response keys:', Object.keys(data));
         return { ok: true, data };
     };
 
