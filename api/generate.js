@@ -33,6 +33,10 @@ module.exports = withMiddleware(async function handler(req, res) {
         'fal-ai/bytedance/seedream/v4.5/edit',
         'fal-ai/bytedance/seedream/v5/lite/text-to-image',
         'fal-ai/bytedance/seedream/v5/lite/edit',
+        'fal-ai/wan/v2.7/text-to-image',
+        'fal-ai/wan/v2.7/pro/text-to-image',
+        'fal-ai/wan/v2.7/edit',
+        'fal-ai/wan/v2.7/pro/edit',
     ];
     const FAL_VIDEO_MODEL_IDS = [
         'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',
@@ -40,7 +44,8 @@ module.exports = withMiddleware(async function handler(req, res) {
     ];
     const isFalModel = FAL_MODEL_IDS.includes(model);
     const isFalVideoModel = FAL_VIDEO_MODEL_IDS.includes(model);
-    const isFalEditModel = model === 'fal-ai/bytedance/seedream/v4.5/edit' || model === 'fal-ai/bytedance/seedream/v5/lite/edit';
+    const isFalEditModel = model === 'fal-ai/bytedance/seedream/v4.5/edit' || model === 'fal-ai/bytedance/seedream/v5/lite/edit' ||
+        model === 'fal-ai/wan/v2.7/edit' || model === 'fal-ai/wan/v2.7/pro/edit';
 
     const XAI_API_KEY =
         req.headers['x-xai-api-key'] ||
@@ -150,6 +155,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             image_size: falImageSize,
             num_images: parsedNumImages,
             enable_safety_checker: false,
+            enable_output_safety_checker: false,
         };
 
         if (isFalEditModel) {
