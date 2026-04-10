@@ -410,6 +410,8 @@ const MODEL_SHORT_NAMES = {
     'grok-imagine-video': 'grok video',
     'fal-ai/bytedance/seedance/v1.5/pro/text-to-video': 'seedance v1.5 text-to-video',
     'fal-ai/bytedance/seedance/v1.5/pro/image-to-video': 'seedance v1.5 img-to-video',
+    'fal-ai/bytedance/seedance-2.0/text-to-video': 'seedance 2.0 text-to-video',
+    'fal-ai/bytedance/seedance-2.0/image-to-video': 'seedance 2.0 img-to-video',
     'fal-ai/wan/v2.7/text-to-image': 'wan 2.7 text',
     'fal-ai/wan/v2.7/pro/text-to-image': 'wan 2.7 pro text',
     'fal-ai/wan/v2.7/edit': 'wan 2.7 edit',
@@ -1437,9 +1439,14 @@ function updateSettingsForModel(model) {
     const isFalModel = typeof model === 'string' && model.startsWith('fal-ai/');
     const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
     const isXaiVideo = model === 'grok-imagine-video';
-    const isFalVideo = model === 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video' ||
-        model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
-    const isFalImageToVideo = model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
+    const isFalVideo =
+        model === 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video' ||
+        model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
+        model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
+        model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
+    const isFalImageToVideo =
+        model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
+        model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
     const isXai = isXaiImage || isXaiVideo;
     const isVideoModel = isXaiVideo || isFalVideo;
 
@@ -2084,9 +2091,9 @@ async function handleAnimateImage(event) {
     // 3. Switch model to seedance image-to-video and set qty to 1
     const modelSelect = document.getElementById('setting-model');
     if (modelSelect) {
-        modelSelect.value = 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
+        modelSelect.value = 'fal-ai/bytedance/seedance-2.0/image-to-video';
         syncModelDropdownUI();
-        updateSettingsForModel('fal-ai/bytedance/seedance/v1.5/pro/image-to-video');
+        updateSettingsForModel('fal-ai/bytedance/seedance-2.0/image-to-video');
     }
     const numImagesSelect = document.getElementById('setting-num-images');
     if (numImagesSelect) {

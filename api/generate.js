@@ -41,6 +41,8 @@ module.exports = withMiddleware(async function handler(req, res) {
     const FAL_VIDEO_MODEL_IDS = [
         'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',
         'fal-ai/bytedance/seedance/v1.5/pro/image-to-video',
+        'fal-ai/bytedance/seedance-2.0/text-to-video',
+        'fal-ai/bytedance/seedance-2.0/image-to-video',
     ];
     const isFalModel = FAL_MODEL_IDS.includes(model);
     const isFalVideoModel = FAL_VIDEO_MODEL_IDS.includes(model);
@@ -222,12 +224,17 @@ module.exports = withMiddleware(async function handler(req, res) {
     if (isFalVideoModel) {
         // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
         const parsedDuration = parseInt(xai_video_length, 10);
-        // Seedance supports duration 4–12 seconds
+        const isSeedance20 =
+            model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
+            model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
+        const maxFalDuration = isSeedance20 ? 15 : 12;
         const normalizedDuration =
-            Number.isFinite(parsedDuration) && parsedDuration >= 4 && parsedDuration <= 12
+            Number.isFinite(parsedDuration) && parsedDuration >= 4 && parsedDuration <= maxFalDuration
                 ? String(parsedDuration)
                 : '5';
-        const validResolutions = ['480p', '720p', '1080p'];
+        const validResolutions = isSeedance20
+            ? ['480p', '720p']
+            : ['480p', '720p', '1080p'];
         const normalizedResolution =
             typeof xai_video_quality === 'string' && validResolutions.includes(xai_video_quality)
                 ? xai_video_quality
@@ -240,7 +247,9 @@ module.exports = withMiddleware(async function handler(req, res) {
                 ? aspect_ratio.trim()
                 : '16:9';
 
-        const isFalImageToVideo = model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
+        const isFalImageToVideo =
+            model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
+            model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
 
         if (isFalImageToVideo && normalizedInputImages.length === 0) {
             return res.status(400).json({
@@ -253,9 +262,12 @@ module.exports = withMiddleware(async function handler(req, res) {
             aspect_ratio: falAspectRatio,
             resolution: normalizedResolution,
             duration: normalizedDuration,
-            enable_safety_checker: false,
             generate_audio: true,
         };
+
+        if (!isSeedance20) {
+            falVideoPayload.enable_safety_checker = false;
+        }
 
         if (isFalImageToVideo) {
             falVideoPayload.image_url = normalizedInputImages[0];
