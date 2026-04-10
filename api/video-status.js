@@ -26,41 +26,86 @@ module.exports = withMiddleware(async function handler(req, res) {
         }
 
         const falModel = model || 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
+        const normalizedFalModel = falModel.startsWith('fal-ai/') ? falModel.slice('fal-ai/'.length) : falModel;
+
+        const buildUniqueUrls = (urls) => {
+            const seen = new Set();
+            const out = [];
+            for (const url of urls) {
+                if (!url || typeof url !== 'string') continue;
+                const trimmed = url.trim();
+                if (!trimmed || seen.has(trimmed)) continue;
+                seen.add(trimmed);
+                out.push(trimmed);
+            }
+            return out;
+        };
+
+        const fetchFalJsonWithFallback = async (candidateUrls, errorPrefix) => {
+            let lastStatus = 502;
+            let lastBody = 'No response';
+            for (const url of candidateUrls) {
+                const resp = await fetch(url, {
+                    headers: { Authorization: `Key ${FAL_KEY}` },
+                });
+                if (resp.ok) {
+                    return { ok: true, data: await resp.json() };
+                }
+                lastStatus = resp.status;
+                lastBody = await resp.text();
+                // Continue trying alternates for not-found responses.
+                if (resp.status !== 404) {
+                    break;
+                }
+            }
+            return {
+                ok: false,
+                status: lastStatus,
+                body: lastBody,
+                error: errorPrefix,
+            };
+        };
 
         try {
-            // Use Fal-provided status_url if available, otherwise construct it
-            const statusUrl = fal_status_url || `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}/status`;
-            const statusResponse = await fetch(statusUrl, {
-                headers: { Authorization: `Key ${FAL_KEY}` },
-            });
-
-            if (!statusResponse.ok) {
-                const errorText = await statusResponse.text();
-                return res.status(statusResponse.status).json({
-                    error: 'Failed to retrieve Fal video status',
-                    details: redactKey(errorText),
+            // Prefer Fal-provided status URL, then fallback to constructed URLs.
+            const statusCandidates = buildUniqueUrls([
+                fal_status_url,
+                `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}/status`,
+                `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(request_id)}/status`,
+            ]);
+            const statusResult = await fetchFalJsonWithFallback(statusCandidates, 'Failed to retrieve Fal video status');
+            if (!statusResult.ok) {
+                return res.status(statusResult.status).json({
+                    error: statusResult.error,
+                    details: redactKey(statusResult.body),
                 });
             }
 
-            const statusData = await statusResponse.json();
+            const statusData = statusResult.data;
             const status = String(statusData?.status || '').toUpperCase();
 
             if (status === 'COMPLETED') {
-                // Use Fal-provided response_url if available, otherwise construct it
-                const resultUrl = fal_response_url || `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}`;
-                const resultResponse = await fetch(resultUrl, {
-                    headers: { Authorization: `Key ${FAL_KEY}` },
-                });
+                // Use explicit response URL first, then status payload URL, then robust constructed fallbacks.
+                const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}`;
+                const normalizedResultBaseUrl = `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(request_id)}`;
+                const resultCandidates = buildUniqueUrls([
+                    fal_response_url,
+                    statusData?.response_url,
+                    resultBaseUrl,
+                    `${resultBaseUrl}/response`,
+                    normalizedResultBaseUrl,
+                    `${normalizedResultBaseUrl}/response`,
+                ]);
 
-                if (!resultResponse.ok) {
-                    const errorText = await resultResponse.text();
-                    return res.status(resultResponse.status).json({
-                        error: 'Failed to retrieve Fal video result',
-                        details: redactKey(errorText),
+                const result = await fetchFalJsonWithFallback(resultCandidates, 'Failed to retrieve Fal video result');
+                if (!result.ok) {
+                    return res.status(result.status).json({
+                        error: result.error,
+                        details: redactKey(result.body),
                     });
                 }
 
-                const resultData = await resultResponse.json();
+                const resultData = result.data;
                 const videoUrl = resultData?.video?.url || null;
 
                 if (videoUrl) {

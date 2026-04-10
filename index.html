@@ -151,7 +151,7 @@
                         </div>
                     </div>
 
-                    <div id="empty-state-no-key" class="empty-state__no-key" style="display: none;">
+                    <div id="empty-state-no-key" class="empty-state__no-key">
                         <p class="empty-state__no-key-text">You need an OpenRouter API key to generate images.</p>
                         <button id="empty-state-add-key-btn" class="empty-state__button" type="button">
                             Add API Key
@@ -171,7 +171,8 @@
         <div class="input-bar">
             <div class="input-bar__container">
                 <div class="input-bar__input-row">
-                    <input id="prompt-image-input" class="input-bar__file-input" type="file" accept="image/*" multiple>
+                    <label for="prompt-image-input" class="sr-only">Attach images</label>
+                    <input id="prompt-image-input" class="input-bar__file-input" type="file" accept="image/*" multiple aria-label="Attach images">
                     <button id="prompt-image-btn" class="input-bar__icon-btn" title="Attach images"
                         aria-label="Attach images">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -234,7 +235,7 @@
                                 </svg>
                                 <span class="folder-selector__name">All Photos</span>
                             </button>
-                            <div id="folder-selector-menu" class="input-bar__dropdown-menu" role="listbox">
+                            <div id="folder-selector-menu" class="input-bar__dropdown-menu" role="listbox" aria-label="Select folder">
                                 <!-- Dynamic folder options rendered here -->
                             </div>
                         </div>
@@ -347,7 +348,7 @@
                     </div>
                     <div class="input-bar__actions-right">
                         <button id="cancel-btn" class="input-bar__button input-bar__button--cancel"
-                            title="Cancel generation" aria-label="Cancel generation" style="display: none;">
+                            title="Cancel generation" aria-label="Cancel generation">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="10" />
@@ -396,12 +397,12 @@
                             Test
                         </button>
                     </div>
-                    <label class="settings-checkbox" style="margin-top: 8px;">
+                    <label class="settings-checkbox">
                         <input type="checkbox" id="setting-openrouter-key-show">
                         <span>Show API key</span>
                     </label>
-                    <span id="setting-openrouter-test-status" class="settings-hint" style="margin-top: 8px;"></span>
-                    <p class="settings-hint" style="margin-top: 8px;">
+                    <span id="setting-openrouter-test-status" class="settings-hint"></span>
+                    <p class="settings-hint">
                         This app stores your key in <code>localStorage</code> and sends it to <code>/api</code> on each
                         request.
                     </p>
@@ -422,12 +423,12 @@
                             Test
                         </button>
                     </div>
-                    <label class="settings-checkbox" style="margin-top: 8px;">
+                    <label class="settings-checkbox">
                         <input type="checkbox" id="setting-xai-key-show">
                         <span>Show API key</span>
                     </label>
-                    <span id="setting-xai-save-status" class="settings-hint" style="margin-top: 8px;"></span>
-                    <p class="settings-hint" style="margin-top: 8px;">
+                    <span id="setting-xai-save-status" class="settings-hint"></span>
+                    <p class="settings-hint">
                         Stored in <code>localStorage</code> and sent to <code>/api</code> when using Grok models.
                     </p>
                 </div>
@@ -447,12 +448,12 @@
                             Test
                         </button>
                     </div>
-                    <label class="settings-checkbox" style="margin-top: 8px;">
+                    <label class="settings-checkbox">
                         <input type="checkbox" id="setting-fal-key-show">
                         <span>Show API key</span>
                     </label>
-                    <span id="setting-fal-save-status" class="settings-hint" style="margin-top: 8px;"></span>
-                    <p class="settings-hint" style="margin-top: 8px;">
+                    <span id="setting-fal-save-status" class="settings-hint"></span>
+                    <p class="settings-hint">
                         Stored in <code>localStorage</code> and sent to <code>/api</code> when using Fal Seedream
                         models.
                     </p>
@@ -461,14 +462,14 @@
                 <!-- Model Selection -->
                 <div class="settings-group">
                     <label class="settings-label">Advanced</label>
-                    <p class="settings-hint" style="margin-top: 0;">Aspect ratio is supported for Gemini, Seedream, Fal,
+                    <p class="settings-hint settings-hint--flush">Aspect ratio is supported for Gemini, Seedream, Fal,
                         and xAI models. Gemini image size is Gemini only; Grok models use their own size settings.</p>
                 </div>
 
                 <!-- Aspect Ratio (Gemini and Seedream) -->
                 <div class="settings-group settings-group--hidden" id="aspect-ratio-group">
-                    <label class="settings-label">Aspect Ratio</label>
-                    <select id="setting-aspect-ratio" class="settings-select">
+                    <label class="settings-label" for="setting-aspect-ratio">Aspect Ratio</label>
+                    <select id="setting-aspect-ratio" class="settings-select" aria-label="Aspect Ratio">
                         <option value="1:1">1:1 (Square)</option>
                         <option value="4:3">4:3 (Landscape)</option>
                         <option value="3:4" selected>3:4 (Portrait)</option>
@@ -484,8 +485,8 @@
 
                 <!-- Resolution (Gemini only) -->
                 <div class="settings-group settings-group--hidden" id="resolution-group">
-                    <label class="settings-label">Gemini Image Size</label>
-                    <select id="setting-resolution" class="settings-select">
+                    <label class="settings-label" for="setting-resolution">Gemini Image Size</label>
+                    <select id="setting-resolution" class="settings-select" aria-label="Gemini Image Size">
                         <option value="1K" selected>1K</option>
                         <option value="2K">2K</option>
                         <option value="4K">4K</option>
@@ -505,8 +506,8 @@
 
                 <!-- Video Quality -->
                 <div class="settings-group settings-group--hidden" id="xai-video-quality-group">
-                    <label class="settings-label">Video Quality</label>
-                    <select id="setting-xai-video-quality" class="settings-select">
+                    <label class="settings-label" for="setting-xai-video-quality">Video Quality</label>
+                    <select id="setting-xai-video-quality" class="settings-select" aria-label="Video Quality">
                         <option value="720p" selected>720p</option>
                         <option value="480p">480p</option>
                         <option value="1080p">1080p</option>
@@ -561,7 +562,7 @@
             </button>
             <div class="modal__content">
                 <img class="modal__image modal__image--photo" src="" alt="">
-                <video class="modal__image modal__image--video" controls playsinline style="display: none;"></video>
+                <video class="modal__image modal__image--video" controls playsinline></video>
                 <div class="modal__info">
                     <div class="modal__prompt-container">
                         <p class="modal__prompt"></p>
@@ -629,11 +630,9 @@
                     <input type="text" id="folder-modal-input" class="settings-input" placeholder="Folder Name"
                         autocomplete="off">
                 </div>
-                <div class="openrouter-key-modal__actions" style="justify-content: flex-end; margin-top: 16px;">
-                    <button id="folder-modal-cancel" class="openrouter-key-modal__ok"
-                        style="background: transparent; border: 1px solid rgba(255,255,255,0.1);">Cancel</button>
-                    <button id="folder-modal-save" class="openrouter-key-modal__link"
-                        style="border: none; cursor: pointer;">Save</button>
+                <div class="openrouter-key-modal__actions">
+                    <button id="folder-modal-cancel" class="openrouter-key-modal__ok">Cancel</button>
+                    <button id="folder-modal-save" class="openrouter-key-modal__link">Save</button>
                 </div>
             </div>
         </div>

@@ -411,6 +411,7 @@ body.is-modal-open .spend-tracker {
 
 .input-bar__button--cancel {
     background: #ef4444;
+    display: none;
 }
 
 .input-bar__button--cancel:hover:not(:disabled) {
@@ -514,6 +515,10 @@ body.is-modal-open .spend-tracker {
     border: 1px solid rgba(255, 255, 255, 0.08);
     -webkit-user-drag: none;
     user-select: none;
+}
+
+.modal__image--video {
+    display: none;
 }
 
 .modal__info {
@@ -1099,6 +1104,7 @@ body.is-modal-open .spend-tracker {
     cursor: pointer;
     font-size: 0.875rem;
     color: var(--text-primary);
+    margin-top: 8px;
 }
 
 .settings-checkbox input[type="checkbox"] {
@@ -1209,6 +1215,30 @@ body.is-modal-open .spend-tracker {
     margin-top: var(--spacing-xs);
     font-size: 0.75rem;
     color: var(--text-muted);
+}
+
+.settings-hint--flush {
+    margin-top: 0;
+}
+
+.settings-checkbox ~ .settings-hint {
+    margin-top: 8px;
+}
+
+#setting-openrouter-test-status,
+#setting-xai-save-status,
+#setting-fal-save-status {
+    margin-top: 8px;
+}
+
+#folder-modal-cancel {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#folder-modal-save {
+    border: none;
+    cursor: pointer;
 }
 
 /* Multi-Image Upload */
@@ -1514,6 +1544,8 @@ body.is-modal-open .spend-tracker {
     display: flex;
     gap: var(--spacing-sm);
     align-items: center;
+    justify-content: flex-end;
+    margin-top: 16px;
 }
 
 .openrouter-key-modal__link {
