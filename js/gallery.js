@@ -617,8 +617,6 @@ function createImageCard(image, preloaded = false) {
         ? createElement('video', {
             className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
             src: image.url,
-            muted: true,
-            playsinline: true,
             preload: 'metadata',
             'aria-label': image.prompt
         })
@@ -628,6 +626,14 @@ function createImageCard(image, preloaded = false) {
             alt: image.prompt,
             loading: 'lazy'
         });
+
+    if (media instanceof HTMLVideoElement) {
+        media.muted = true;
+        media.defaultMuted = true;
+        media.autoplay = true;
+        media.loop = true;
+        media.playsInline = true;
+    }
 
     if (!preloaded) {
         const handleLoaded = () => {
@@ -852,9 +858,10 @@ async function openLightbox(image) {
 
     if (image.mediaType === 'video') {
         if (modalVideo) {
-            modalVideo.style.display = '';
+            modalVideo.style.display = 'block';
             modalVideo.src = image.url;
             modalVideo.classList.add('modal__image--loading');
+            modalVideo.load();
         }
         if (modalImage) {
             modalImage.style.display = 'none';
@@ -1022,6 +1029,10 @@ async function openLightbox(image) {
         const fullUrl = await state.getFullImageUrl(image.id);
         if (fullUrl && modal.classList.contains('modal--active')) {
             modalVideo.src = fullUrl;
+            modalVideo.load();
+            modalVideo.play().catch((error) => {
+                console.debug('Video autoplay was blocked:', error);
+            });
         }
         modalVideo.classList.remove('modal__image--loading');
     } else if (modalImage) {
@@ -1042,6 +1053,7 @@ export function closeLightbox() {
 
     const modalVideo = modal.querySelector('.modal__image--video');
     if (modalVideo instanceof HTMLVideoElement) {
+        modalVideo.style.display = 'none';
         modalVideo.pause();
         modalVideo.removeAttribute('src');
         modalVideo.load();
@@ -1101,10 +1113,6 @@ export function initLightbox() {
 
     if (modalImage) {
         modalImage.addEventListener('click', toggleUi);
-    }
-
-    if (modalVideo) {
-        modalVideo.addEventListener('click', toggleUi);
     }
 
     // Close on escape key
