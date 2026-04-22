@@ -1,4 +1,4 @@
-const { withMiddleware, redactKey } = require('./_middleware');
+const { withMiddleware, redactKey, resolveOpenRouterApiKey } = require('./_middleware');
 
 module.exports = withMiddleware(async function handler(req, res) {
     const {
@@ -37,6 +37,9 @@ module.exports = withMiddleware(async function handler(req, res) {
         'fal-ai/wan/v2.7/pro/text-to-image',
         'fal-ai/wan/v2.7/edit',
         'fal-ai/wan/v2.7/pro/edit',
+        'fal-ai/ernie-image/lora',
+        'fal-ai/ernie-image/lora/turbo',
+        'fal-ai/nucleus-image',
     ];
     const FAL_VIDEO_MODEL_IDS = [
         'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',
@@ -61,9 +64,7 @@ module.exports = withMiddleware(async function handler(req, res) {
 
     const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-    const OPENROUTER_API_KEY =
-        req.headers['x-openrouter-api-key'] ||
-        req.headers['x-openrouter-api_key'];
+    const OPENROUTER_API_KEY = resolveOpenRouterApiKey(req);
 
     if (!isXaiModel && !isFalModel && !isFalVideoModel && !OPENROUTER_API_KEY) {
         return res.status(401).json({
@@ -138,7 +139,20 @@ module.exports = withMiddleware(async function handler(req, res) {
             });
         }
 
+        // Nucleus uses aspect_ratio presets, not image_size (see fal-ai/nucleus-image)
+        const isNucleusImageModel = model === 'fal-ai/nucleus-image';
+        const normalizeNucleusAspectRatio = (ar) => {
+            const allowed = new Set(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']);
+            if (typeof ar === 'string' && allowed.has(ar.trim())) {
+                return ar.trim();
+            }
+            return '1:1';
+        };
+
         // Map UI aspect ratio (e.g. "1:1", "4:3") to Fal image_size enum
+        const isErnieTurboModel = model === 'fal-ai/ernie-image/lora/turbo';
+        const isErnieImageModel =
+            model === 'fal-ai/ernie-image/lora' || isErnieTurboModel;
         const aspectRatioToFalImageSize = (ar) => {
             switch (ar) {
                 case '1:1': return 'square_hd';
@@ -146,19 +160,66 @@ module.exports = withMiddleware(async function handler(req, res) {
                 case '3:4': return 'portrait_4_3';
                 case '16:9': return 'landscape_16_9';
                 case '9:16': return 'portrait_16_9';
-                default: return 'auto_2K';
+                default: return isErnieImageModel ? 'square_hd' : 'auto_2K';
             }
         };
 
-        const falImageSize = aspectRatioToFalImageSize(normalizedAspectRatio);
+        let falImageSize;
+        if (!isNucleusImageModel) {
+            falImageSize = aspectRatioToFalImageSize(normalizedAspectRatio);
+        }
 
-        const falPayload = {
-            prompt: prompt.trim(),
-            image_size: falImageSize,
-            num_images: parsedNumImages,
-            enable_safety_checker: false,
-            enable_output_safety_checker: false,
+        /** Ernie: $0.015/Mpix — rough display estimate from preset */
+        const estimateErnieMegapixels = (imageSize) => {
+            switch (imageSize) {
+                case 'square':
+                case 'square_hd':
+                    return 1.0;
+                case 'landscape_4_3':
+                case 'portrait_4_3':
+                    return 1.2;
+                case 'landscape_16_9':
+                case 'portrait_16_9':
+                    return 1.6;
+                default:
+                    return 1.0;
+            }
         };
+
+        /** @type {Record<string, unknown>} */
+        let falPayload;
+        if (isNucleusImageModel) {
+            // https://fal.ai/models/fal-ai/nucleus-image/api
+            falPayload = {
+                prompt: prompt.trim(),
+                aspect_ratio: normalizeNucleusAspectRatio(normalizedAspectRatio),
+                num_images: parsedNumImages,
+                num_inference_steps: 50,
+                guidance_scale: 8,
+                enable_safety_checker: false,
+                output_format: 'png',
+            };
+        } else if (isErnieImageModel) {
+            // Turbo: 8 / 1 (turbo-optimized). Base lora: 50 / 5 per
+            // https://fal.ai/models/fal-ai/ernie-image/lora/api
+            falPayload = {
+                prompt: prompt.trim(),
+                image_size: falImageSize,
+                num_images: parsedNumImages,
+                num_inference_steps: isErnieTurboModel ? 8 : 50,
+                guidance_scale: isErnieTurboModel ? 1 : 5,
+                enable_safety_checker: false,
+                enable_prompt_expansion: false,
+            };
+        } else {
+            falPayload = {
+                prompt: prompt.trim(),
+                image_size: falImageSize,
+                num_images: parsedNumImages,
+                enable_safety_checker: false,
+                enable_output_safety_checker: false,
+            };
+        }
 
         if (isFalEditModel) {
             falPayload.image_urls = normalizedInputImages;
@@ -191,8 +252,10 @@ module.exports = withMiddleware(async function handler(req, res) {
                 return res.status(502).json({ error: 'No images returned from Fal' });
             }
 
-            // Fal pricing: $0.04 per image for Seedream models
-            const costPerImage = 0.04;
+            // Fal pricing: flat $0.04/image (Seedream/Wan/Nucleus); Ernie: ~$0.015/Mpix
+            const costPerImage = isErnieImageModel && typeof falImageSize === 'string'
+                ? 0.015 * estimateErnieMegapixels(falImageSize)
+                : 0.04;
             const limited = falImages.slice(0, parsedNumImages);
             const totalCost = costPerImage * limited.length;
 

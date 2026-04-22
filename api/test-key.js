@@ -1,9 +1,7 @@
-const { withMiddleware, redactKey } = require('./_middleware');
+const { withMiddleware, redactKey, resolveOpenRouterApiKey } = require('./_middleware');
 
 module.exports = withMiddleware(async function handler(req, res) {
-    const OPENROUTER_API_KEY =
-        req.headers['x-openrouter-api-key'] ||
-        req.headers['x-openrouter-api_key'];
+    const OPENROUTER_API_KEY = resolveOpenRouterApiKey(req);
 
     if (!OPENROUTER_API_KEY) {
         return res.status(401).json({

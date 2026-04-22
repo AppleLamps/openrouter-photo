@@ -17,10 +17,28 @@ const resolveCorsOrigin = (req) => {
 };
 
 /**
+ * OpenRouter key: prefer client header, then server env. Trims; empty string → null.
+ * Accepts the header spellings the app historically used, plus `x-openrouter-api_key`.
+ * @param {import('http').IncomingMessage} req
+ * @returns {string | null}
+ */
+function resolveOpenRouterApiKey(req) {
+    const fromHeader =
+        req.headers['x-openrouter-api-key'] ||
+        req.headers['x-openrouter_api_key'] ||
+        req.headers['x-openrouter-api_key'];
+    const raw = fromHeader || process.env.OPENROUTER_API_KEY;
+    if (raw == null) return null;
+    const t = String(raw).trim();
+    return t.length > 0 ? t : null;
+}
+
+/**
  * Redact OpenRouter API keys from text to prevent leaking secrets in logs/responses.
  * @param {string} text
  * @returns {string}
  */
+
 const redactKey = (text) => {
     if (!text) return text;
     const str = String(text);
@@ -87,4 +105,4 @@ function withMiddleware(handler, options = {}) {
     };
 }
 
-module.exports = { withMiddleware, redactKey };
+module.exports = { withMiddleware, redactKey, resolveOpenRouterApiKey };
