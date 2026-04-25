@@ -14,6 +14,15 @@ import { generateId } from './utils.js';
 import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, showErrorCard, initLightbox, closeLightbox } from './gallery.js';
 import { formatBytes } from './image-utils.js';
 import { initSidebar } from './sidebar.js';
+import {
+    MODELS,
+    CAPABILITY_TABS,
+    TYPE_PILL_LABEL,
+    TIER_LABEL,
+    DEFAULT_MODEL_ID,
+    findModelById,
+    getTriggerLabel,
+} from './models.js';
 
 const SPEND_STORAGE_KEY = 'openrouter_spend_v1';
 
@@ -392,50 +401,228 @@ function syncModelDropdownUI() {
     }
 }
 
-const MODEL_SHORT_NAMES = {
-    'bytedance-seed/seedream-4.5': 'seedream v4.5',
-    'fal-ai/bytedance/seedream/v4.5/text-to-image': 'seedream v4.5 text',
-    'fal-ai/bytedance/seedream/v4.5/edit': 'seedream v4.5 edit',
-    'fal-ai/bytedance/seedream/v5/lite/text-to-image': 'seedream v5 lite text',
-    'fal-ai/bytedance/seedream/v5/lite/edit': 'seedream v5 lite edit',
-    'black-forest-labs/flux.2-max': 'flux.2 max',
-    'black-forest-labs/flux.2-flex': 'flux.2 flex',
-    'black-forest-labs/flux.2-pro': 'flux.2 pro',
-    'google/gemini-3-pro-image-preview': 'gemini 3 pro image',
-    'google/gemini-2.5-flash-image': 'gemini 2.5 flash image',
-    'openai/gpt-5-image-mini': 'gpt-5 image mini',
-    'openai/gpt-5-image': 'gpt-5 image',
-    'grok-imagine-image': 'grok image',
-    'grok-imagine-image-pro': 'grok image pro',
-    'grok-imagine-video': 'grok video',
-    'fal-ai/bytedance/seedance/v1.5/pro/text-to-video': 'seedance v1.5 text-to-video',
-    'fal-ai/bytedance/seedance/v1.5/pro/image-to-video': 'seedance v1.5 img-to-video',
-    'fal-ai/bytedance/seedance-2.0/text-to-video': 'seedance 2.0 text-to-video',
-    'fal-ai/bytedance/seedance-2.0/image-to-video': 'seedance 2.0 img-to-video',
-    'fal-ai/wan/v2.7/text-to-image': 'wan 2.7 text',
-    'fal-ai/wan/v2.7/pro/text-to-image': 'wan 2.7 pro text',
-    'fal-ai/wan/v2.7/edit': 'wan 2.7 edit',
-    'fal-ai/wan/v2.7/pro/edit': 'wan 2.7 pro edit',
-    'fal-ai/nucleus-image': 'nucleus image',
-    'fal-ai/ernie-image/lora': 'ernie image lora',
-    'fal-ai/ernie-image/lora/turbo': 'ernie image turbo',
-    'sourceful/riverflow-v2-max-preview': 'riverflow v2 max',
-    'sourceful/riverflow-v2-standard-preview': 'riverflow v2 standard',
-    'sourceful/riverflow-v2-fast-preview': 'riverflow v2 fast',
-};
-
 function initModelDropdown() {
-    modelDropdown = createDropdown({
-        dropdownId: 'model-dropdown',
-        hiddenId: 'setting-model',
-        triggerId: 'model-trigger',
-        menuId: 'model-menu',
-        defaultValue: true,
-        placeholder: 'Select model',
-        showTitle: true,
-        dispatchChange: true,
-        formatDisplay: (v) => MODEL_SHORT_NAMES[v] || v || 'Select model'
+    modelDropdown = createModelPicker();
+}
+
+/**
+ * Build the searchable, tab-filtered, provider-grouped model picker.
+ * Returns the same { syncUI, setValue, close } shape as createDropdown so the
+ * rest of the app (which calls modelDropdown.syncUI() / .setValue()) keeps working.
+ */
+function createModelPicker() {
+    const dropdown = document.getElementById('model-dropdown');
+    const trigger = document.getElementById('model-trigger');
+    const menu = document.getElementById('model-menu');
+    const hidden = document.getElementById('setting-model');
+    const search = /** @type {HTMLInputElement|null} */ (document.getElementById('model-picker-search'));
+    const tabsEl = document.getElementById('model-picker-tabs');
+    const listEl = document.getElementById('model-picker-list');
+
+    if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement)
+        || !menu || !search || !tabsEl || !listEl) {
+        return null;
+    }
+
+    let activeTab = 'all';
+    let query = '';
+
+    if (!hidden.value || !findModelById(hidden.value)) {
+        hidden.value = DEFAULT_MODEL_ID;
+    }
+
+    const syncTriggerLabel = () => {
+        trigger.textContent = getTriggerLabel(hidden.value);
+        trigger.title = hidden.value || 'Select model';
+    };
+
+    // ── Tabs ─────────────────────────────────────────────────────────
+    tabsEl.innerHTML = '';
+    CAPABILITY_TABS.forEach(tab => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'model-picker__tab';
+        btn.dataset.tab = tab.id;
+        btn.setAttribute('role', 'tab');
+        btn.textContent = tab.label;
+        if (tab.id === activeTab) btn.setAttribute('aria-selected', 'true');
+        btn.addEventListener('click', () => {
+            activeTab = tab.id;
+            tabsEl.querySelectorAll('.model-picker__tab').forEach(t => {
+                t.setAttribute('aria-selected', t === btn ? 'true' : 'false');
+            });
+            renderList();
+        });
+        tabsEl.appendChild(btn);
     });
+
+    // ── Filtering ────────────────────────────────────────────────────
+    const matches = (m) => {
+        const tabDef = CAPABILITY_TABS.find(t => t.id === activeTab);
+        if (tabDef?.types && !tabDef.types.includes(m.type)) return false;
+        if (!query) return true;
+        const q = query.toLowerCase();
+        return m.name.toLowerCase().includes(q)
+            || m.provider.toLowerCase().includes(q)
+            || (m.via || '').toLowerCase().includes(q)
+            || m.id.toLowerCase().includes(q);
+    };
+
+    const setValue = (value) => {
+        if (!value || hidden.value === value) {
+            hidden.value = value || hidden.value;
+        } else {
+            hidden.value = value;
+        }
+        syncTriggerLabel();
+        // Update aria-selected on rows
+        listEl.querySelectorAll('.model-picker__row').forEach((row) => {
+            row.setAttribute('aria-selected', row.getAttribute('data-value') === hidden.value ? 'true' : 'false');
+        });
+        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    // ── Row construction ─────────────────────────────────────────────
+    const buildBadge = (cls, text) => {
+        const span = document.createElement('span');
+        span.className = `model-picker__badge ${cls}`;
+        span.textContent = text;
+        return span;
+    };
+
+    const buildRow = (m) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'model-picker__row';
+        row.setAttribute('role', 'option');
+        row.setAttribute('data-value', m.id);
+        row.setAttribute('aria-selected', hidden.value === m.id ? 'true' : 'false');
+
+        const main = document.createElement('div');
+        main.className = 'model-picker__row-main';
+
+        const name = document.createElement('span');
+        name.className = 'model-picker__row-name';
+        name.textContent = m.name;
+        main.appendChild(name);
+
+        const badges = document.createElement('div');
+        badges.className = 'model-picker__row-badges';
+
+        const typeText = TYPE_PILL_LABEL[m.type];
+        if (typeText) badges.appendChild(buildBadge(`model-picker__badge--type model-picker__badge--type-${m.type}`, typeText));
+        if (m.tier) badges.appendChild(buildBadge(`model-picker__badge--tier model-picker__badge--tier-${m.tier}`, TIER_LABEL[m.tier] || m.tier));
+        if (m.via) badges.appendChild(buildBadge('model-picker__badge--via', `via ${m.via}`));
+
+        main.appendChild(badges);
+        row.appendChild(main);
+
+        // Selection check (visible only when aria-selected="true" via CSS)
+        const check = document.createElement('span');
+        check.className = 'model-picker__row-check';
+        check.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+        row.appendChild(check);
+
+        row.addEventListener('click', () => {
+            setValue(m.id);
+            close();
+        });
+        return row;
+    };
+
+    const renderList = () => {
+        listEl.innerHTML = '';
+        const filtered = MODELS.filter(matches);
+
+        if (filtered.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'model-picker__empty';
+            empty.textContent = 'No models match your search.';
+            listEl.appendChild(empty);
+            return;
+        }
+
+        // Group by provider, preserving the order each provider first appears in MODELS.
+        const groups = new Map();
+        filtered.forEach(m => {
+            if (!groups.has(m.provider)) groups.set(m.provider, []);
+            groups.get(m.provider).push(m);
+        });
+
+        groups.forEach((models, provider) => {
+            const group = document.createElement('div');
+            group.className = 'model-picker__group';
+
+            const header = document.createElement('div');
+            header.className = 'model-picker__group-header';
+            header.textContent = provider;
+            group.appendChild(header);
+
+            models.forEach(m => group.appendChild(buildRow(m)));
+            listEl.appendChild(group);
+        });
+    };
+
+    // ── Open / close ─────────────────────────────────────────────────
+    const close = () => {
+        dropdown.classList.remove('is-open');
+        document.body.classList.remove('model-picker-open');
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const open = () => {
+        dropdown.classList.add('is-open');
+        document.body.classList.add('model-picker-open');
+        trigger.setAttribute('aria-expanded', 'true');
+        renderList();
+        // Focus search after the menu renders so iOS doesn't suppress the keyboard.
+        requestAnimationFrame(() => {
+            search.value = query;
+            search.focus({ preventScroll: true });
+        });
+        // Scroll the selected row into view
+        requestAnimationFrame(() => {
+            const sel = listEl.querySelector('[aria-selected="true"]');
+            if (sel instanceof HTMLElement) sel.scrollIntoView({ block: 'nearest' });
+        });
+    };
+
+    trigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropdown.classList.contains('is-open') ? close() : open();
+    });
+
+    search.addEventListener('input', () => {
+        query = search.value.trim();
+        renderList();
+    });
+
+    search.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            // Pick the first matching row.
+            const first = listEl.querySelector('.model-picker__row');
+            if (first instanceof HTMLElement) first.click();
+        } else if (e.key === 'Escape') {
+            close();
+        }
+    });
+
+    // Close when clicking the backdrop on mobile
+    menu.addEventListener('click', (e) => {
+        if (e.target === menu) close();
+    });
+
+    _openDropdowns.add({ element: dropdown, close });
+
+    syncTriggerLabel();
+    renderList();
+
+    return {
+        syncUI: syncTriggerLabel,
+        setValue,
+        close,
+    };
 }
 
 function initNumImagesDropdown() {

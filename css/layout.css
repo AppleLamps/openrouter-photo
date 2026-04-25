@@ -510,8 +510,8 @@
 /* Sidebar expand button (floating) */
 .sidebar__expand-btn {
     position: fixed;
-    left: 14px;
-    top: 14px;
+    left: calc(env(safe-area-inset-left) + 14px);
+    top: calc(env(safe-area-inset-top) + 14px);
     z-index: 50;
     width: 44px;
     height: 44px;
@@ -525,6 +525,7 @@
     color: var(--text-secondary);
     cursor: pointer;
     transition: all var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .sidebar__expand-btn:hover {

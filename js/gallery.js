@@ -1106,8 +1106,14 @@ export function initLightbox() {
     });
 
     // Tap image to toggle UI (mobile-friendly "clean view")
-    const toggleUi = () => {
+    let suppressNextImageClick = false;
+    const toggleUi = (e) => {
         if (!modal.classList.contains('modal--active')) return;
+        if (suppressNextImageClick) {
+            suppressNextImageClick = false;
+            e?.preventDefault?.();
+            return;
+        }
         modal.classList.toggle('modal--ui-hidden');
     };
 
@@ -1176,9 +1182,16 @@ export function initLightbox() {
             const elapsed = Math.max(Date.now() - lightboxSwipeState.startTime, 1);
             const velocity = lightboxSwipeState.deltaY / elapsed; // px/ms
             const shouldClose = lightboxSwipeState.deltaY > 110 || velocity > 0.85;
+            const wasDragged = lightboxSwipeState.deltaY > 6;
 
             modal.classList.remove('modal--dragging');
             modalContent.style.transform = '';
+
+            // If the gesture moved enough to be a drag (not just a tap), eat the
+            // synthesized click that follows touchend so it doesn't toggle the UI.
+            if (wasDragged) {
+                suppressNextImageClick = true;
+            }
 
             if (shouldClose) {
                 closeLightbox();

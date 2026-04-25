@@ -17,15 +17,29 @@
     aspect-ratio: 1;
     will-change: transform;
     contain: layout style paint;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.gallery__card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+/* Hover effects only on devices with a real pointer (avoids sticky :hover on iOS) */
+@media (hover: hover) and (pointer: fine) {
+    .gallery__card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .gallery__card:hover .gallery__delete-btn {
+        opacity: 1;
+    }
+
+    .gallery__card:hover .gallery__image {
+        transform: scale(1.05);
+    }
 }
 
-.gallery__card:hover .gallery__delete-btn {
-    opacity: 1;
+/* Touch feedback: brief press-down */
+.gallery__card:active {
+    transform: scale(0.98);
+    transition-duration: 0.08s;
 }
 
 /* Image */
@@ -35,10 +49,6 @@
     object-fit: cover;
     display: block;
     transition: transform 0.3s ease;
-}
-
-.gallery__card:hover .gallery__image {
-    transform: scale(1.05);
 }
 
 /* Overlay - Hidden by default, only show delete on hover */
@@ -379,28 +389,39 @@
     position: absolute;
     top: 8px;
     right: 8px;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     color: white;
     border-radius: 50%;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     opacity: 0;
-    transition: all 0.15s ease;
+    transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease;
     z-index: 10;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.gallery__card:hover .gallery__delete-btn {
-    opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+    .gallery__card:hover .gallery__delete-btn {
+        opacity: 1;
+    }
+
+    .gallery__delete-btn:hover {
+        background: #ef4444;
+        transform: scale(1.1);
+    }
 }
 
-.gallery__delete-btn:hover {
-    background: #ef4444;
-    transform: scale(1.1);
+/* On touch devices, always show the delete button (no hover available) */
+@media (hover: none), (pointer: coarse) {
+    .gallery__delete-btn {
+        opacity: 0.85;
+    }
 }
 
 /* Delete Button Confirmation State */

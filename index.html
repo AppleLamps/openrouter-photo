@@ -239,99 +239,30 @@
                                 <!-- Dynamic folder options rendered here -->
                             </div>
                         </div>
-                        <div class="input-bar__inline-dropdown" id="model-dropdown">
+                        <div class="input-bar__inline-dropdown model-picker-dropdown" id="model-dropdown">
                             <input id="setting-model" type="hidden"
                                 value="fal-ai/bytedance/seedream/v4.5/text-to-image">
                             <button id="model-trigger" type="button"
-                                class="input-bar__inline-select input-bar__dropdown-trigger" aria-haspopup="listbox"
+                                class="input-bar__inline-select input-bar__dropdown-trigger" aria-haspopup="dialog"
                                 aria-expanded="false" title="Model">
-                                fal-ai/bytedance/seedream/v4.5/text-to-image
+                                Model
                             </button>
-                            <div id="model-menu" class="input-bar__dropdown-menu input-bar__dropdown-menu--model"
-                                role="listbox" aria-label="Model">
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="bytedance-seed/seedream-4.5">bytedance-seed/seedream-4.5</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/bytedance/seedream/v4.5/text-to-image">fal:
-                                    seedream-4.5 text-to-image</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/bytedance/seedream/v4.5/edit">fal: seedream-4.5
-                                    edit</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/bytedance/seedream/v5/lite/text-to-image">fal:
-                                    seedream-5 lite text-to-image</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/bytedance/seedream/v5/lite/edit">fal: seedream-5
-                                    lite edit</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="black-forest-labs/flux.2-max">black-forest-labs/flux.2-max</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="black-forest-labs/flux.2-flex">black-forest-labs/flux.2-flex</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="black-forest-labs/flux.2-pro">black-forest-labs/flux.2-pro</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="google/gemini-3-pro-image-preview">google/gemini-3-pro-image-preview</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="google/gemini-2.5-flash-image">google/gemini-2.5-flash-image</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="openai/gpt-5-image-mini">openai/gpt-5-image-mini</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="openai/gpt-5-image">openai/gpt-5-image</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="grok-imagine-image">grok-imagine-image</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="grok-imagine-image-pro">grok-imagine-image-pro</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="grok-imagine-video">grok-imagine-video</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/bytedance/seedance/v1.5/pro/text-to-video">fal:
-                                    seedance-1.5
-                                    pro text-to-video</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/bytedance/seedance/v1.5/pro/image-to-video">fal:
-                                    seedance-1.5
-                                    pro image-to-video</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/bytedance/seedance-2.0/text-to-video">fal:
-                                    seedance-2.0 text-to-video</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/bytedance/seedance-2.0/image-to-video">fal:
-                                    seedance-2.0 image-to-video</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/wan/v2.7/text-to-image">fal: wan 2.7
-                                    text-to-image</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/wan/v2.7/pro/text-to-image">fal: wan 2.7 pro
-                                    text-to-image</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/wan/v2.7/edit">fal: wan 2.7
-                                    edit</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/wan/v2.7/pro/edit">fal: wan 2.7 pro
-                                    edit</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/nucleus-image">fal: nucleus image</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/ernie-image/lora">fal: ernie image
-                                    lora</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option" data-value="fal-ai/ernie-image/lora/turbo">fal: ernie image
-                                    lora turbo</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="sourceful/riverflow-v2-max-preview">sourceful/riverflow-v2-max-preview</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="sourceful/riverflow-v2-standard-preview">sourceful/riverflow-v2-standard-preview</button>
-                                <button type="button" class="input-bar__dropdown-item input-bar__dropdown-item--model"
-                                    role="option"
-                                    data-value="sourceful/riverflow-v2-fast-preview">sourceful/riverflow-v2-fast-preview</button>
+                            <div id="model-menu" class="input-bar__dropdown-menu input-bar__dropdown-menu--model model-picker"
+                                role="dialog" aria-label="Choose a model">
+                                <div class="model-picker__search-wrap">
+                                    <svg class="model-picker__search-icon" xmlns="http://www.w3.org/2000/svg"
+                                        width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                    <input id="model-picker-search" class="model-picker__search" type="text"
+                                        placeholder="Search models…" aria-label="Search models" autocomplete="off"
+                                        spellcheck="false">
+                                </div>
+                                <div id="model-picker-tabs" class="model-picker__tabs" role="tablist"></div>
+                                <div id="model-picker-list" class="model-picker__list" role="listbox"
+                                    aria-label="Models"></div>
                             </div>
                         </div>
                         <div class="input-bar__inline-dropdown" id="num-images-dropdown">
