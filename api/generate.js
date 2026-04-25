@@ -40,6 +40,11 @@ module.exports = withMiddleware(async function handler(req, res) {
         'fal-ai/ernie-image/lora',
         'fal-ai/ernie-image/lora/turbo',
         'fal-ai/nucleus-image',
+        'fal-ai/z-image/turbo/lora',
+        'fal-ai/bitdance',
+        'fal-ai/qwen-image-max/text-to-image',
+        'fal-ai/qwen-image-max/edit',
+        'fal-ai/reve/edit',
     ];
     const FAL_VIDEO_MODEL_IDS = [
         'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',
@@ -49,8 +54,11 @@ module.exports = withMiddleware(async function handler(req, res) {
     ];
     const isFalModel = FAL_MODEL_IDS.includes(model);
     const isFalVideoModel = FAL_VIDEO_MODEL_IDS.includes(model);
+    const isReveEditModel = model === 'fal-ai/reve/edit';
     const isFalEditModel = model === 'fal-ai/bytedance/seedream/v4.5/edit' || model === 'fal-ai/bytedance/seedream/v5/lite/edit' ||
-        model === 'fal-ai/wan/v2.7/edit' || model === 'fal-ai/wan/v2.7/pro/edit';
+        model === 'fal-ai/wan/v2.7/edit' || model === 'fal-ai/wan/v2.7/pro/edit' ||
+        model === 'fal-ai/qwen-image-max/edit' ||
+        isReveEditModel;
 
     const XAI_API_KEY =
         req.headers['x-xai-api-key'] ||
@@ -149,18 +157,30 @@ module.exports = withMiddleware(async function handler(req, res) {
             return '1:1';
         };
 
-        // Map UI aspect ratio (e.g. "1:1", "4:3") to Fal image_size enum
+        // Map UI aspect ratio (e.g. "1:1", "4:3") to Fal image_size enum (or a
+        // custom { width, height } for ratios outside the enum).
         const isErnieTurboModel = model === 'fal-ai/ernie-image/lora/turbo';
         const isErnieImageModel =
             model === 'fal-ai/ernie-image/lora' || isErnieTurboModel;
+        const isZImageModel = model === 'fal-ai/z-image/turbo/lora';
+        const isBitdanceModel = model === 'fal-ai/bitdance';
+        const isQwenImageMaxT2IModel = model === 'fal-ai/qwen-image-max/text-to-image';
+        const isQwenImageMaxEditModel = model === 'fal-ai/qwen-image-max/edit';
+        const isQwenImageMaxModel = isQwenImageMaxT2IModel || isQwenImageMaxEditModel;
+        const usesPresetImageSize = isErnieImageModel || isZImageModel || isBitdanceModel || isQwenImageMaxModel;
         const aspectRatioToFalImageSize = (ar) => {
             switch (ar) {
-                case '1:1': return 'square_hd';
-                case '4:3': return 'landscape_4_3';
-                case '3:4': return 'portrait_4_3';
+                case '1:1':  return 'square_hd';
+                case '4:3':  return 'landscape_4_3';
+                case '3:4':  return 'portrait_4_3';
                 case '16:9': return 'landscape_16_9';
                 case '9:16': return 'portrait_16_9';
-                default: return isErnieImageModel ? 'square_hd' : 'auto_2K';
+                // Custom dimensions targeting ~1 Mpix in multiples of 64.
+                case '3:2':  return { width: 1216, height: 832 };
+                case '2:3':  return { width: 832,  height: 1216 };
+                case '21:9': return { width: 1568, height: 672 };
+                case '9:21': return { width: 672,  height: 1568 };
+                default:     return usesPresetImageSize ? 'landscape_4_3' : 'auto_2K';
             }
         };
 
@@ -169,8 +189,12 @@ module.exports = withMiddleware(async function handler(req, res) {
             falImageSize = aspectRatioToFalImageSize(normalizedAspectRatio);
         }
 
-        /** Ernie: $0.015/Mpix — rough display estimate from preset */
-        const estimateErnieMegapixels = (imageSize) => {
+        /** Approximate megapixels for the Fal image_size value — used for $/Mpix pricing. */
+        const estimateMegapixelsFromImageSize = (imageSize) => {
+            if (imageSize && typeof imageSize === 'object'
+                && Number.isFinite(imageSize.width) && Number.isFinite(imageSize.height)) {
+                return (imageSize.width * imageSize.height) / 1_000_000;
+            }
             switch (imageSize) {
                 case 'square':
                 case 'square_hd':
@@ -211,6 +235,53 @@ module.exports = withMiddleware(async function handler(req, res) {
                 enable_safety_checker: false,
                 enable_prompt_expansion: false,
             };
+        } else if (isZImageModel) {
+            // Z-Image Turbo (Tongyi-MAI 6B). Steps capped at 8; "regular" acceleration.
+            // https://fal.ai/models/fal-ai/z-image/turbo/lora/api
+            falPayload = {
+                prompt: prompt.trim(),
+                image_size: falImageSize,
+                num_images: parsedNumImages,
+                num_inference_steps: 8,
+                acceleration: 'regular',
+                output_format: 'png',
+                enable_safety_checker: false,
+                enable_prompt_expansion: false,
+            };
+        } else if (isBitdanceModel) {
+            // BitDance autoregressive image model — flat $0.01/image.
+            // https://fal.ai/models/fal-ai/bitdance/api
+            falPayload = {
+                prompt: prompt.trim(),
+                image_size: falImageSize,
+                num_images: parsedNumImages,
+                num_inference_steps: 25,
+                guidance_scale: 7.5,
+                output_format: 'png',
+                enable_safety_checker: false,
+            };
+        } else if (isQwenImageMaxModel) {
+            // Qwen-Image-Max (text-to-image and edit) — flat $0.075/image.
+            // 800-char prompt limit; built-in LLM prompt expansion.
+            // image_urls is appended below by the shared isFalEditModel block.
+            // https://fal.ai/models/fal-ai/qwen-image-max
+            falPayload = {
+                prompt: prompt.trim().slice(0, 800),
+                image_size: falImageSize,
+                num_images: parsedNumImages,
+                output_format: 'png',
+                enable_prompt_expansion: true,
+                enable_safety_checker: false,
+            };
+        } else if (isReveEditModel) {
+            // Reve edit — flat $0.04/image. No image_size / steps / guidance.
+            // Takes a single `image_url` (string), not `image_urls` (array).
+            // https://fal.ai/models/fal-ai/reve/edit/api
+            falPayload = {
+                prompt: prompt.trim(),
+                num_images: parsedNumImages,
+                output_format: 'png',
+            };
         } else {
             falPayload = {
                 prompt: prompt.trim(),
@@ -222,7 +293,12 @@ module.exports = withMiddleware(async function handler(req, res) {
         }
 
         if (isFalEditModel) {
-            falPayload.image_urls = normalizedInputImages;
+            // Reve takes a single `image_url`; the others take an `image_urls` array.
+            if (isReveEditModel) {
+                falPayload.image_url = normalizedInputImages[0];
+            } else {
+                falPayload.image_urls = normalizedInputImages;
+            }
         }
 
         try {
@@ -252,10 +328,21 @@ module.exports = withMiddleware(async function handler(req, res) {
                 return res.status(502).json({ error: 'No images returned from Fal' });
             }
 
-            // Fal pricing: flat $0.04/image (Seedream/Wan/Nucleus); Ernie: ~$0.015/Mpix
-            const costPerImage = isErnieImageModel && typeof falImageSize === 'string'
-                ? 0.015 * estimateErnieMegapixels(falImageSize)
-                : 0.04;
+            // Fal pricing: flat $0.04/image (Seedream/Wan/Nucleus);
+            //   Ernie: ~$0.015/Mpix; Z-Image Turbo: $0.0085/Mpix;
+            //   BitDance: flat $0.01/image; Qwen-Image-Max: flat $0.075/image.
+            let costPerImage;
+            if (isErnieImageModel && falImageSize) {
+                costPerImage = 0.015 * estimateMegapixelsFromImageSize(falImageSize);
+            } else if (isZImageModel && falImageSize) {
+                costPerImage = 0.0085 * estimateMegapixelsFromImageSize(falImageSize);
+            } else if (isBitdanceModel) {
+                costPerImage = 0.01;
+            } else if (isQwenImageMaxModel) {
+                costPerImage = 0.075;
+            } else {
+                costPerImage = 0.04;
+            }
             const limited = falImages.slice(0, parsedNumImages);
             const totalCost = costPerImage * limited.length;
 

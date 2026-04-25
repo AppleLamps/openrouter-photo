@@ -55,6 +55,11 @@ export const MODELS = [
     { id: 'sourceful/riverflow-v2-fast-preview',                   name: 'Riverflow 2 Fast',       provider: 'Sourceful', type: 'image', tier: 'fast' },
 
     // ───── Other ─────
+    { id: 'fal-ai/qwen-image-max/text-to-image',                   name: 'Qwen-Image Max',         provider: 'Qwen',      type: 'image', tier: 'quality',  via: 'fal' },
+    { id: 'fal-ai/qwen-image-max/edit',                            name: 'Qwen-Image Max Edit',    provider: 'Qwen',      type: 'edit',  tier: 'quality',  via: 'fal' },
+    { id: 'fal-ai/reve/edit',                                      name: 'Reve Edit',              provider: 'Reve',      type: 'edit',  tier: 'balanced', via: 'fal' },
+    { id: 'fal-ai/bitdance',                                       name: 'BitDance',               provider: 'BitDance',  type: 'image', tier: 'balanced', via: 'fal' },
+    { id: 'fal-ai/z-image/turbo/lora',                             name: 'Z-Image Turbo',          provider: 'Tongyi',    type: 'image', tier: 'fast',     via: 'fal' },
     { id: 'fal-ai/nucleus-image',                                  name: 'Nucleus',                provider: 'Nucleus',   type: 'image', tier: 'balanced', via: 'fal' },
     { id: 'fal-ai/ernie-image/lora',                               name: 'Ernie LoRA',             provider: 'Baidu',     type: 'image', tier: 'balanced', via: 'fal' },
     { id: 'fal-ai/ernie-image/lora/turbo',                         name: 'Ernie LoRA Turbo',       provider: 'Baidu',     type: 'image', tier: 'fast',     via: 'fal' },
