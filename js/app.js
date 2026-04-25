@@ -1726,13 +1726,18 @@ async function handleGenerate(input, button) {
     // Keep textarea enabled but disable generate button and show cancel button
     setLoading(input, button, true);
 
+    // Capture folder selection NOW so the image lands where the user intended,
+    // even if they switch folders while it's still generating.
+    const selectedFolderInputAtStart = document.getElementById('selected-folder');
+    const generationFolderId = selectedFolderInputAtStart?.value || null;
+
     // Show placeholder cards for each image with unique IDs
     const placeholderIds = [];
     for (let i = 0; i < numImages; i++) {
         const placeholderId = generateId();
         placeholderIds.push(placeholderId);
-        showPlaceholder(placeholderId);
-        placeholderMetadata.set(placeholderId, { prompt, settings });
+        showPlaceholder(placeholderId, generationFolderId);
+        placeholderMetadata.set(placeholderId, { prompt, settings, folderId: generationFolderId });
     }
 
     try {
@@ -1823,9 +1828,9 @@ async function handleGenerate(input, button) {
             delete storableSettings.image_url;
             delete storableSettings.image_urls;
 
-            // Get selected folder from folder selector (if available)
-            const selectedFolderInput = document.getElementById('selected-folder');
-            const folderId = selectedFolderInput?.value || null;
+            // Use the folderId captured when the user pressed Generate, NOT the
+            // current selector value — they may have switched folders since.
+            const folderId = generationFolderId;
 
             // Add each generated image to state with settings for remix
             response.images.forEach((image, index) => {

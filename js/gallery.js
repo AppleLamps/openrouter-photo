@@ -11,7 +11,7 @@ let galleryElement = null;
 /** @type {HTMLElement|null} */
 let emptyStateElement = null;
 
-/** @type {Map<string, HTMLElement>} */
+/** @type {Map<string, { element: HTMLElement, folderId: string|null }>} */
 let placeholderElements = new Map();
 
 /** @type {Map<string, number>} */
@@ -261,13 +261,18 @@ function renderGallery() {
     // Use filtered images based on folder selection and visibility settings
     const images = state.getFilteredImages();
 
-    if (images.length === 0) {
-        updateEmptyState();
-        return;
-    }
-
     // Use DocumentFragment to batch DOM insertions (single reflow)
     const fragment = document.createDocumentFragment();
+
+    // Re-attach in-flight placeholders that belong to this view (newest first).
+    // Without this, switching folders mid-generation makes the shimmer disappear
+    // and looks like generation was cancelled.
+    placeholderElements.forEach(({ element, folderId }) => {
+        if (shouldShowPlaceholderInCurrentView(folderId)) {
+            fragment.appendChild(element);
+        }
+    });
+
     images.forEach(image => {
         const card = createImageCard(image);
         fragment.appendChild(card);
@@ -711,8 +716,10 @@ function removeImageCard(id) {
 /**
  * Show loading placeholder with premium golden shimmer
  * @param {string} placeholderId - Unique ID for this placeholder
+ * @param {string|null} [folderId=null] - Folder this generation belongs to
+ *   (so we know whether to display the placeholder in the current view).
  */
-export function showPlaceholder(placeholderId) {
+export function showPlaceholder(placeholderId, folderId = null) {
     if (!galleryElement) return;
 
     const placeholder = createElement('div', {
@@ -731,8 +738,10 @@ export function showPlaceholder(placeholderId) {
     placeholder.appendChild(innerShimmer);
     placeholder.appendChild(glowEffect);
 
-    placeholderElements.set(placeholderId, placeholder);
-    galleryElement.insertBefore(placeholder, galleryElement.firstChild);
+    placeholderElements.set(placeholderId, { element: placeholder, folderId: folderId ?? null });
+    if (shouldShowPlaceholderInCurrentView(folderId ?? null)) {
+        galleryElement.insertBefore(placeholder, galleryElement.firstChild);
+    }
     updateEmptyState();
 }
 
@@ -741,9 +750,9 @@ export function showPlaceholder(placeholderId) {
  * @param {string} placeholderId - Unique ID for this placeholder
  */
 export function removePlaceholder(placeholderId) {
-    const placeholder = placeholderElements.get(placeholderId);
-    if (placeholder) {
-        placeholder.remove();
+    const entry = placeholderElements.get(placeholderId);
+    if (entry) {
+        entry.element.remove();
         placeholderElements.delete(placeholderId);
         updateEmptyState();
     }
@@ -753,9 +762,26 @@ export function removePlaceholder(placeholderId) {
  * Remove all loading placeholders
  */
 export function removeAllPlaceholders() {
-    placeholderElements.forEach(p => p.remove());
+    placeholderElements.forEach(({ element }) => element.remove());
     placeholderElements.clear();
     updateEmptyState();
+}
+
+/**
+ * Decide whether a placeholder for `folderId` should be visible in the
+ * current folder + visibility-mode combination. Mirrors shouldShowImageInCurrentView.
+ * @param {string|null} folderId
+ * @returns {boolean}
+ */
+function shouldShowPlaceholderInCurrentView(folderId) {
+    const visibilityMode = state.getPhotoVisibilityMode();
+    const selectedFolder = state.selectedFolderId;
+    const phFolderId = folderId || null;
+
+    if (selectedFolder === null) {
+        return visibilityMode === 'all' ? true : phFolderId === null;
+    }
+    return phFolderId === selectedFolder;
 }
 
 /**
@@ -766,8 +792,9 @@ export function removeAllPlaceholders() {
  * @param {Function} onRetry - Retry callback
  */
 export function showErrorCard(placeholderId, errorMessage, prompt, onRetry) {
-    const placeholder = placeholderElements.get(placeholderId);
-    if (!placeholder || !galleryElement) return;
+    const entry = placeholderElements.get(placeholderId);
+    if (!entry || !galleryElement) return;
+    const placeholder = entry.element;
 
     const errorCard = createElement('div', {
         className: 'gallery__error-card',
