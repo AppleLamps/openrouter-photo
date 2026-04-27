@@ -924,6 +924,7 @@ async function init() {
     const generateBtn = document.getElementById('generate-btn');
     const cancelBtn = document.getElementById('cancel-btn');
     const enhanceBtn = document.getElementById('enhance-btn');
+    const customEnhanceBtn = document.getElementById('custom-enhance-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const settingsPanel = document.getElementById('settings-panel');
     const settingsClose = document.getElementById('settings-close');
@@ -1010,6 +1011,11 @@ async function init() {
     // Set up enhance button listener
     if (enhanceBtn && promptInput) {
         enhanceBtn.addEventListener('click', () => handleEnhance(promptInput, enhanceBtn));
+    }
+
+    // Set up custom enhance button listener
+    if (customEnhanceBtn && promptInput) {
+        setupCustomEnhanceModal(promptInput, customEnhanceBtn);
     }
 
     // Set up surprise me button listener
@@ -2010,6 +2016,109 @@ async function handleEnhance(input, button) {
 }
 
 /**
+ * Initialize the custom enhance modal flow.
+ * @param {HTMLTextAreaElement} input - Prompt input element
+ * @param {HTMLButtonElement} button - Custom enhance button element
+ */
+function setupCustomEnhanceModal(input, button) {
+    const modal = document.getElementById('custom-enhance-modal');
+    const textarea = document.getElementById('custom-enhance-instructions');
+    const closeBtn = document.getElementById('custom-enhance-close');
+    const cancelBtn = document.getElementById('custom-enhance-cancel');
+    const submitBtn = document.getElementById('custom-enhance-submit');
+    const backdrop = modal?.querySelector('[data-custom-enhance-close]');
+
+    if (!modal || !textarea || !closeBtn || !cancelBtn || !submitBtn || !backdrop) {
+        return;
+    }
+
+    const open = () => {
+        if (!input.value.trim()) {
+            input.focus();
+            shakeElement(input);
+            return;
+        }
+
+        modal.classList.add('custom-enhance-modal--active');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('is-modal-open');
+        textarea.focus();
+    };
+
+    const close = () => {
+        modal.classList.remove('custom-enhance-modal--active');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('is-modal-open');
+        textarea.value = '';
+        input.focus();
+    };
+
+    const submit = async () => {
+        const prompt = input.value.trim();
+        const instructions = textarea.value.trim();
+
+        if (!prompt) {
+            close();
+            shakeElement(input);
+            return;
+        }
+
+        if (!instructions) {
+            textarea.focus();
+            shakeElement(textarea);
+            return;
+        }
+
+        setEnhanceLoading(button, true);
+        input.disabled = true;
+        textarea.disabled = true;
+        submitBtn.disabled = true;
+        cancelBtn.disabled = true;
+        submitBtn.textContent = 'Enhancing...';
+
+        try {
+            const enhanced = await enhancePrompt(prompt, promptImageDataUrls, instructions);
+            input.value = enhanced;
+            flashInput(input);
+            close();
+        } catch (error) {
+            console.error('Custom enhancement failed:', error);
+            showError(error.message || 'Failed to enhance prompt. Please try again.');
+        } finally {
+            setEnhanceLoading(button, false);
+            input.disabled = false;
+            textarea.disabled = false;
+            submitBtn.disabled = false;
+            cancelBtn.disabled = false;
+            submitBtn.textContent = 'Enhance';
+            if (!modal.classList.contains('custom-enhance-modal--active')) {
+                input.focus();
+            }
+        }
+    };
+
+    button.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+    submitBtn.addEventListener('click', submit);
+
+    textarea.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+            event.preventDefault();
+            submit();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.classList.contains('custom-enhance-modal--active')) {
+            event.preventDefault();
+            close();
+        }
+    });
+}
+
+/**
  * Show a popup explaining how to get an OpenRouter API key, and focus the Settings key input.
  * @param {{ message?: string, url?: string } | undefined} help
  */
@@ -2380,7 +2489,10 @@ function restoreSettings(settings) {
 function setEnhanceLoading(button, isLoading) {
     button.disabled = isLoading;
 
-    const enhanceIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>`;
+    if (!button.dataset.defaultIcon) {
+        button.dataset.defaultIcon = button.innerHTML;
+    }
+
     const loadingIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin-icon"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
 
     if (isLoading) {
@@ -2388,7 +2500,7 @@ function setEnhanceLoading(button, isLoading) {
         button.innerHTML = loadingIcon;
     } else {
         button.classList.remove('input-bar__icon-btn--loading');
-        button.innerHTML = enhanceIcon;
+        button.innerHTML = button.dataset.defaultIcon;
     }
 }
 

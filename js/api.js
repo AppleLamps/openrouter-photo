@@ -197,10 +197,11 @@ export async function generateImage(prompt, options = {}, signal = null) {
  * Enhance a prompt using AI
  * @param {string} currentPrompt - The current prompt to enhance
  * @param {string[]} [imageUrls] - Optional array of image data URLs to include for context
+ * @param {string} [customInstructions] - Optional user instructions for how to enhance the prompt
  * @returns {Promise<string>} The enhanced prompt
  * @throws {Error} If enhancement fails
  */
-export async function enhancePrompt(currentPrompt, imageUrls = []) {
+export async function enhancePrompt(currentPrompt, imageUrls = [], customInstructions = '') {
     if (!currentPrompt || typeof currentPrompt !== 'string') {
         throw new Error('Prompt is required');
     }
@@ -217,6 +218,10 @@ export async function enhancePrompt(currentPrompt, imageUrls = []) {
         // Include image URLs if provided
         if (Array.isArray(imageUrls) && imageUrls.length > 0) {
             requestBody.image_urls = imageUrls;
+        }
+
+        if (typeof customInstructions === 'string' && customInstructions.trim().length > 0) {
+            requestBody.custom_instructions = customInstructions.trim();
         }
 
         const response = await fetch(ENHANCE_ENDPOINT, {

@@ -1,11 +1,18 @@
 const { withMiddleware, redactKey } = require('./_middleware');
 
 module.exports = withMiddleware(async function handler(req, res) {
-    const { prompt, image_urls } = req.body;
+    const { prompt, image_urls, custom_instructions } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
         return res.status(400).json({ error: 'Prompt is required' });
     }
+
+    const customInstructions = typeof custom_instructions === 'string'
+        ? custom_instructions.trim().slice(0, 2000)
+        : '';
+    const enhancementRequest = customInstructions
+        ? `Original prompt:\n${prompt.trim()}\n\nEnhancement instructions:\n${customInstructions}\n\nRewrite the original prompt according to the enhancement instructions. Preserve the user's core subject and intent unless the instructions explicitly say to change them. Return only the final enhanced prompt.`
+        : prompt.trim();
 
     // Validate image_urls if provided
     const hasImages = Array.isArray(image_urls) && image_urls.length > 0;
@@ -38,10 +45,10 @@ module.exports = withMiddleware(async function handler(req, res) {
                     image_url: url,
                     detail: 'high'
                 })),
-                { type: 'input_text', text: prompt.trim() }
+                { type: 'input_text', text: enhancementRequest }
             ];
         } else {
-            userContent = prompt.trim();
+            userContent = enhancementRequest;
         }
 
         const systemPrompt = `You are a specialized prompt engineer for **Grok Imagine**, xAI's image generation and editing tool. Your sole job is to take a user's idea, concept, or editing request and output a production-ready Grok Imagine prompt that will generate the best possible result on the first try.
