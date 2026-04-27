@@ -15,6 +15,8 @@ const FAL_IMAGE_MODELS = {
     'fal-ai/qwen-image-max/text-to-image': { price: { type: 'flat', amount: 0.075 } },
     'fal-ai/qwen-image-max/edit': { edit: true, price: { type: 'flat', amount: 0.075 } },
     'fal-ai/reve/edit': { edit: true, singleImageUrl: true, price: { type: 'flat', amount: 0.04 } },
+    'fal-ai/phota': {},
+    'fal-ai/phota/edit': { edit: true, price: { type: 'resolution', oneK: 0.09, fourK: 0.18 } },
 };
 
 const FAL_VIDEO_MODELS = {
@@ -38,6 +40,9 @@ function getFalImageCostPerImage(model, imageSize, estimateMegapixelsFromImageSi
     if (!price) return 0;
     if (price.type === 'mpix') {
         return price.amount * estimateMegapixelsFromImageSize(imageSize);
+    }
+    if (price.type === 'resolution') {
+        return imageSize === '4K' ? price.fourK : price.oneK;
     }
     return price.amount;
 }

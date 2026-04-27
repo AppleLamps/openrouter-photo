@@ -60,9 +60,11 @@ export const MODELS = [
     { id: 'fal-ai/reve/edit',                                      name: 'Reve Edit',              provider: 'Reve',      type: 'edit',  tier: 'balanced', via: 'fal' },
     { id: 'fal-ai/bitdance',                                       name: 'BitDance',               provider: 'BitDance',  type: 'image', tier: 'balanced', via: 'fal' },
     { id: 'fal-ai/z-image/turbo/lora',                             name: 'Z-Image Turbo',          provider: 'Tongyi',    type: 'image', tier: 'fast',     via: 'fal' },
+    { id: 'fal-ai/phota',                                          name: 'Phota',                  provider: 'fal.ai',    type: 'image', tier: 'quality',  via: 'fal' },
+    { id: 'fal-ai/phota/edit',                                     name: 'Phota Edit',             provider: 'fal.ai',    type: 'edit',  tier: 'quality',  via: 'fal' },
     { id: 'fal-ai/nucleus-image',                                  name: 'Nucleus',                provider: 'Nucleus',   type: 'image', tier: 'balanced', via: 'fal' },
     { id: 'fal-ai/ernie-image/lora',                               name: 'Ernie LoRA',             provider: 'Baidu',     type: 'image', tier: 'balanced', via: 'fal' },
-    { id: 'fal-ai/ernie-image/lora/turbo',                         name: 'Ernie LoRA Turbo',       provider: 'Baidu',     type: 'image', tier: 'fast',     via: 'fal' },
+    { id: 'fal-ai/ernie-image/lora/turbo',                         name: 'Ernie Image Turbo',      provider: 'Baidu',     type: 'image', tier: 'fast',     via: 'fal' },
 ];
 
 /** Tab → set of model types it includes. */
@@ -87,7 +89,7 @@ export const TIER_LABEL = {
 };
 
 /** Default selection if the persisted value isn't in the catalog anymore. */
-export const DEFAULT_MODEL_ID = 'fal-ai/bytedance/seedream/v4.5/text-to-image';
+export const DEFAULT_MODEL_ID = 'fal-ai/z-image/turbo/lora';
 
 export function findModelById(id) {
     return MODELS.find(m => m.id === id) || null;

@@ -111,10 +111,11 @@ module.exports = withMiddleware(async function handler(req, res) {
             ? aspect_ratio.trim()
             : imageSizePresetToAspectRatio(image_size);
 
+    const maxInputImages = model === 'fal-ai/phota/edit' ? 10 : 3;
     const normalizedInputImages = Array.isArray(image_urls)
         ? image_urls
             .filter((u) => typeof u === 'string' && u.startsWith('data:image/'))
-            .slice(0, 3)
+            .slice(0, maxInputImages)
         : [];
 
     // ---------- Fal Seedream models ----------
@@ -143,6 +144,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             model === 'fal-ai/ernie-image/lora' || isErnieTurboModel;
         const isZImageModel = model === 'fal-ai/z-image/turbo/lora';
         const isBitdanceModel = model === 'fal-ai/bitdance';
+        const isPhotaModel = model === 'fal-ai/phota';
+        const isPhotaEditModel = model === 'fal-ai/phota/edit';
         const isQwenImageMaxT2IModel = model === 'fal-ai/qwen-image-max/text-to-image';
         const isQwenImageMaxEditModel = model === 'fal-ai/qwen-image-max/edit';
         const isQwenImageMaxModel = isQwenImageMaxT2IModel || isQwenImageMaxEditModel;
@@ -164,7 +167,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         };
 
         let falImageSize;
-        if (!isNucleusImageModel) {
+        if (!isNucleusImageModel && !isPhotaModel && !isPhotaEditModel) {
             falImageSize = aspectRatioToFalImageSize(normalizedAspectRatio);
         }
 
@@ -204,7 +207,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             };
         } else if (isErnieImageModel) {
             // Turbo: 8 / 1 (turbo-optimized). Base lora: 50 / 5 per
-            // https://fal.ai/models/fal-ai/ernie-image/lora/api
+            // https://fal.ai/models/fal-ai/ernie-image/lora/turbo/api
             falPayload = {
                 prompt: prompt.trim(),
                 image_size: falImageSize,
@@ -212,8 +215,13 @@ module.exports = withMiddleware(async function handler(req, res) {
                 num_inference_steps: isErnieTurboModel ? 8 : 50,
                 guidance_scale: isErnieTurboModel ? 1 : 5,
                 enable_safety_checker: false,
-                enable_prompt_expansion: false,
+                enable_prompt_expansion: isErnieTurboModel ? true : false,
+                output_format: isErnieTurboModel ? 'jpeg' : 'png',
             };
+            if (isErnieTurboModel) {
+                falPayload.acceleration = 'regular';
+                falPayload.loras = [];
+            }
         } else if (isZImageModel) {
             // Z-Image Turbo (Tongyi-MAI 6B). Steps capped at 8; "regular" acceleration.
             // https://fal.ai/models/fal-ai/z-image/turbo/lora/api
@@ -238,6 +246,24 @@ module.exports = withMiddleware(async function handler(req, res) {
                 guidance_scale: 7.5,
                 output_format: 'png',
                 enable_safety_checker: false,
+            };
+        } else if (isPhotaModel || isPhotaEditModel) {
+            // Phota uses the Fal queue API and aspect_ratio/resolution fields.
+            // https://fal.ai/models/fal-ai/phota/api
+            const validPhotaAspectRatios = new Set(['auto', '1:1', '16:9', '4:3', '3:4', '9:16']);
+            const photaAspectRatio = validPhotaAspectRatios.has(normalizedAspectRatio)
+                ? normalizedAspectRatio
+                : 'auto';
+            const photaResolution = resolution === '4K' ? '4K' : '1K';
+            falImageSize = photaResolution;
+
+            falPayload = {
+                prompt: prompt.trim(),
+                num_images: parsedNumImages,
+                output_format: 'jpeg',
+                sync_mode: false,
+                resolution: photaResolution,
+                aspect_ratio: photaAspectRatio,
             };
         } else if (isQwenImageMaxModel) {
             // Qwen-Image-Max (text-to-image and edit) — flat $0.075/image.
@@ -281,6 +307,104 @@ module.exports = withMiddleware(async function handler(req, res) {
         }
 
         try {
+            if (isPhotaModel) {
+                const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Key ${FAL_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(falPayload),
+                });
+
+                if (!submitResponse.ok) {
+                    const errorText = await submitResponse.text();
+                    return res.status(submitResponse.status).json({
+                        error: 'Failed to start image generation via Fal',
+                        details: redactKey(errorText),
+                    });
+                }
+
+                const submitData = await submitResponse.json();
+                const requestId = submitData?.request_id;
+                if (!requestId) {
+                    return res.status(502).json({ error: 'Fal Phota request did not return a request ID' });
+                }
+
+                const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+                const statusUrl = submitData?.status_url
+                    || `https://queue.fal.run/${model}/requests/${encodeURIComponent(requestId)}/status`;
+                const responseUrl = submitData?.response_url
+                    || `https://queue.fal.run/${model}/requests/${encodeURIComponent(requestId)}`;
+
+                for (let attempt = 0; attempt < 30; attempt++) {
+                    if (attempt > 0) {
+                        await delay(2000);
+                    }
+
+                    const statusResponse = await fetch(statusUrl, {
+                        headers: { Authorization: `Key ${FAL_KEY}` },
+                    });
+                    if (!statusResponse.ok) {
+                        const errorText = await statusResponse.text();
+                        return res.status(statusResponse.status).json({
+                            error: 'Failed to retrieve Fal image status',
+                            details: redactKey(errorText),
+                        });
+                    }
+
+                    const statusData = await statusResponse.json();
+                    const status = String(statusData?.status || '').toUpperCase();
+                    if (status === 'COMPLETED') {
+                        const resultResponse = await fetch(statusData?.response_url || responseUrl, {
+                            headers: { Authorization: `Key ${FAL_KEY}` },
+                        });
+                        if (!resultResponse.ok) {
+                            const errorText = await resultResponse.text();
+                            return res.status(resultResponse.status).json({
+                                error: 'Failed to retrieve Fal image result',
+                                details: redactKey(errorText),
+                            });
+                        }
+
+                        const data = await resultResponse.json();
+                        const falImages = Array.isArray(data?.images) ? data.images : [];
+                        if (falImages.length === 0) {
+                            return res.status(502).json({ error: 'No images returned from Fal' });
+                        }
+
+                        const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize);
+                        const limited = falImages.slice(0, parsedNumImages);
+                        const totalCost = costPerImage * limited.length;
+
+                        return res.status(200).json({
+                            images: limited.map((img) => ({
+                                url: img.url,
+                                model,
+                                cost: costPerImage,
+                                provider: 'fal',
+                            })),
+                            meta: {
+                                total_usage: totalCost,
+                                requests: [{
+                                    model,
+                                    provider_name: 'fal',
+                                    usage: totalCost,
+                                    imageCount: limited.length,
+                                }],
+                                usage_pending: false,
+                            },
+                        });
+                    }
+
+                    if (['FAILED', 'ERROR'].includes(status)) {
+                        return res.status(502).json({ error: 'Fal image generation failed' });
+                    }
+                }
+
+                return res.status(504).json({ error: 'Fal image generation timed out' });
+            }
+
             // Use Fal sync endpoint for immediate results
             const falUrl = `https://fal.run/${model}`;
             const response = await fetch(falUrl, {
