@@ -500,10 +500,20 @@
                 </svg>
             </button>
             <div class="modal__content">
-                <img class="modal__image modal__image--photo" src="" alt="" draggable="false">
-                <video class="modal__image modal__image--video" controls playsinline></video>
-                <div class="modal__info">
+                <div class="modal__stage" aria-label="Generated media preview">
+                    <img class="modal__image modal__image--photo" src="" alt="" draggable="false">
+                    <video class="modal__image modal__image--video" controls playsinline></video>
+                </div>
+                <aside class="modal__info" aria-label="Image details and actions">
+                    <div class="modal__info-header">
+                        <span class="modal__eyebrow">Generated media</span>
+                        <div class="modal__meta-row">
+                            <span class="modal__meta-tag" id="modal-model">-</span>
+                            <span class="modal__meta-tag" id="modal-cost">-</span>
+                        </div>
+                    </div>
                     <div class="modal__prompt-container">
+                        <span class="modal__section-label">Prompt</span>
                         <p class="modal__prompt"></p>
                         <button class="modal__copy-btn" title="Copy prompt">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -513,10 +523,6 @@
                                 <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
                             </svg>
                         </button>
-                    </div>
-                    <div class="modal__meta-row">
-                        <span class="modal__meta-tag" id="modal-model">-</span>
-                        <span class="modal__meta-tag" id="modal-cost">-</span>
                     </div>
                     <div class="modal__actions">
                         <button class="modal__button modal__download-btn modal__button--primary" title="Download">
@@ -542,7 +548,7 @@
                             Share
                         </button>
                     </div>
-                </div>
+                </aside>
             </div>
         </div>
     </div>
