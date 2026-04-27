@@ -678,7 +678,12 @@ function prependImageCard(image, preloaded = false) {
     if (!galleryElement) return;
 
     const card = createImageCard(image, preloaded);
+    card.classList.add('gallery__card--enter');
     galleryElement.insertBefore(card, galleryElement.firstChild);
+
+    requestAnimationFrame(() => {
+        card.classList.add('gallery__card--enter-active');
+    });
 }
 
 /**

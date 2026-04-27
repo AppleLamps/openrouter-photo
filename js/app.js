@@ -1169,11 +1169,7 @@ function initSettingsUI() {
         }
 
         openRouterKeyInput.addEventListener('input', () => {
-            try {
-                localStorage.setItem('openrouter_api_key', openRouterKeyInput.value.trim());
-            } catch {
-                // ignore storage failures (private mode, disabled storage, etc.)
-            }
+            if (openRouterTestStatus) openRouterTestStatus.textContent = 'Unsaved';
         });
     }
 
@@ -1192,12 +1188,7 @@ function initSettingsUI() {
         }
 
         xaiKeyInput.addEventListener('input', () => {
-            try {
-                localStorage.setItem('xai_api_key', xaiKeyInput.value.trim());
-                if (xaiSaveStatus) xaiSaveStatus.textContent = '';
-            } catch {
-                // ignore storage failures (private mode, disabled storage, etc.)
-            }
+            if (xaiSaveStatus) xaiSaveStatus.textContent = 'Unsaved';
         });
     }
 
@@ -1227,6 +1218,9 @@ function initSettingsUI() {
             xaiTestBtn.disabled = true;
 
             try {
+                if (xaiKeyInput) {
+                    localStorage.setItem('xai_api_key', xaiKeyInput.value.trim());
+                }
                 await testXaiKey();
                 if (xaiSaveStatus) xaiSaveStatus.textContent = 'Key works';
                 showSuccess('xAI API key is valid.');
@@ -1248,12 +1242,7 @@ function initSettingsUI() {
         }
 
         falKeyInput.addEventListener('input', () => {
-            try {
-                localStorage.setItem('fal_api_key', falKeyInput.value.trim());
-                if (falSaveStatus) falSaveStatus.textContent = '';
-            } catch {
-                // ignore storage failures
-            }
+            if (falSaveStatus) falSaveStatus.textContent = 'Unsaved';
         });
     }
 
@@ -1283,6 +1272,9 @@ function initSettingsUI() {
             falTestBtn.disabled = true;
 
             try {
+                if (falKeyInput) {
+                    localStorage.setItem('fal_api_key', falKeyInput.value.trim());
+                }
                 await testFalKey();
                 if (falSaveStatus) falSaveStatus.textContent = 'Key works';
                 showSuccess('Fal API key is valid.');
@@ -1295,7 +1287,7 @@ function initSettingsUI() {
         });
     }
 
-    // Save API key button (even though we also auto-save on input, users expect an explicit action)
+    // Save API key button
     if (openRouterSaveBtn && openRouterKeyInput) {
         openRouterSaveBtn.addEventListener('click', () => {
             try {
@@ -1317,6 +1309,9 @@ function initSettingsUI() {
             openRouterTestBtn.disabled = true;
 
             try {
+                if (openRouterKeyInput) {
+                    localStorage.setItem('openrouter_api_key', openRouterKeyInput.value.trim());
+                }
                 await testOpenRouterKey();
                 if (openRouterTestStatus) openRouterTestStatus.textContent = 'Key works';
                 showSuccess('OpenRouter API key is valid.');
@@ -1833,16 +1828,10 @@ async function handleGenerate(input, button) {
             const folderId = generationFolderId;
 
             // Add each generated image to state with settings for remix
-            response.images.forEach((image, index) => {
-                // Remove corresponding placeholder
-                if (placeholderIds[index]) {
-                    removePlaceholder(placeholderIds[index]);
-                    placeholderMetadata.delete(placeholderIds[index]);
-                }
-
+            const saveResults = await Promise.all(response.images.map(async (image, index) => {
                 const mediaType = image.media_type || image.mediaType || 'image';
 
-                state.addImage({
+                const result = await state.addImage({
                     id: generateId(),
                     url: image.url,
                     prompt: prompt,
@@ -1856,7 +1845,19 @@ async function handleGenerate(input, button) {
                         provider: image.provider || null
                     }
                 });
-            });
+
+                // Remove corresponding placeholder only after storage has accepted the item.
+                if (placeholderIds[index]) {
+                    removePlaceholder(placeholderIds[index]);
+                    placeholderMetadata.delete(placeholderIds[index]);
+                }
+
+                return result;
+            }));
+
+            if (saveResults.some((result) => result && result.persisted === false)) {
+                showError('Generated media is visible now, but could not be saved for reload. Download anything important.');
+            }
 
             // Remove any remaining placeholders (if fewer images returned than requested)
             placeholderIds.slice(response.images.length).forEach(id => {

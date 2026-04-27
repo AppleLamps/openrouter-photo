@@ -312,8 +312,10 @@ class State {
     saveToLocalStorage() {
         try {
             localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(this.images));
+            return true;
         } catch (error) {
             console.error('Failed to save to localStorage:', error);
+            return false;
         }
     }
 
@@ -354,9 +356,9 @@ class State {
                 sourceUrl: imageData.sourceUrl || (isVideo ? imageData.url : null)
             };
             this.images.unshift(entry);
-            this.saveToLocalStorage();
+            const persisted = this.saveToLocalStorage();
             this.notifyListeners('add', entry);
-            return;
+            return { image: entry, persisted };
         }
 
         try {
@@ -381,7 +383,7 @@ class State {
 
                 this.images.unshift(inMemoryVideo);
                 this.notifyListeners('add', inMemoryVideo);
-                return;
+                return { image: inMemoryVideo, persisted: true };
             }
 
             let fullBlob;
@@ -422,6 +424,7 @@ class State {
 
             this.images.unshift(inMemoryImage);
             this.notifyListeners('add', inMemoryImage);
+            return { image: inMemoryImage, persisted: true };
         } catch (error) {
             console.error('Failed to add image:', error);
             // Fallback: try to store the original data URI
@@ -432,6 +435,7 @@ class State {
             };
             this.images.unshift(entry);
             this.notifyListeners('add', entry);
+            return { image: entry, persisted: false, error };
         }
     }
 

@@ -12,12 +12,29 @@
     overflow: hidden;
     background: var(--bg-card);
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.28s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     aspect-ratio: 1;
     will-change: transform;
     contain: layout style paint;
     -webkit-tap-highlight-color: transparent;
+}
+
+.gallery__card--enter {
+    opacity: 0;
+    transform: translateY(18px) scale(0.965);
+    filter: blur(6px);
+}
+
+.gallery__card--enter-active {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+    transition:
+        opacity 0.52s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.62s cubic-bezier(0.16, 1, 0.3, 1),
+        filter 0.42s ease-out,
+        box-shadow 0.22s ease;
 }
 
 /* Hover effects only on devices with a real pointer (avoids sticky :hover on iOS) */
@@ -48,7 +65,7 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.3s ease;
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.36s ease-out, filter 0.36s ease-out;
 }
 
 /* Overlay - Hidden by default, only show delete on hover */
@@ -65,56 +82,45 @@
     aspect-ratio: 1;
     contain: layout style paint;
 
-    /* Deep luxurious base with warm undertones */
     background:
-        /* Ambient corner glows */
-        radial-gradient(ellipse 120% 80% at 10% 10%, rgba(255, 195, 0, 0.08) 0%, transparent 50%),
-        radial-gradient(ellipse 120% 80% at 90% 90%, rgba(218, 165, 32, 0.06) 0%, transparent 50%),
-        /* Central warmth */
-        radial-gradient(ellipse 100% 100% at 50% 50%, rgba(255, 215, 0, 0.025) 0%, transparent 60%),
-        /* Rich dark gold gradient base */
+        radial-gradient(ellipse 90% 70% at 14% 10%, rgba(255, 222, 120, 0.14) 0%, transparent 56%),
+        radial-gradient(ellipse 105% 75% at 88% 92%, rgba(176, 124, 28, 0.16) 0%, transparent 58%),
+        radial-gradient(ellipse 80% 80% at 52% 48%, rgba(255, 190, 60, 0.045) 0%, transparent 64%),
         linear-gradient(160deg,
-            #1a1509 0%,
-            #1f1a0b 20%,
-            #231d0c 40%,
-            #211b0b 60%,
-            #1c160a 80%,
-            #171308 100%);
+            #171004 0%,
+            #241907 24%,
+            #302109 46%,
+            #251a07 68%,
+            #140e04 100%);
 
-    /* Golden border with subtle glow */
-    border: 1px solid rgba(255, 200, 50, 0.12);
+    border: 1px solid rgba(255, 211, 92, 0.18);
     box-shadow:
-        /* Outer shadow for depth */
-        0 8px 32px rgba(0, 0, 0, 0.25),
-        0 16px 48px rgba(0, 0, 0, 0.15),
-        /* Inner golden rim */
-        inset 0 0 0 1px rgba(255, 215, 0, 0.06),
-        /* Soft inner glow */
-        inset 0 0 80px rgba(255, 200, 50, 0.03);
+        0 10px 34px rgba(0, 0, 0, 0.24),
+        0 18px 50px rgba(108, 74, 12, 0.10),
+        inset 0 0 0 1px rgba(255, 238, 170, 0.07),
+        inset 0 0 88px rgba(255, 196, 70, 0.055);
 }
 
 /* Primary shimmer wave - smooth diagonal sweep */
 .gallery__placeholder::before {
     content: '';
     position: absolute;
-    inset: -50%;
-    width: 200%;
-    height: 200%;
-    transform: translateX(-100%) rotate(-45deg);
+    inset: -45%;
+    width: 190%;
+    height: 190%;
+    transform: translate3d(-72%, 0, 0) rotate(-42deg);
     background: linear-gradient(90deg,
             transparent 0%,
-            transparent 35%,
-            rgba(255, 215, 0, 0.02) 42%,
-            rgba(255, 200, 50, 0.06) 46%,
-            rgba(255, 223, 100, 0.12) 48%,
-            rgba(255, 235, 150, 0.18) 50%,
-            rgba(255, 223, 100, 0.12) 52%,
-            rgba(255, 200, 50, 0.06) 54%,
-            rgba(255, 215, 0, 0.02) 58%,
-            transparent 65%,
+            transparent 32%,
+            rgba(255, 197, 72, 0.025) 39%,
+            rgba(255, 216, 116, 0.11) 45%,
+            rgba(255, 243, 198, 0.32) 50%,
+            rgba(255, 211, 88, 0.12) 55%,
+            rgba(255, 197, 72, 0.025) 62%,
+            transparent 69%,
             transparent 100%);
     will-change: transform;
-    animation: shimmerWave 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: shimmerWave 2.45s cubic-bezier(0.45, 0, 0.2, 1) infinite;
 }
 
 /* Secondary shimmer - luminous center pulse */
@@ -125,18 +131,18 @@
     background:
         /* Central glow */
         radial-gradient(ellipse 70% 50% at 50% 50%,
-            rgba(255, 215, 0, 0.08) 0%,
-            rgba(255, 200, 50, 0.04) 30%,
+            rgba(255, 222, 130, 0.11) 0%,
+            rgba(218, 151, 38, 0.055) 34%,
             transparent 70%),
         /* Edge highlight sweep */
         linear-gradient(135deg,
             transparent 0%,
-            transparent 40%,
-            rgba(255, 220, 100, 0.05) 50%,
-            transparent 60%,
+            transparent 35%,
+            rgba(255, 235, 170, 0.085) 50%,
+            transparent 65%,
             transparent 100%);
     opacity: 0;
-    animation: shimmerGlow 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: shimmerGlow 2.45s cubic-bezier(0.45, 0, 0.2, 1) infinite;
 }
 
 /* Inner shimmer layer for extra depth */
@@ -144,28 +150,28 @@
     position: absolute;
     inset: 0;
     background:
-        /* Subtle noise texture simulation */
         repeating-linear-gradient(90deg,
             transparent 0px,
-            rgba(255, 215, 0, 0.008) 1px,
+            rgba(255, 222, 130, 0.012) 1px,
             transparent 2px,
-            transparent 4px),
+            transparent 5px),
         repeating-linear-gradient(0deg,
             transparent 0px,
-            rgba(255, 215, 0, 0.008) 1px,
+            rgba(255, 222, 130, 0.01) 1px,
             transparent 2px,
-            transparent 4px);
-    animation: shimmerTexture 4s linear infinite;
+            transparent 5px);
+    opacity: 0.72;
+    animation: shimmerTexture 5.2s linear infinite;
     pointer-events: none;
 }
 
 @keyframes shimmerWave {
     0% {
-        transform: translateX(-100%) rotate(-45deg);
+        transform: translate3d(-72%, 0, 0) rotate(-42deg);
     }
 
     100% {
-        transform: translateX(100%) rotate(-45deg);
+        transform: translate3d(72%, 0, 0) rotate(-42deg);
     }
 }
 
@@ -178,8 +184,8 @@
     }
 
     50% {
-        opacity: 1;
-        transform: scale(1);
+        opacity: 0.92;
+        transform: scale(1.015);
     }
 }
 
@@ -199,12 +205,13 @@
     inset: -1px;
     border-radius: 13px;
     background: linear-gradient(135deg,
-            rgba(255, 215, 0, 0.15) 0%,
-            transparent 30%,
-            transparent 70%,
-            rgba(255, 195, 50, 0.1) 100%);
+            rgba(255, 231, 150, 0.22) 0%,
+            rgba(255, 200, 80, 0.04) 28%,
+            transparent 52%,
+            rgba(172, 115, 24, 0.08) 74%,
+            rgba(255, 216, 110, 0.16) 100%);
     opacity: 0;
-    animation: shimmerEdge 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: shimmerEdge 2.45s cubic-bezier(0.45, 0, 0.2, 1) infinite;
     pointer-events: none;
 }
 
@@ -217,7 +224,7 @@
     }
 
     25% {
-        opacity: 0.6;
+        opacity: 0.68;
     }
 
     50% {
@@ -226,11 +233,20 @@
     }
 
     75% {
-        opacity: 0.4;
+        opacity: 0.46;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .gallery__card--enter,
+    .gallery__card--enter-active,
+    .gallery__image--loaded {
+        animation: none !important;
+        filter: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+    }
 
     .gallery__placeholder::before,
     .gallery__placeholder::after,
@@ -368,19 +384,25 @@
 /* Image Loading Animation */
 .gallery__image--loading {
     opacity: 0;
+    filter: blur(8px);
+    transform: scale(1.035);
 }
 
 .gallery__image--loaded {
-    animation: fadeIn 0.25s ease-out forwards;
+    animation: imageReveal 0.58s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes fadeIn {
+@keyframes imageReveal {
     from {
         opacity: 0;
+        filter: blur(8px);
+        transform: scale(1.035);
     }
 
     to {
         opacity: 1;
+        filter: blur(0);
+        transform: scale(1);
     }
 }
 

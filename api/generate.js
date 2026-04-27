@@ -1,4 +1,10 @@
 const { withMiddleware, redactKey, resolveOpenRouterApiKey } = require('./_middleware');
+const {
+    getFalImageCostPerImage,
+    isFalImageModel,
+    isFalVideoModel,
+    isFalEditModel,
+} = require('./model-registry');
 
 module.exports = withMiddleware(async function handler(req, res) {
     const {
@@ -28,37 +34,10 @@ module.exports = withMiddleware(async function handler(req, res) {
     const isXaiVideoModel = model === 'grok-imagine-video';
     const isXaiModel = isXaiImageModel || isXaiVideoModel;
 
-    const FAL_MODEL_IDS = [
-        'fal-ai/bytedance/seedream/v4.5/text-to-image',
-        'fal-ai/bytedance/seedream/v4.5/edit',
-        'fal-ai/bytedance/seedream/v5/lite/text-to-image',
-        'fal-ai/bytedance/seedream/v5/lite/edit',
-        'fal-ai/wan/v2.7/text-to-image',
-        'fal-ai/wan/v2.7/pro/text-to-image',
-        'fal-ai/wan/v2.7/edit',
-        'fal-ai/wan/v2.7/pro/edit',
-        'fal-ai/ernie-image/lora',
-        'fal-ai/ernie-image/lora/turbo',
-        'fal-ai/nucleus-image',
-        'fal-ai/z-image/turbo/lora',
-        'fal-ai/bitdance',
-        'fal-ai/qwen-image-max/text-to-image',
-        'fal-ai/qwen-image-max/edit',
-        'fal-ai/reve/edit',
-    ];
-    const FAL_VIDEO_MODEL_IDS = [
-        'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',
-        'fal-ai/bytedance/seedance/v1.5/pro/image-to-video',
-        'fal-ai/bytedance/seedance-2.0/text-to-video',
-        'fal-ai/bytedance/seedance-2.0/image-to-video',
-    ];
-    const isFalModel = FAL_MODEL_IDS.includes(model);
-    const isFalVideoModel = FAL_VIDEO_MODEL_IDS.includes(model);
+    const isFalModel = isFalImageModel(model);
+    const isFalVideoModelForRequest = isFalVideoModel(model);
     const isReveEditModel = model === 'fal-ai/reve/edit';
-    const isFalEditModel = model === 'fal-ai/bytedance/seedream/v4.5/edit' || model === 'fal-ai/bytedance/seedream/v5/lite/edit' ||
-        model === 'fal-ai/wan/v2.7/edit' || model === 'fal-ai/wan/v2.7/pro/edit' ||
-        model === 'fal-ai/qwen-image-max/edit' ||
-        isReveEditModel;
+    const isFalEditModelForRequest = isFalEditModel(model);
 
     const XAI_API_KEY =
         req.headers['x-xai-api-key'] ||
@@ -74,7 +53,7 @@ module.exports = withMiddleware(async function handler(req, res) {
 
     const OPENROUTER_API_KEY = resolveOpenRouterApiKey(req);
 
-    if (!isXaiModel && !isFalModel && !isFalVideoModel && !OPENROUTER_API_KEY) {
+    if (!isXaiModel && !isFalModel && !isFalVideoModelForRequest && !OPENROUTER_API_KEY) {
         return res.status(401).json({
             code: 'OPENROUTER_API_KEY_REQUIRED',
             error: 'OpenRouter API key required',
@@ -96,7 +75,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         });
     }
 
-    if ((isFalModel || isFalVideoModel) && !FAL_KEY) {
+    if ((isFalModel || isFalVideoModelForRequest) && !FAL_KEY) {
         return res.status(401).json({
             code: 'FAL_API_KEY_REQUIRED',
             error: 'Fal API key required',
@@ -141,7 +120,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     // ---------- Fal Seedream models ----------
     if (isFalModel) {
         // Edit models require at least one input image
-        if (isFalEditModel && normalizedInputImages.length === 0) {
+        if (isFalEditModelForRequest && normalizedInputImages.length === 0) {
             return res.status(400).json({
                 error: 'Edit models require at least one attached image. Please attach an image and try again.',
             });
@@ -292,7 +271,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             };
         }
 
-        if (isFalEditModel) {
+        if (isFalEditModelForRequest) {
             // Reve takes a single `image_url`; the others take an `image_urls` array.
             if (isReveEditModel) {
                 falPayload.image_url = normalizedInputImages[0];
@@ -331,18 +310,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             // Fal pricing: flat $0.04/image (Seedream/Wan/Nucleus);
             //   Ernie: ~$0.015/Mpix; Z-Image Turbo: $0.0085/Mpix;
             //   BitDance: flat $0.01/image; Qwen-Image-Max: flat $0.075/image.
-            let costPerImage;
-            if (isErnieImageModel && falImageSize) {
-                costPerImage = 0.015 * estimateMegapixelsFromImageSize(falImageSize);
-            } else if (isZImageModel && falImageSize) {
-                costPerImage = 0.0085 * estimateMegapixelsFromImageSize(falImageSize);
-            } else if (isBitdanceModel) {
-                costPerImage = 0.01;
-            } else if (isQwenImageMaxModel) {
-                costPerImage = 0.075;
-            } else {
-                costPerImage = 0.04;
-            }
+            const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize);
             const limited = falImages.slice(0, parsedNumImages);
             const totalCost = costPerImage * limited.length;
 
@@ -371,7 +339,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     // ---------- Fal Seedance video model ----------
-    if (isFalVideoModel) {
+    if (isFalVideoModelForRequest) {
         // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
         const parsedDuration = parseInt(xai_video_length, 10);
         const isSeedance20 =

@@ -3,17 +3,63 @@
  * Handles CORS, OPTIONS preflight, POST-only enforcement, and body parsing.
  */
 
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const DEFAULT_RATE_LIMIT_MAX = 60;
+const rateLimitBuckets = new Map();
+
+const getRequestOrigin = (req) => {
+    const proto = req.headers['x-forwarded-proto'] || (req.socket?.encrypted ? 'https' : 'http');
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    return host ? `${proto}://${host}` : null;
+};
+
 const resolveCorsOrigin = (req) => {
     const raw = process.env.ALLOWED_ORIGIN || '';
     const allowed = raw.split(',').map((origin) => origin.trim()).filter(Boolean);
-    if (allowed.length === 0 || allowed.includes('*')) {
-        return '*';
+    if (allowed.includes('*')) {
+        return { origin: '*', blocked: false };
+    }
+    if (allowed.length === 0) {
+        const origin = req.headers.origin;
+        if (!origin) {
+            return { origin: null, blocked: false };
+        }
+        return { origin, blocked: origin !== getRequestOrigin(req) };
     }
     const origin = req.headers.origin;
     if (origin && allowed.includes(origin)) {
-        return origin;
+        return { origin, blocked: false };
     }
-    return allowed[0];
+    return { origin: allowed[0], blocked: Boolean(origin) };
+};
+
+const getClientId = (req) => {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+        return forwardedFor.split(',')[0].trim();
+    }
+    return req.socket?.remoteAddress || 'unknown';
+};
+
+const checkRateLimit = (req, options = {}) => {
+    const windowMs = Number.parseInt(process.env.API_RATE_LIMIT_WINDOW_MS || '', 10) || options.windowMs || DEFAULT_RATE_LIMIT_WINDOW_MS;
+    const max = Number.parseInt(process.env.API_RATE_LIMIT_MAX || '', 10) || options.max || DEFAULT_RATE_LIMIT_MAX;
+    if (max <= 0) return { allowed: true, remaining: 0, resetMs: Date.now() + windowMs };
+
+    const now = Date.now();
+    const key = `${getClientId(req)}:${req.url || ''}`;
+    let bucket = rateLimitBuckets.get(key);
+    if (!bucket || bucket.resetMs <= now) {
+        bucket = { count: 0, resetMs: now + windowMs };
+        rateLimitBuckets.set(key, bucket);
+    }
+
+    bucket.count += 1;
+    return {
+        allowed: bucket.count <= max,
+        remaining: Math.max(max - bucket.count, 0),
+        resetMs: bucket.resetMs,
+    };
 };
 
 /**
@@ -62,17 +108,22 @@ function withMiddleware(handler, options = {}) {
     const {
         allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key',
         skipBodyParse = false,
+        rateLimit = {},
     } = options;
 
     return async function wrappedHandler(req, res) {
         // ---------- CORS ----------
-        const allowedOrigin = resolveCorsOrigin(req);
-        res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-        if (allowedOrigin !== '*') {
+        const cors = resolveCorsOrigin(req);
+        if (cors.origin) {
+            res.setHeader('Access-Control-Allow-Origin', cors.origin);
             res.setHeader('Vary', 'Origin');
         }
         res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', allowHeaders);
+
+        if (cors.blocked) {
+            return res.status(403).json({ error: 'Origin not allowed' });
+        }
 
         // ---------- Preflight ----------
         if (req.method === 'OPTIONS') {
@@ -82,6 +133,14 @@ function withMiddleware(handler, options = {}) {
         // ---------- POST only ----------
         if (req.method !== 'POST') {
             return res.status(405).json({ error: 'Method not allowed' });
+        }
+
+        // ---------- Rate limiting ----------
+        const limit = checkRateLimit(req, rateLimit);
+        res.setHeader('X-RateLimit-Remaining', String(limit.remaining));
+        res.setHeader('X-RateLimit-Reset', String(Math.ceil(limit.resetMs / 1000)));
+        if (!limit.allowed) {
+            return res.status(429).json({ error: 'Too many requests. Please wait and try again.' });
         }
 
         // ---------- Body parsing (Vercel compatibility) ----------
