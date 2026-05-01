@@ -39,12 +39,13 @@ export function initSidebar() {
 
     if (!sidebarElement) return;
 
-    // Load saved sidebar state.
-    // On mobile (overlay mode) default to closed so the sidebar doesn't
-    // immediately block the gallery on first load.
+    // Load saved sidebar state on desktop; overlay (narrow) always starts closed
+    // so a desktop "open" preference does not trap mobile users behind the sheet.
     const savedState = localStorage.getItem(SIDEBAR_STATE_KEY);
     const isMobileOverlay = MOBILE_MQ.matches;
-    if (savedState === 'closed' || (isMobileOverlay && savedState !== 'open')) {
+    if (isMobileOverlay) {
+        closeSidebar();
+    } else if (savedState === 'closed') {
         closeSidebar();
     }
 
@@ -118,6 +119,18 @@ export function initSidebar() {
     // Initial render
     renderFolderList();
     updateFolderCounts();
+
+    const onOverlayBreakpointChange = () => {
+        if (MOBILE_MQ.matches && sidebarElement.classList.contains('sidebar--open')) {
+            closeSidebar();
+        }
+    };
+    if (typeof MOBILE_MQ.addEventListener === 'function') {
+        MOBILE_MQ.addEventListener('change', onOverlayBreakpointChange);
+    } else {
+        // Safari < 14
+        MOBILE_MQ.addListener(onOverlayBreakpointChange);
+    }
 }
 
 /**

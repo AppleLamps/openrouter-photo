@@ -2717,8 +2717,8 @@ body.is-modal-open .spend-tracker {
     font-size: 0.85rem;
 }
 
-/* ── Mobile: open as a bottom sheet with a tappable backdrop above ── */
-@media (max-width: 768px) {
+/* ── Narrow viewports: bottom sheet (must match model menu portal breakpoint in app.js) ── */
+@media (max-width: 900px) {
     body.model-picker-open {
         overflow: hidden;
     }
