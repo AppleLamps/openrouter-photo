@@ -75,6 +75,9 @@ html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Dynamic viewport: avoids 100vh bugs when iOS toolbars show/hide */
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 body {
@@ -83,7 +86,10 @@ body {
     color: var(--text-primary);
     line-height: 1.6;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
+    /* Reduce accidental horizontal panning on iOS while scrolling vertically */
+    touch-action: pan-y pinch-zoom;
 }
 
 img {

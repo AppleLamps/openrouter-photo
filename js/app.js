@@ -273,7 +273,7 @@ function scheduleStorageIndicatorUpdate() {
 /**
  * Global registry of open dropdowns — a single document-level click/keydown
  * handler closes them all, instead of attaching N×2 listeners per dropdown.
- * @type {Set<{element: HTMLElement, close: Function}>}
+ * @type {Set<{ element: HTMLElement, close: () => void, portaledMenu?: HTMLElement }>}
  */
 const _openDropdowns = new Set();
 
@@ -281,7 +281,11 @@ const _openDropdowns = new Set();
 document.addEventListener('click', (e) => {
     for (const entry of _openDropdowns) {
         if (!entry.element.classList.contains('is-open')) continue;
-        if (e.target instanceof Node && entry.element.contains(e.target)) continue;
+        const target = e.target;
+        if (!(target instanceof Node)) continue;
+        if (entry.element.contains(target)) continue;
+        // Model picker moves #model-menu to <body> on narrow viewports; treat it as part of the dropdown.
+        if (entry.portaledMenu?.contains(target)) continue;
         entry.close();
     }
 });
@@ -589,10 +593,10 @@ function createModelPicker() {
         dropdown.classList.add('is-open');
         document.body.classList.add('model-picker-open');
         trigger.setAttribute('aria-expanded', 'true');
-        // On mobile, .input-bar has transform: translateX(-50%) which makes it the
-        // containing block for position:fixed children.  Portal the menu to <body>
-        // so it can correctly fill the viewport as a full-screen bottom sheet.
-        if (window.matchMedia('(max-width: 768px)').matches && menu.parentElement !== document.body) {
+        // On narrow viewports, .input-bar uses transform, which makes it the
+        // containing block for position:fixed children. Portal the menu to <body>
+        // so it can fill the viewport as a full-screen bottom sheet (matches sidebar overlay breakpoint).
+        if (window.matchMedia('(max-width: 900px)').matches && menu.parentElement !== document.body) {
             document.body.appendChild(menu);
             menu.classList.add('model-picker--open');
         }
@@ -635,7 +639,7 @@ function createModelPicker() {
         if (e.target === menu) close();
     });
 
-    _openDropdowns.add({ element: dropdown, close });
+    _openDropdowns.add({ element: dropdown, close, portaledMenu: menu });
 
     syncTriggerLabel();
     renderList();

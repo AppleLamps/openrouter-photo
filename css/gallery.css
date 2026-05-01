@@ -6,6 +6,13 @@
     gap: 20px;
 }
 
+@media (max-width: 600px) {
+    .gallery {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+    }
+}
+
 .gallery__card {
     position: relative;
     border-radius: 12px;

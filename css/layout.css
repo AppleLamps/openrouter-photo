@@ -2,6 +2,7 @@
 
 .app-container {
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
 }
@@ -232,6 +233,7 @@
     left: 0;
     top: 0;
     height: 100vh;
+    height: 100dvh;
     width: 260px;
     background: var(--bg-card);
     border-right: 1px solid var(--border-color);
@@ -548,8 +550,17 @@
 
 @media (max-width: 768px) {
     .main-content {
-        padding: calc(var(--spacing-lg) + 56px) var(--spacing-lg) var(--spacing-lg) var(--spacing-lg);
-        padding-bottom: 120px;
+        padding:
+            calc(var(--spacing-lg) + env(safe-area-inset-top) + 52px)
+            max(var(--spacing-lg), env(safe-area-inset-right))
+            var(--spacing-lg)
+            max(var(--spacing-lg), env(safe-area-inset-left));
+        padding-bottom: calc(120px + env(safe-area-inset-bottom));
+    }
+
+    .empty-state__content {
+        padding-left: max(16px, env(safe-area-inset-left));
+        padding-right: max(16px, env(safe-area-inset-right));
     }
 
     .sidebar {
@@ -560,8 +571,12 @@
 
 @media (max-width: 480px) {
     .main-content {
-        padding: calc(var(--spacing-md) + 56px) var(--spacing-md) var(--spacing-md) var(--spacing-md);
-        padding-bottom: 180px;
+        padding:
+            calc(var(--spacing-md) + env(safe-area-inset-top) + 48px)
+            max(var(--spacing-md), env(safe-area-inset-right))
+            var(--spacing-md)
+            max(var(--spacing-md), env(safe-area-inset-left));
+        padding-bottom: calc(180px + env(safe-area-inset-bottom));
         /* Increased to account for taller wrapping input bar */
     }
 }
