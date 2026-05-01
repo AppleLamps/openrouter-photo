@@ -59,6 +59,9 @@ export function initSidebar() {
         const target = /** @type {Node} */ (e.target);
         if (sidebarElement.contains(target)) return;
         if (expandButton && expandButton.contains(target)) return;
+        // Model picker portals its menu to document.body on narrow screens; don't treat it as "outside" the app.
+        const modelMenu = document.getElementById('model-menu');
+        if (modelMenu?.contains(target)) return;
         closeSidebar();
     });
 
