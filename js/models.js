@@ -42,6 +42,7 @@ export const MODELS = [
     { id: 'fal-ai/bytedance/seedance-2.0/image-to-video',          name: 'Seedance 2.0',           provider: 'Bytedance', type: 'image-to-video', tier: 'quality', via: 'fal' },
     { id: 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',      name: 'Seedance 1.5 Pro',       provider: 'Bytedance', type: 'text-to-video',  tier: 'quality', via: 'fal' },
     { id: 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video',     name: 'Seedance 1.5 Pro',       provider: 'Bytedance', type: 'image-to-video', tier: 'quality', via: 'fal' },
+    { id: 'alibaba/happy-horse/reference-to-video',                name: 'Happy Horse',            provider: 'Alibaba',   type: 'image-to-video', tier: 'quality', via: 'fal' },
 
     // ───── Wan ─────
     { id: 'fal-ai/wan/v2.7/pro/text-to-image',                     name: 'Wan 2.7 Pro',            provider: 'Wan',       type: 'image', tier: 'quality',  via: 'fal' },

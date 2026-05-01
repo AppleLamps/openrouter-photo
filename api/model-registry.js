@@ -24,6 +24,11 @@ const FAL_VIDEO_MODELS = {
     'fal-ai/bytedance/seedance/v1.5/pro/image-to-video': { imageToVideo: true },
     'fal-ai/bytedance/seedance-2.0/text-to-video': { seedance20: true },
     'fal-ai/bytedance/seedance-2.0/image-to-video': { seedance20: true, imageToVideo: true },
+    'alibaba/happy-horse/reference-to-video': {
+        imageToVideo: true,
+        happyHorse: true,
+        pricePerSecond: { '720p': 0.14, '1080p': 0.28 },
+    },
 };
 
 function getFalImageModel(model) {

@@ -15,8 +15,9 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     try {
-        // Cheap validation call: list models. If the key is invalid, OpenRouter will return 401/403.
-        const response = await fetch('https://openrouter.ai/api/v1/models', {
+        // Dedicated key validation endpoint. This is more reliable than listing models,
+        // which can be public/cacheable and is not specifically an auth check.
+        const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
             method: 'GET',
             headers: {
                 Authorization: `Bearer ${OPENROUTER_API_KEY}`,

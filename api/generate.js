@@ -4,6 +4,7 @@ const {
     isFalImageModel,
     isFalVideoModel,
     isFalEditModel,
+    getFalVideoModel,
 } = require('./model-registry');
 
 module.exports = withMiddleware(async function handler(req, res) {
@@ -111,7 +112,10 @@ module.exports = withMiddleware(async function handler(req, res) {
             ? aspect_ratio.trim()
             : imageSizePresetToAspectRatio(image_size);
 
-    const maxInputImages = model === 'fal-ai/phota/edit' ? 10 : 3;
+    const maxInputImages =
+        model === 'fal-ai/phota/edit' ? 10 :
+            model === 'alibaba/happy-horse/reference-to-video' ? 9 :
+                3;
     const normalizedInputImages = Array.isArray(image_urls)
         ? image_urls
             .filter((u) => typeof u === 'string' && u.startsWith('data:image/'))
@@ -462,28 +466,36 @@ module.exports = withMiddleware(async function handler(req, res) {
         }
     }
 
-    // ---------- Fal Seedance video model ----------
+    // ---------- Fal video models ----------
     if (isFalVideoModelForRequest) {
+        const falVideoConfig = getFalVideoModel(model);
+        const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
         // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
         const parsedDuration = parseInt(xai_video_length, 10);
         const isSeedance20 =
             model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
             model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
-        const maxFalDuration = isSeedance20 ? 15 : 12;
+        const minFalDuration = isHappyHorse ? 3 : 4;
+        const maxFalDuration = isSeedance20 || isHappyHorse ? 15 : 12;
         const normalizedDuration =
-            Number.isFinite(parsedDuration) && parsedDuration >= 4 && parsedDuration <= maxFalDuration
-                ? String(parsedDuration)
-                : '5';
-        const validResolutions = isSeedance20
+            Number.isFinite(parsedDuration) && parsedDuration >= minFalDuration && parsedDuration <= maxFalDuration
+                ? parsedDuration
+                : 5;
+        const validResolutions = isHappyHorse
+            ? ['720p', '1080p']
+            : isSeedance20
             ? ['480p', '720p']
             : ['480p', '720p', '1080p'];
         const normalizedResolution =
             typeof xai_video_quality === 'string' && validResolutions.includes(xai_video_quality)
                 ? xai_video_quality
-                : '720p';
+                : isHappyHorse ? '1080p' : '720p';
 
-        // Seedance supports: 21:9, 16:9, 4:3, 1:1, 3:4, 9:16, auto
-        const validAspectRatios = ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16', 'auto'];
+        // Seedance supports: 21:9, 16:9, 4:3, 1:1, 3:4, 9:16, auto.
+        // Happy Horse supports: 16:9, 9:16, 1:1, 4:3, 3:4.
+        const validAspectRatios = isHappyHorse
+            ? ['16:9', '9:16', '1:1', '4:3', '3:4']
+            : ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16', 'auto'];
         const falAspectRatio =
             typeof aspect_ratio === 'string' && validAspectRatios.includes(aspect_ratio.trim())
                 ? aspect_ratio.trim()
@@ -491,7 +503,8 @@ module.exports = withMiddleware(async function handler(req, res) {
 
         const isFalImageToVideo =
             model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
-            model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
+            model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
+            falVideoConfig?.imageToVideo === true;
 
         if (isFalImageToVideo && normalizedInputImages.length === 0) {
             return res.status(400).json({
@@ -503,15 +516,20 @@ module.exports = withMiddleware(async function handler(req, res) {
             prompt: prompt.trim(),
             aspect_ratio: falAspectRatio,
             resolution: normalizedResolution,
-            duration: normalizedDuration,
-            generate_audio: true,
+            duration: isHappyHorse ? normalizedDuration : String(normalizedDuration),
         };
 
-        if (!isSeedance20) {
+        if (!isHappyHorse) {
+            falVideoPayload.generate_audio = true;
+        }
+
+        if (!isSeedance20 || isHappyHorse) {
             falVideoPayload.enable_safety_checker = false;
         }
 
-        if (isFalImageToVideo) {
+        if (isHappyHorse) {
+            falVideoPayload.image_urls = normalizedInputImages;
+        } else if (isFalImageToVideo) {
             falVideoPayload.image_url = normalizedInputImages[0];
             if (normalizedInputImages[1]) {
                 falVideoPayload.end_image_url = normalizedInputImages[1];
@@ -545,8 +563,9 @@ module.exports = withMiddleware(async function handler(req, res) {
                 return res.status(502).json({ error: 'Fal video request did not return a request ID' });
             }
 
-            // Estimated cost for Seedance video generation (flat approximation per request)
-            const videoCost = 0.10;
+            const videoCost = isHappyHorse
+                ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
+                : 0.10;
 
             // Return immediately — client will poll /api/video-status
             return res.status(202).json({

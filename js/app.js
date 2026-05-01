@@ -1727,17 +1727,20 @@ function updateSettingsForModel(model) {
 
     const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedream = typeof model === 'string' && model.includes('seedream');
-    const isFalModel = typeof model === 'string' && model.startsWith('fal-ai/');
+    const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
+    const isFalModel = typeof model === 'string' && (model.startsWith('fal-ai/') || isHappyHorse);
     const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
     const isXaiVideo = model === 'grok-imagine-video';
     const isFalVideo =
         model === 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video' ||
         model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
         model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
-        model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
+        model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
+        isHappyHorse;
     const isFalImageToVideo =
         model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
-        model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
+        model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
+        isHappyHorse;
     const isXai = isXaiImage || isXaiVideo;
     const isVideoModel = isXaiVideo || isFalVideo;
 
