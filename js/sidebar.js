@@ -36,11 +36,27 @@ export function initSidebar() {
 
     if (!sidebarElement) return;
 
-    // Load saved sidebar state
+    // Load saved sidebar state.
+    // On mobile (overlay mode) default to closed so the sidebar doesn't
+    // immediately block the gallery on first load.
     const savedState = localStorage.getItem(SIDEBAR_STATE_KEY);
-    if (savedState === 'closed') {
+    const isMobileOverlay = window.matchMedia('(max-width: 900px)').matches;
+    if (savedState === 'closed' || (isMobileOverlay && savedState !== 'open')) {
         closeSidebar();
     }
+
+    // Close sidebar when tapping the backdrop (mobile overlay mode only).
+    // The sidebar's ::before pseudo-element creates the visual backdrop but
+    // cannot receive click events, so we listen at the document level and
+    // close whenever the tap lands outside the sidebar panel.
+    document.addEventListener('click', (e) => {
+        if (!window.matchMedia('(max-width: 900px)').matches) return;
+        if (!sidebarElement.classList.contains('sidebar--open')) return;
+        const target = /** @type {Node} */ (e.target);
+        if (sidebarElement.contains(target)) return;
+        if (expandButton && expandButton.contains(target)) return;
+        closeSidebar();
+    });
 
     // Collapse button
     const collapseBtn = document.getElementById('sidebar-collapse');
@@ -86,6 +102,10 @@ export function initSidebar() {
         }
         if (action === 'folder-selected') {
             updateSelectedFolder(data.folderId);
+            // Auto-close sidebar after selecting a folder on mobile
+            if (window.matchMedia('(max-width: 900px)').matches) {
+                closeSidebar();
+            }
         }
         if (action === 'edit-mode-changed') {
             updateEditModeUI(data.enabled);
