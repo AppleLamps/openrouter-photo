@@ -7,6 +7,9 @@ import { createElement } from './utils.js';
 
 const SIDEBAR_STATE_KEY = 'sidebar_open';
 
+/** Media query that matches the CSS overlay breakpoint for the sidebar. */
+const MOBILE_MQ = window.matchMedia('(max-width: 900px)');
+
 let sidebarElement = null;
 let expandButton = null;
 let appContainer = null;
@@ -40,7 +43,7 @@ export function initSidebar() {
     // On mobile (overlay mode) default to closed so the sidebar doesn't
     // immediately block the gallery on first load.
     const savedState = localStorage.getItem(SIDEBAR_STATE_KEY);
-    const isMobileOverlay = window.matchMedia('(max-width: 900px)').matches;
+    const isMobileOverlay = MOBILE_MQ.matches;
     if (savedState === 'closed' || (isMobileOverlay && savedState !== 'open')) {
         closeSidebar();
     }
@@ -50,7 +53,7 @@ export function initSidebar() {
     // cannot receive click events, so we listen at the document level and
     // close whenever the tap lands outside the sidebar panel.
     document.addEventListener('click', (e) => {
-        if (!window.matchMedia('(max-width: 900px)').matches) return;
+        if (!MOBILE_MQ.matches) return;
         if (!sidebarElement.classList.contains('sidebar--open')) return;
         const target = /** @type {Node} */ (e.target);
         if (sidebarElement.contains(target)) return;
@@ -103,7 +106,7 @@ export function initSidebar() {
         if (action === 'folder-selected') {
             updateSelectedFolder(data.folderId);
             // Auto-close sidebar after selecting a folder on mobile
-            if (window.matchMedia('(max-width: 900px)').matches) {
+            if (MOBILE_MQ.matches) {
                 closeSidebar();
             }
         }
