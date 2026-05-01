@@ -9,7 +9,9 @@ const FAL_IMAGE_MODELS = {
     'fal-ai/wan/v2.7/pro/edit': { edit: true, price: { type: 'flat', amount: 0.04 } },
     'fal-ai/ernie-image/lora': { price: { type: 'mpix', amount: 0.015 } },
     'fal-ai/ernie-image/lora/turbo': { price: { type: 'mpix', amount: 0.015 } },
-    'fal-ai/nucleus-image': { price: { type: 'flat', amount: 0.04 } },
+    'fal-ai/nucleus-image': { price: { type: 'mpix', amount: 0.01 } },
+    'fal-ai/glm-image': { price: { type: 'mpix', amount: 0.05 } },
+    'fal-ai/ovis-image': { price: { type: 'mpix', amount: 0.012 } },
     'fal-ai/z-image/turbo/lora': { price: { type: 'mpix', amount: 0.0085 } },
     'fal-ai/bitdance': { price: { type: 'flat', amount: 0.01 } },
     'fal-ai/qwen-image-max/text-to-image': { price: { type: 'flat', amount: 0.075 } },
@@ -24,6 +26,11 @@ const FAL_VIDEO_MODELS = {
     'fal-ai/bytedance/seedance/v1.5/pro/image-to-video': { imageToVideo: true },
     'fal-ai/bytedance/seedance-2.0/text-to-video': { seedance20: true },
     'fal-ai/bytedance/seedance-2.0/image-to-video': { seedance20: true, imageToVideo: true },
+    'bytedance/seedance-2.0/text-to-video': {
+        seedance20: true,
+        seedance20Advanced: true,
+        pricePerSecond: { '720p': 0.3034 },
+    },
     'alibaba/happy-horse/reference-to-video': {
         imageToVideo: true,
         happyHorse: true,

@@ -40,6 +40,7 @@ export const MODELS = [
     // ───── Bytedance: Seedance (video) ─────
     { id: 'fal-ai/bytedance/seedance-2.0/text-to-video',           name: 'Seedance 2.0',           provider: 'Bytedance', type: 'text-to-video',  tier: 'quality', via: 'fal' },
     { id: 'fal-ai/bytedance/seedance-2.0/image-to-video',          name: 'Seedance 2.0',           provider: 'Bytedance', type: 'image-to-video', tier: 'quality', via: 'fal' },
+    { id: 'bytedance/seedance-2.0/text-to-video',                  name: 'Seedance 2.0 Pro',       provider: 'Bytedance', type: 'text-to-video',  tier: 'quality', via: 'fal' },
     { id: 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',      name: 'Seedance 1.5 Pro',       provider: 'Bytedance', type: 'text-to-video',  tier: 'quality', via: 'fal' },
     { id: 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video',     name: 'Seedance 1.5 Pro',       provider: 'Bytedance', type: 'image-to-video', tier: 'quality', via: 'fal' },
     { id: 'alibaba/happy-horse/reference-to-video',                name: 'Happy Horse',            provider: 'Alibaba',   type: 'image-to-video', tier: 'quality', via: 'fal' },
@@ -64,6 +65,8 @@ export const MODELS = [
     { id: 'fal-ai/phota',                                          name: 'Phota',                  provider: 'fal.ai',    type: 'image', tier: 'quality',  via: 'fal' },
     { id: 'fal-ai/phota/edit',                                     name: 'Phota Edit',             provider: 'fal.ai',    type: 'edit',  tier: 'quality',  via: 'fal' },
     { id: 'fal-ai/nucleus-image',                                  name: 'Nucleus',                provider: 'Nucleus',   type: 'image', tier: 'balanced', via: 'fal' },
+    { id: 'fal-ai/glm-image',                                      name: 'GLM Image',              provider: 'Zhipu AI',   type: 'image', tier: 'quality',  via: 'fal' },
+    { id: 'fal-ai/ovis-image',                                     name: 'Ovis Image',             provider: 'Ovis',       type: 'image', tier: 'fast',     via: 'fal' },
     { id: 'fal-ai/ernie-image/lora',                               name: 'Ernie LoRA',             provider: 'Baidu',     type: 'image', tier: 'balanced', via: 'fal' },
     { id: 'fal-ai/ernie-image/lora/turbo',                         name: 'Ernie Image Turbo',      provider: 'Baidu',     type: 'image', tier: 'fast',     via: 'fal' },
 ];

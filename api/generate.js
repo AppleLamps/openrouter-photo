@@ -239,6 +239,54 @@ module.exports = withMiddleware(async function handler(req, res) {
                 enable_safety_checker: false,
                 enable_prompt_expansion: false,
             };
+        } else if (model === 'fal-ai/ovis-image') {
+            // Ovis Image is optimized for quick, high-quality text rendering.
+            // https://fal.ai/models/fal-ai/ovis-image/api
+            falPayload = {
+                prompt: prompt.trim(),
+                negative_prompt: '',
+                image_size: falImageSize,
+                num_inference_steps: 28,
+                guidance_scale: 5,
+                sync_mode: false,
+                num_images: parsedNumImages,
+                enable_safety_checker: false,
+                output_format: 'png',
+                acceleration: 'regular',
+            };
+        } else if (model === 'fal-ai/glm-image') {
+            // GLM Image supports image_size, prompt expansion, and strong text rendering.
+            // https://fal.ai/models/fal-ai/glm-image/api
+            falPayload = {
+                prompt: prompt.trim(),
+                image_size: falImageSize,
+                num_inference_steps: 30,
+                guidance_scale: 1.5,
+                num_images: parsedNumImages,
+                enable_safety_checker: false,
+                output_format: 'jpeg',
+                sync_mode: false,
+                enable_prompt_expansion: false,
+            };
+        } else if (model === 'fal-ai/nucleus-image') {
+            // Nucleus Image uses aspect_ratio presets instead of image_size.
+            // https://fal.ai/models/fal-ai/nucleus-image/api
+            const validNucleusAspectRatios = new Set(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']);
+            const nucleusAspectRatio = validNucleusAspectRatios.has(normalizedAspectRatio)
+                ? normalizedAspectRatio
+                : '1:1';
+
+            falPayload = {
+                prompt: prompt.trim(),
+                negative_prompt: '',
+                aspect_ratio: nucleusAspectRatio,
+                num_inference_steps: 50,
+                guidance_scale: 8,
+                num_images: Math.min(parsedNumImages, 2),
+                sync_mode: false,
+                enable_safety_checker: false,
+                output_format: 'png',
+            };
         } else if (isBitdanceModel) {
             // BitDance autoregressive image model — flat $0.01/image.
             // https://fal.ai/models/fal-ai/bitdance/api
@@ -470,18 +518,20 @@ module.exports = withMiddleware(async function handler(req, res) {
     if (isFalVideoModelForRequest) {
         const falVideoConfig = getFalVideoModel(model);
         const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
+        const isSeedance20Advanced = model === 'bytedance/seedance-2.0/text-to-video';
         // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
         const parsedDuration = parseInt(xai_video_length, 10);
         const isSeedance20 =
             model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
-            model === 'fal-ai/bytedance/seedance-2.0/image-to-video';
+            model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
+            isSeedance20Advanced;
         const minFalDuration = isHappyHorse ? 3 : 4;
         const maxFalDuration = isSeedance20 || isHappyHorse ? 15 : 12;
         const normalizedDuration =
             Number.isFinite(parsedDuration) && parsedDuration >= minFalDuration && parsedDuration <= maxFalDuration
                 ? parsedDuration
                 : 5;
-        const validResolutions = isHappyHorse
+        const validResolutions = isHappyHorse || isSeedance20Advanced
             ? ['720p', '1080p']
             : isSeedance20
             ? ['480p', '720p']
@@ -523,7 +573,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             falVideoPayload.generate_audio = true;
         }
 
-        if (!isSeedance20 || isHappyHorse) {
+        if (!isSeedance20 || isHappyHorse || isSeedance20Advanced) {
             falVideoPayload.enable_safety_checker = false;
         }
 
@@ -565,6 +615,8 @@ module.exports = withMiddleware(async function handler(req, res) {
 
             const videoCost = isHappyHorse
                 ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
+                : isSeedance20Advanced
+                    ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
                 : 0.10;
 
             // Return immediately — client will poll /api/video-status

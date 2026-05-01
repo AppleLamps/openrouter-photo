@@ -165,6 +165,16 @@ function clearPromptAttachments() {
     renderPromptAttachments();
 }
 
+function getAttachedImageUrls(limit = PROMPT_ATTACHMENTS_MAX) {
+    const images = [
+        ...promptImageDataUrls,
+        ...(inputImageDataUri ? [inputImageDataUri] : []),
+        ...multiImageDataUris,
+    ].filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
+
+    return Array.from(new Set(images)).slice(0, limit);
+}
+
 function safeParseJson(text) {
     try {
         return JSON.parse(text);
@@ -1516,7 +1526,7 @@ function initImageUpload() {
  * @param {HTMLElement} preview - The preview container
  * @param {HTMLImageElement} previewImg - The preview image element
  */
-function handleImageFile(file, label, preview, previewImg) {
+async function handleImageFile(file, label, preview, previewImg) {
     if (!file.type.startsWith('image/')) {
         showError('Please select a valid image file');
         return;
@@ -1528,9 +1538,8 @@ function handleImageFile(file, label, preview, previewImg) {
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const dataUri = e.target?.result;
+    try {
+        const dataUri = await compressImageForUpload(file);
         if (dataUri) {
             // Store the data URI globally
             inputImageDataUri = dataUri;
@@ -1539,11 +1548,10 @@ function handleImageFile(file, label, preview, previewImg) {
             preview.classList.remove('image-upload__preview--hidden');
             label.style.display = 'none';
         }
-    };
-    reader.onerror = () => {
-        showError('Failed to read image file');
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+        console.error('Failed to process image:', error);
+        showError('Failed to process image file');
+    }
 }
 
 /**
@@ -1614,7 +1622,7 @@ function initMultiImageUpload() {
  * @param {File[]} files - The image files
  * @param {HTMLElement} previewsContainer - The previews container
  */
-function handleMultipleImageFiles(files, previewsContainer) {
+async function handleMultipleImageFiles(files, previewsContainer) {
     // Validate individual files first, filtering out invalid ones
     const validFiles = [];
     for (const file of files) {
@@ -1640,20 +1648,18 @@ function handleMultipleImageFiles(files, previewsContainer) {
     previewsContainer.innerHTML = '';
 
     // Process each file
-    files.forEach((file, index) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUri = e.target?.result;
+    for (const [index, file] of files.entries()) {
+        try {
+            const dataUri = await compressImageForUpload(file);
             if (dataUri) {
                 multiImageDataUris.push(dataUri);
                 addMultiImagePreview(dataUri, index + 1, previewsContainer);
             }
-        };
-        reader.onerror = () => {
-            showError(`Failed to read image file: ${file.name}`);
-        };
-        reader.readAsDataURL(file);
-    });
+        } catch (error) {
+            console.error('Failed to process image:', error);
+            showError(`Failed to process image file: ${file.name}`);
+        }
+    }
 }
 
 /**
@@ -1728,7 +1734,8 @@ function updateSettingsForModel(model) {
     const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedream = typeof model === 'string' && model.includes('seedream');
     const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
-    const isFalModel = typeof model === 'string' && (model.startsWith('fal-ai/') || isHappyHorse);
+    const isSeedance20Advanced = model === 'bytedance/seedance-2.0/text-to-video';
+    const isFalModel = typeof model === 'string' && (model.startsWith('fal-ai/') || isHappyHorse || isSeedance20Advanced);
     const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
     const isXaiVideo = model === 'grok-imagine-video';
     const isFalVideo =
@@ -1736,6 +1743,7 @@ function updateSettingsForModel(model) {
         model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
         model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
         model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
+        isSeedance20Advanced ||
         isHappyHorse;
     const isFalImageToVideo =
         model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
@@ -1835,23 +1843,24 @@ async function handleGenerate(input, button) {
     const selectedFolderInputAtStart = document.getElementById('selected-folder');
     const generationFolderId = selectedFolderInputAtStart?.value || null;
 
+    const attachedImageUrls = getAttachedImageUrls();
+    const requestSettings = {
+        ...settings,
+        ...(attachedImageUrls.length > 0
+            ? { image_urls: attachedImageUrls }
+            : {}),
+    };
+
     // Show placeholder cards for each image with unique IDs
     const placeholderIds = [];
     for (let i = 0; i < numImages; i++) {
         const placeholderId = generateId();
         placeholderIds.push(placeholderId);
         showPlaceholder(placeholderId, generationFolderId);
-        placeholderMetadata.set(placeholderId, { prompt, settings, folderId: generationFolderId });
+        placeholderMetadata.set(placeholderId, { prompt, settings: requestSettings, folderId: generationFolderId });
     }
 
     try {
-        const requestSettings = {
-            ...settings,
-            ...(promptImageDataUrls.length > 0
-                ? { image_urls: promptImageDataUrls.slice(0, PROMPT_ATTACHMENTS_MAX) }
-                : {}),
-        };
-
         // Cache the abort signal so we can safely check it even if
         // generationAbortController is set to null by cancel/finally.
         const abortSignal = generationAbortController.signal;
@@ -2095,7 +2104,7 @@ async function handleEnhance(input, button) {
 
     try {
         // Pass attached images so AI can see the photo when enhancing the prompt
-        const enhanced = await enhancePrompt(prompt, promptImageDataUrls);
+        const enhanced = await enhancePrompt(prompt, getAttachedImageUrls());
 
         // Update input with enhanced prompt
         input.value = enhanced;
@@ -2180,7 +2189,7 @@ function setupCustomEnhanceModal(input, button) {
         submitBtn.textContent = 'Enhancing...';
 
         try {
-            const enhanced = await enhancePrompt(prompt, promptImageDataUrls, instructions);
+            const enhanced = await enhancePrompt(prompt, getAttachedImageUrls(), instructions);
             input.value = enhanced;
             flashInput(input);
             close();
