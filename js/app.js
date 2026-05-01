@@ -271,14 +271,16 @@ function scheduleStorageIndicatorUpdate() {
 }
 
 /**
- * Global registry of open dropdowns — a single document-level click/keydown
- * handler closes them all, instead of attaching N×2 listeners per dropdown.
+ * Global registry of open dropdowns — document-level pointer/key handlers
+ * close them all, instead of attaching N×2 listeners per dropdown.
  * @type {Set<{ element: HTMLElement, close: () => void, portaledMenu?: HTMLElement }>}
  */
 const _openDropdowns = new Set();
 
-// Single document-level handler: close any open dropdown on outside click
-document.addEventListener('click', (e) => {
+// Close open dropdowns on outside interaction. Use pointerdown + capture so we run
+// before nested targets inside a portaled menu receive the event (bubble order would
+// otherwise close the picker before row clicks fire when #model-menu is under <body>).
+document.addEventListener('pointerdown', (e) => {
     for (const entry of _openDropdowns) {
         if (!entry.element.classList.contains('is-open')) continue;
         const target = e.target;
@@ -288,7 +290,7 @@ document.addEventListener('click', (e) => {
         if (entry.portaledMenu?.contains(target)) continue;
         entry.close();
     }
-});
+}, true);
 
 // Single document-level handler: close any open dropdown on Escape
 document.addEventListener('keydown', (e) => {
