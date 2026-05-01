@@ -578,12 +578,24 @@ function createModelPicker() {
         dropdown.classList.remove('is-open');
         document.body.classList.remove('model-picker-open');
         trigger.setAttribute('aria-expanded', 'false');
+        // If the menu was portaled to <body> (mobile), move it back
+        if (menu.parentElement === document.body) {
+            menu.classList.remove('model-picker--open');
+            dropdown.appendChild(menu);
+        }
     };
 
     const open = () => {
         dropdown.classList.add('is-open');
         document.body.classList.add('model-picker-open');
         trigger.setAttribute('aria-expanded', 'true');
+        // On mobile, .input-bar has transform: translateX(-50%) which makes it the
+        // containing block for position:fixed children.  Portal the menu to <body>
+        // so it can correctly fill the viewport as a full-screen bottom sheet.
+        if (window.matchMedia('(max-width: 768px)').matches && menu.parentElement !== document.body) {
+            document.body.appendChild(menu);
+            menu.classList.add('model-picker--open');
+        }
         renderList();
         // Focus search after the menu renders so iOS doesn't suppress the keyboard.
         requestAnimationFrame(() => {

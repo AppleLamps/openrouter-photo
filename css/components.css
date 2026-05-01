@@ -830,6 +830,11 @@ body.is-modal-open .spend-tracker {
         width: calc(100% - var(--spacing-md) * 2);
     }
 
+    /* Remove desktop padding so the stage/info fill edge-to-edge on mobile */
+    .modal {
+        padding: 0;
+    }
+
     .input-bar__container {
         padding: 14px 16px 10px 16px;
         border-radius: 16px;
@@ -2809,4 +2814,9 @@ body.is-modal-open .spend-tracker {
         font-size: 0.7rem;
         padding: 3px 8px;
     }
+}
+
+/* Model picker portaled to <body> on mobile (avoids transform containing-block) */
+.model-picker--open {
+    display: flex;
 }
