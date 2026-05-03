@@ -68,7 +68,9 @@
     /* Z-Index */
     --z-gallery: 1;
     --z-input-bar: 100;
+    --z-sidebar: 900;
     --z-modal: 1000;
+    --z-app-modal: 10000;
 }
 
 html {
@@ -139,4 +141,10 @@ a {
 ::selection {
     background-color: var(--accent-primary);
     color: white;
+}
+
+body.is-sidebar-overlay-open,
+body.model-picker-open,
+body.is-modal-open {
+    overflow: hidden;
 }

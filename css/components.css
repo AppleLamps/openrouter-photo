@@ -64,6 +64,8 @@ body.is-modal-open .spend-tracker {
 }
 
 .input-bar__input-row {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: flex-start;
     gap: 8px;
@@ -96,6 +98,8 @@ body.is-modal-open .spend-tracker {
 }
 
 .input-bar__actions {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -110,6 +114,8 @@ body.is-modal-open .spend-tracker {
 }
 
 .input-bar__actions-center {
+    position: relative;
+    z-index: 3;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -826,8 +832,18 @@ body.is-modal-open .spend-tracker {
 /* Responsive Components */
 @media (max-width: 768px) {
     .input-bar {
-        bottom: calc(env(safe-area-inset-bottom) + var(--spacing-md));
-        width: calc(100% - var(--spacing-md) * 2);
+        left: 0;
+        right: 0;
+        bottom: max(0px, calc(100% - 100dvh));
+        width: 100%;
+        max-width: none;
+        transform: none;
+    }
+
+    .app-container--sidebar-open .input-bar {
+        left: 0;
+        width: 100%;
+        transform: none;
     }
 
     /* Remove desktop padding so the stage/info fill edge-to-edge on mobile */
@@ -836,8 +852,13 @@ body.is-modal-open .spend-tracker {
     }
 
     .input-bar__container {
-        padding: 14px 16px 10px 16px;
-        border-radius: 16px;
+        padding:
+            12px max(14px, env(safe-area-inset-right))
+            calc(10px + env(safe-area-inset-bottom))
+            max(14px, env(safe-area-inset-left));
+        border-width: 1px 0 0;
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.12);
     }
 
     .modal__content {
@@ -1001,8 +1022,7 @@ body.is-modal-open .spend-tracker {
     /* Stack actions on mobile to prevent overlaps */
     .input-bar__actions {
         flex-wrap: wrap;
-        gap: 12px;
-        /* bit more space between rows */
+        gap: 10px;
     }
 
     .input-bar__actions-left {
@@ -1019,11 +1039,9 @@ body.is-modal-open .spend-tracker {
         order: 3;
         width: 100%;
         margin-top: 4px;
-        /* Space between buttons and dropdowns */
         justify-content: space-between;
-        /* Distribute dropdowns evenly */
         border-top: 1px solid var(--border-color);
-        padding-top: 12px;
+        padding-top: 10px;
     }
 
     /* Make dropdowns take available space */
@@ -1053,23 +1071,37 @@ body.is-modal-open .spend-tracker {
     /* Better vertical alignment for input with icon button */
     .input-bar__input {
         margin-top: 6px;
-        /* Align text baseline with icon button */
+        font-size: 16px;
+    }
+
+    .input-bar__icon-btn,
+    .input-bar__button {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .input-bar__inline-select {
+        min-height: 40px;
+        font-size: 0.78rem;
     }
 }
 
 @media (max-width: 480px) {
     .input-bar__container {
-        padding: 12px 14px 8px 14px;
+        padding:
+            10px max(12px, env(safe-area-inset-right))
+            calc(9px + env(safe-area-inset-bottom))
+            max(12px, env(safe-area-inset-left));
     }
 
     .input-bar__button {
-        width: 36px;
-        height: 36px;
+        width: 44px;
+        height: 44px;
     }
 
     .input-bar__icon-btn {
-        width: 32px;
-        height: 32px;
+        width: 44px;
+        height: 44px;
     }
 
     .input-bar__icon-btn svg {
@@ -1504,7 +1536,7 @@ body.is-modal-open .spend-tracker {
 /* Responsive Settings Panel */
 @media (max-width: 768px) {
     .settings-panel {
-        bottom: 80px;
+        bottom: calc(80px + max(0px, calc(100% - 100dvh)));
         width: calc(100% - var(--spacing-md) * 2);
         max-height: 60vh;
     }
@@ -1512,7 +1544,7 @@ body.is-modal-open .spend-tracker {
 
 @media (max-width: 600px) {
     .settings-panel {
-        bottom: 180px;
+        bottom: calc(180px + max(0px, calc(100% - 100dvh)));
         /* Moved up to clear the taller input bar */
     }
 }
@@ -1640,7 +1672,10 @@ body.is-modal-open .spend-tracker {
 .openrouter-key-modal {
     position: fixed;
     inset: 0;
-    z-index: 10000;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    z-index: var(--z-app-modal);
     display: none;
 }
 
@@ -2255,6 +2290,43 @@ body.is-modal-open .spend-tracker {
 
 /* Responsive spend breakdown */
 @media (max-width: 600px) {
+    #folder-modal.openrouter-key-modal--active {
+        align-items: flex-end;
+    }
+
+    #folder-modal .openrouter-key-modal__card {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: calc(100dvh - 16px);
+        border-radius: 20px 20px 0 0;
+        border-width: 1px 0 0;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    #folder-modal .openrouter-key-modal__actions {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    #folder-modal .openrouter-key-modal__ok,
+    #folder-modal .openrouter-key-modal__link {
+        position: relative;
+        z-index: 3;
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+
     .openrouter-key-modal__card {
         width: calc(100% - 32px);
         max-height: calc(100vh - 48px);
@@ -2506,11 +2578,18 @@ body.is-modal-open .spend-tracker {
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
+.model-picker__sheet-header {
+    display: none;
+}
+
+.model-picker__sheet-close {
+    display: none;
+}
+
 .model-picker__search-icon {
     position: absolute;
     left: 22px;
-    top: 50%;
-    transform: translateY(-50%);
+    bottom: 18px;
     color: var(--text-muted);
     pointer-events: none;
 }
@@ -2737,7 +2816,7 @@ body.is-modal-open .spend-tracker {
         min-width: 0;
         margin: 0;
         padding: 0;
-        z-index: var(--z-modal);
+        z-index: calc(var(--z-modal) + 20);
         background: rgba(0, 0, 0, 0.5);
         -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px);
@@ -2758,7 +2837,7 @@ body.is-modal-open .spend-tracker {
 
     .model-picker__search-wrap {
         position: relative;
-        padding: 22px 14px 8px;
+        padding: 18px 14px 8px;
         border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         border-radius: 18px 18px 0 0;
     }
@@ -2776,6 +2855,38 @@ body.is-modal-open .spend-tracker {
         background: rgba(0, 0, 0, 0.15);
     }
 
+    .model-picker__sheet-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 44px;
+        padding-bottom: 8px;
+    }
+
+    .model-picker__sheet-title {
+        color: var(--text-primary);
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .model-picker__sheet-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        margin-right: -4px;
+        border-radius: 999px;
+        color: var(--text-secondary);
+        background: rgba(0, 0, 0, 0.05);
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .model-picker__sheet-close:active {
+        background: rgba(0, 0, 0, 0.1);
+    }
+
     .model-picker__search {
         font-size: 16px; /* prevents iOS zoom-on-focus */
         padding: 12px 12px 12px 36px;
@@ -2783,6 +2894,7 @@ body.is-modal-open .spend-tracker {
 
     .model-picker__search-icon {
         left: 26px;
+        bottom: 22px;
     }
 
     .model-picker__tabs {
@@ -2817,6 +2929,6 @@ body.is-modal-open .spend-tracker {
 }
 
 /* Model picker portaled to <body> on mobile (avoids transform containing-block) */
-.model-picker--open {
+.model-picker.input-bar__dropdown-menu--model.model-picker--open {
     display: flex;
 }

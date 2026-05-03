@@ -13,7 +13,7 @@ import { state } from './state.js';
 import { generateId } from './utils.js';
 import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, showErrorCard, initLightbox, closeLightbox } from './gallery.js';
 import { formatBytes } from './image-utils.js';
-import { initSidebar } from './sidebar.js';
+import { initSidebar, showCreateFolderModal } from './sidebar.js';
 import {
     MODELS,
     CAPABILITY_TABS,
@@ -432,6 +432,7 @@ function createModelPicker() {
     const menu = document.getElementById('model-menu');
     const hidden = document.getElementById('setting-model');
     const search = /** @type {HTMLInputElement|null} */ (document.getElementById('model-picker-search'));
+    const closeBtn = document.getElementById('model-picker-close');
     const tabsEl = document.getElementById('model-picker-tabs');
     const listEl = document.getElementById('model-picker-list');
 
@@ -636,6 +637,15 @@ function createModelPicker() {
         }
     });
 
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            close();
+            trigger.focus({ preventScroll: true });
+        });
+    }
+
     // Close when clicking the backdrop on mobile
     menu.addEventListener('click', (e) => {
         if (e.target === menu) close();
@@ -747,13 +757,11 @@ function initFolderSelectorDropdown() {
         newFolderOption.type = 'button';
         newFolderOption.className = 'input-bar__dropdown-item input-bar__dropdown-item--action';
         newFolderOption.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Folder`;
-        newFolderOption.addEventListener('click', async () => {
+        newFolderOption.addEventListener('click', () => {
             close();
-            const name = prompt('Enter folder name:');
-            if (name && name.trim()) {
-                const folder = await state.addFolder(name.trim());
+            showCreateFolderModal((folder) => {
                 setValue(folder.id, folder.name, true);
-            }
+            });
         });
         menu.appendChild(newFolderOption);
     };

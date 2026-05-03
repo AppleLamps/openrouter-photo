@@ -26,6 +26,13 @@ let folderModalClose = null;
 // Modal state
 let currentFolderAction = null; // 'create' or 'rename'
 let currentFolderTarget = null; // folder object being renamed
+let currentFolderComplete = null;
+
+function syncSidebarDocumentState(isOpen) {
+    const isMobileOverlay = MOBILE_MQ.matches;
+    document.body.classList.toggle('is-sidebar-open', isOpen);
+    document.body.classList.toggle('is-sidebar-overlay-open', isOpen && isMobileOverlay);
+}
 
 /**
  * Initialize the sidebar
@@ -44,7 +51,9 @@ export function initSidebar() {
     const savedState = localStorage.getItem(SIDEBAR_STATE_KEY);
     const isMobileOverlay = MOBILE_MQ.matches;
     if (isMobileOverlay) {
-        closeSidebar();
+        closeSidebar(false);
+    } else if (savedState !== 'closed') {
+        openSidebar();
     } else if (savedState === 'closed') {
         closeSidebar();
     }
@@ -125,7 +134,9 @@ export function initSidebar() {
 
     const onOverlayBreakpointChange = () => {
         if (MOBILE_MQ.matches && sidebarElement.classList.contains('sidebar--open')) {
-            closeSidebar();
+            closeSidebar(false);
+        } else {
+            syncSidebarDocumentState(sidebarElement.classList.contains('sidebar--open'));
         }
     };
     if (typeof MOBILE_MQ.addEventListener === 'function') {
@@ -159,6 +170,7 @@ export function openSidebar() {
 
     sidebarElement.classList.add('sidebar--open');
     appContainer.classList.add('app-container--sidebar-open');
+    syncSidebarDocumentState(true);
     if (expandButton) {
         expandButton.classList.add('sidebar__expand-btn--hidden');
     }
@@ -168,15 +180,18 @@ export function openSidebar() {
 /**
  * Close sidebar
  */
-export function closeSidebar() {
+export function closeSidebar(persist = true) {
     if (!sidebarElement || !appContainer) return;
 
     sidebarElement.classList.remove('sidebar--open');
     appContainer.classList.remove('app-container--sidebar-open');
+    syncSidebarDocumentState(false);
     if (expandButton) {
         expandButton.classList.remove('sidebar__expand-btn--hidden');
     }
-    localStorage.setItem(SIDEBAR_STATE_KEY, 'closed');
+    if (persist) {
+        localStorage.setItem(SIDEBAR_STATE_KEY, 'closed');
+    }
 }
 
 /**
@@ -354,14 +369,16 @@ function initFolderModal() {
 
 /**
  * Open folder modal
- * @param {'create'|'rename'|'delete'} action 
- * @param {Object|null} folder 
+ * @param {'create'|'rename'|'delete'} action
+ * @param {Object|null} folder
+ * @param {(folder: Object) => void|null} onComplete
  */
-function openFolderModal(action, folder = null) {
+function openFolderModal(action, folder = null, onComplete = null) {
     if (!folderModal) return;
 
     currentFolderAction = action;
     currentFolderTarget = folder;
+    currentFolderComplete = typeof onComplete === 'function' ? onComplete : null;
 
     // Reset UI state
     folderModalInput.value = '';
@@ -410,6 +427,7 @@ function closeFolderModal() {
     document.body.classList.remove('is-modal-open');
     currentFolderAction = null;
     currentFolderTarget = null;
+    currentFolderComplete = null;
     
     // Clean up inline styles
     folderModalSave.style.backgroundColor = '';
@@ -419,9 +437,9 @@ function closeFolderModal() {
 /**
  * Handle save action
  */
-function handleFolderSave() {
+async function handleFolderSave() {
     if (currentFolderAction === 'delete' && currentFolderTarget) {
-        state.deleteFolder(currentFolderTarget.id);
+        await state.deleteFolder(currentFolderTarget.id);
         closeFolderModal();
         return;
     }
@@ -439,10 +457,13 @@ function handleFolderSave() {
     folderModalInput.style.borderColor = '';
 
     if (currentFolderAction === 'create') {
-        state.addFolder(name);
+        const folder = await state.addFolder(name);
+        if (typeof currentFolderComplete === 'function') {
+            currentFolderComplete(folder);
+        }
     } else if (currentFolderAction === 'rename' && currentFolderTarget) {
         if (name !== currentFolderTarget.name) {
-            state.renameFolder(currentFolderTarget.id, name);
+            await state.renameFolder(currentFolderTarget.id, name);
         }
     }
 
@@ -452,8 +473,8 @@ function handleFolderSave() {
 /**
  * Show create folder modal
  */
-export function showCreateFolderModal() {
-    openFolderModal('create');
+export function showCreateFolderModal(onCreated = null) {
+    openFolderModal('create', null, onCreated);
 }
 
 /**

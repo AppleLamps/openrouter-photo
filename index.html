@@ -28,9 +28,9 @@
 </head>
 
 <body>
-    <div class="app-container app-container--sidebar-open">
+    <div class="app-container">
         <!-- Sidebar -->
-        <aside id="sidebar" class="sidebar sidebar--open">
+        <aside id="sidebar" class="sidebar">
             <div class="sidebar__header">
                 <h2 class="sidebar__title">Folders</h2>
                 <button id="sidebar-collapse" class="sidebar__collapse-btn" type="button" title="Collapse sidebar"
@@ -84,7 +84,7 @@
         </aside>
 
         <!-- Floating button to reopen collapsed sidebar -->
-        <button id="sidebar-expand" class="sidebar__expand-btn sidebar__expand-btn--hidden" type="button"
+        <button id="sidebar-expand" class="sidebar__expand-btn" type="button"
             title="Open sidebar" aria-label="Open sidebar">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -259,6 +259,18 @@
                             <div id="model-menu" class="input-bar__dropdown-menu input-bar__dropdown-menu--model model-picker"
                                 role="dialog" aria-label="Choose a model">
                                 <div class="model-picker__search-wrap">
+                                    <div class="model-picker__sheet-header">
+                                        <span class="model-picker__sheet-title">Choose Model</span>
+                                        <button id="model-picker-close" class="model-picker__sheet-close" type="button"
+                                            aria-label="Close model picker">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                            </svg>
+                                        </button>
+                                    </div>
                                     <svg class="model-picker__search-icon" xmlns="http://www.w3.org/2000/svg"
                                         width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
