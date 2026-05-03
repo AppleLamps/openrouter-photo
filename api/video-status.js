@@ -66,6 +66,16 @@ module.exports = withMiddleware(async function handler(req, res) {
             };
         };
 
+        const extractFalVideoUrl = (data) => (
+            data?.video?.url ||
+            data?.url ||
+            data?.response?.video?.url ||
+            data?.response?.url ||
+            data?.data?.video?.url ||
+            data?.data?.url ||
+            null
+        );
+
         try {
             // Prefer Fal-provided status URL, then fallback to constructed URLs.
             const statusCandidates = buildUniqueUrls([
@@ -83,33 +93,31 @@ module.exports = withMiddleware(async function handler(req, res) {
 
             const statusData = statusResult.data;
             const status = String(statusData?.status || '').toUpperCase();
+            const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}`;
+            const normalizedResultBaseUrl = `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(request_id)}`;
+            const resultCandidates = buildUniqueUrls([
+                fal_response_url,
+                statusData?.response_url,
+                resultBaseUrl,
+                `${resultBaseUrl}/response`,
+                normalizedResultBaseUrl,
+                `${normalizedResultBaseUrl}/response`,
+            ]);
+
+            const result = await fetchFalJsonWithFallback(resultCandidates, 'Failed to retrieve Fal video result');
+            if (result.ok) {
+                const videoUrl = extractFalVideoUrl(result.data);
+                if (videoUrl) {
+                    return res.status(200).json({ status: 'completed', url: videoUrl });
+                }
+            }
 
             if (status === 'COMPLETED') {
-                // Use explicit response URL first, then status payload URL, then robust constructed fallbacks.
-                const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}`;
-                const normalizedResultBaseUrl = `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(request_id)}`;
-                const resultCandidates = buildUniqueUrls([
-                    fal_response_url,
-                    statusData?.response_url,
-                    resultBaseUrl,
-                    `${resultBaseUrl}/response`,
-                    normalizedResultBaseUrl,
-                    `${normalizedResultBaseUrl}/response`,
-                ]);
-
-                const result = await fetchFalJsonWithFallback(resultCandidates, 'Failed to retrieve Fal video result');
                 if (!result.ok) {
                     return res.status(result.status).json({
                         error: result.error,
                         details: redactKey(result.body),
                     });
-                }
-
-                const resultData = result.data;
-                const videoUrl = resultData?.video?.url || null;
-
-                if (videoUrl) {
-                    return res.status(200).json({ status: 'completed', url: videoUrl });
                 }
 
                 return res.status(200).json({ status: 'failed' });

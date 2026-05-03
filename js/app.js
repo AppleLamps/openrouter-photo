@@ -1904,7 +1904,7 @@ async function handleGenerate(input, button) {
         // Handle video generation 202 (pending) — poll client-side
         if (response.status === 'pending' && response.request_id) {
             const VIDEO_POLL_INTERVAL = 3000;
-            const VIDEO_POLL_MAX = 60; // 3 min max
+            const VIDEO_POLL_MAX = 120; // 6 min max
             let pollCount = 0;
 
             while (pollCount < VIDEO_POLL_MAX) {

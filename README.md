@@ -269,7 +269,7 @@ npx vercel --prod
 
 ### Video generation stuck on pending
 
-- Video generation typically takes 30–90 seconds; polling runs every 3 s up to a 3-minute timeout
+- Video generation typically takes 30–90 seconds; polling runs every 3 s up to a 6-minute timeout
 - If it times out, try again — Fal queue jobs can occasionally stall
 - Verify your Fal/xAI API key has credits
 
