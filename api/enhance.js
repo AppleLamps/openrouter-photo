@@ -1,4 +1,4 @@
-const { withMiddleware, redactKey } = require('./_middleware');
+const { withMiddleware, redactKey, resolveXaiApiKey } = require('./_middleware');
 
 module.exports = withMiddleware(async function handler(req, res) {
     const { prompt, image_urls, custom_instructions } = req.body;
@@ -17,9 +17,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     // Validate image_urls if provided
     const hasImages = Array.isArray(image_urls) && image_urls.length > 0;
 
-    const XAI_API_KEY =
-        req.headers['x-xai-api-key'] ||
-        process.env.XAI_API_KEY;
+    const XAI_API_KEY = resolveXaiApiKey(req);
 
     if (!XAI_API_KEY) {
         return res.status(401).json({

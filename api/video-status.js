@@ -1,7 +1,33 @@
-const { withMiddleware, redactKey } = require('./_middleware');
+const { withMiddleware, redactKey, resolveXaiApiKey, resolveFalApiKey } = require('./_middleware');
+const { getFalVideoModel } = require('./model-registry');
+
+const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
+
+const buildUniqueUrls = (urls) => {
+    const seen = new Set();
+    const out = [];
+    for (const url of urls) {
+        if (!url || typeof url !== 'string') continue;
+        const trimmed = url.trim();
+        if (!trimmed || seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        out.push(trimmed);
+    }
+    return out;
+};
+
+const isTrustedFalQueueUrl = (rawUrl) => {
+    if (!rawUrl || typeof rawUrl !== 'string') return false;
+    try {
+        const parsed = new URL(rawUrl);
+        return parsed.protocol === 'https:' && parsed.hostname === 'queue.fal.run';
+    } catch {
+        return false;
+    }
+};
 
 module.exports = withMiddleware(async function handler(req, res) {
-    const { request_id, provider, model, fal_status_url, fal_response_url } = req.body;
+    const { request_id, provider, model } = req.body;
 
     if (!request_id || typeof request_id !== 'string') {
         return res.status(400).json({ error: 'request_id is required' });
@@ -9,10 +35,7 @@ module.exports = withMiddleware(async function handler(req, res) {
 
     // ---------- Fal video polling ----------
     if (provider === 'fal') {
-        const FAL_KEY =
-            req.headers['x-fal-api-key'] ||
-            req.headers['x-fal-api_key'] ||
-            process.env.FAL_KEY;
+        const FAL_KEY = resolveFalApiKey(req);
 
         if (!FAL_KEY) {
             return res.status(401).json({
@@ -25,21 +48,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             });
         }
 
-        const falModel = model || 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
+        const falModel = getFalVideoModel(model) ? model : DEFAULT_FAL_VIDEO_MODEL;
         const normalizedFalModel = falModel.startsWith('fal-ai/') ? falModel.slice('fal-ai/'.length) : falModel;
-
-        const buildUniqueUrls = (urls) => {
-            const seen = new Set();
-            const out = [];
-            for (const url of urls) {
-                if (!url || typeof url !== 'string') continue;
-                const trimmed = url.trim();
-                if (!trimmed || seen.has(trimmed)) continue;
-                seen.add(trimmed);
-                out.push(trimmed);
-            }
-            return out;
-        };
 
         const fetchFalJsonWithFallback = async (candidateUrls, errorPrefix) => {
             let lastStatus = 502;
@@ -77,9 +87,8 @@ module.exports = withMiddleware(async function handler(req, res) {
         );
 
         try {
-            // Prefer Fal-provided status URL, then fallback to constructed URLs.
+            // Only poll trusted Fal queue endpoints reconstructed from allowlisted model IDs.
             const statusCandidates = buildUniqueUrls([
-                fal_status_url,
                 `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}/status`,
                 `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(request_id)}/status`,
             ]);
@@ -96,8 +105,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}`;
             const normalizedResultBaseUrl = `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(request_id)}`;
             const resultCandidates = buildUniqueUrls([
-                fal_response_url,
-                statusData?.response_url,
+                isTrustedFalQueueUrl(statusData?.response_url) ? statusData.response_url : null,
                 resultBaseUrl,
                 `${resultBaseUrl}/response`,
                 normalizedResultBaseUrl,
@@ -136,10 +144,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     // ---------- xAI video polling (default) ----------
-    const XAI_API_KEY =
-        req.headers['x-xai-api-key'] ||
-        req.headers['x-xai-api_key'] ||
-        process.env.XAI_API_KEY;
+    const XAI_API_KEY = resolveXaiApiKey(req);
 
     if (!XAI_API_KEY) {
         return res.status(401).json({

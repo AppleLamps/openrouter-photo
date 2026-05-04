@@ -6,6 +6,7 @@
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_RATE_LIMIT_MAX = 60;
 const rateLimitBuckets = new Map();
+const SERVER_PROVIDER_KEY_ACCESS_HEADER = 'x-app-access-token';
 
 const getRequestOrigin = (req) => {
     const proto = req.headers['x-forwarded-proto'] || (req.socket?.encrypted ? 'https' : 'http');
@@ -62,6 +63,59 @@ const checkRateLimit = (req, options = {}) => {
     };
 };
 
+const getHeaderValue = (req, names) => {
+    for (const name of names) {
+        const raw = req.headers[name];
+        if (Array.isArray(raw)) {
+            const value = raw.find((item) => typeof item === 'string' && item.trim());
+            if (value) return value.trim();
+        } else if (typeof raw === 'string' && raw.trim()) {
+            return raw.trim();
+        }
+    }
+    return null;
+};
+
+const getEnvValue = (name) => {
+    const raw = process.env[name];
+    if (raw == null) return null;
+    const trimmed = String(raw).trim();
+    return trimmed.length > 0 ? trimmed : null;
+};
+
+const isProductionRuntime = () =>
+    process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+
+const canUseServerProviderKey = (req) => {
+    if (process.env.ALLOW_PUBLIC_SERVER_PROVIDER_KEYS === 'true') {
+        return true;
+    }
+    if (!isProductionRuntime() && process.env.ALLOW_PUBLIC_SERVER_PROVIDER_KEYS !== 'false') {
+        return true;
+    }
+
+    const requiredToken = getEnvValue('APP_ACCESS_TOKEN');
+    if (!requiredToken) {
+        return false;
+    }
+
+    const suppliedToken = getHeaderValue(req, [
+        SERVER_PROVIDER_KEY_ACCESS_HEADER,
+        'x-app_access_token',
+    ]);
+    return suppliedToken === requiredToken;
+};
+
+const resolveProviderApiKey = (req, headerNames, envName) => {
+    const fromHeader = getHeaderValue(req, headerNames);
+    if (fromHeader) return fromHeader;
+
+    const fromEnv = getEnvValue(envName);
+    if (!fromEnv) return null;
+
+    return canUseServerProviderKey(req) ? fromEnv : null;
+};
+
 /**
  * OpenRouter key: prefer client header, then server env. Trims; empty string → null.
  * Accepts the header spellings the app historically used, plus `x-openrouter-api_key`.
@@ -69,14 +123,25 @@ const checkRateLimit = (req, options = {}) => {
  * @returns {string | null}
  */
 function resolveOpenRouterApiKey(req) {
-    const fromHeader =
-        req.headers['x-openrouter-api-key'] ||
-        req.headers['x-openrouter_api_key'] ||
-        req.headers['x-openrouter-api_key'];
-    const raw = fromHeader || process.env.OPENROUTER_API_KEY;
-    if (raw == null) return null;
-    const t = String(raw).trim();
-    return t.length > 0 ? t : null;
+    return resolveProviderApiKey(req, [
+        'x-openrouter-api-key',
+        'x-openrouter_api_key',
+        'x-openrouter-api_key',
+    ], 'OPENROUTER_API_KEY');
+}
+
+function resolveXaiApiKey(req) {
+    return resolveProviderApiKey(req, [
+        'x-xai-api-key',
+        'x-xai-api_key',
+    ], 'XAI_API_KEY');
+}
+
+function resolveFalApiKey(req) {
+    return resolveProviderApiKey(req, [
+        'x-fal-api-key',
+        'x-fal-api_key',
+    ], 'FAL_KEY');
 }
 
 /**
@@ -106,7 +171,7 @@ const redactKey = (text) => {
  */
 function withMiddleware(handler, options = {}) {
     const {
-        allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key',
+        allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-App-Access-Token',
         skipBodyParse = false,
         rateLimit = {},
     } = options;
@@ -164,4 +229,4 @@ function withMiddleware(handler, options = {}) {
     };
 }
 
-module.exports = { withMiddleware, redactKey, resolveOpenRouterApiKey };
+module.exports = { withMiddleware, redactKey, resolveOpenRouterApiKey, resolveXaiApiKey, resolveFalApiKey };

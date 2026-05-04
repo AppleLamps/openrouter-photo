@@ -41,7 +41,7 @@ app.use('/api', (req, res, next) => {
         }
     }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-App-Access-Token');
     if (cors.blocked) {
         return res.status(403).json({ error: 'Origin not allowed' });
     }
@@ -52,6 +52,7 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use('/vendor', express.static(path.join(__dirname, 'public', 'vendor')));
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 

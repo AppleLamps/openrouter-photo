@@ -307,9 +307,33 @@ function triggerBlobDownload(blob, filename) {
 }
 
 async function loadJSZip() {
+    if (window.JSZip) {
+        return window.JSZip;
+    }
+
     if (!jsZipLoaderPromise) {
-        jsZipLoaderPromise = import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm')
-            .then(mod => mod.default || mod)
+        jsZipLoaderPromise = new Promise((resolve, reject) => {
+            const existing = document.querySelector('script[data-jszip-loader]');
+            if (existing) {
+                existing.addEventListener('load', () => {
+                    if (window.JSZip) resolve(window.JSZip);
+                    else reject(new Error('JSZip failed to load'));
+                }, { once: true });
+                existing.addEventListener('error', () => reject(new Error('Failed to load JSZip')), { once: true });
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = '/vendor/jszip.min.js';
+            script.async = true;
+            script.dataset.jszipLoader = 'true';
+            script.onload = () => {
+                if (window.JSZip) resolve(window.JSZip);
+                else reject(new Error('JSZip failed to load'));
+            };
+            script.onerror = () => reject(new Error('Failed to load JSZip'));
+            document.head.appendChild(script);
+        })
             .catch((error) => {
                 jsZipLoaderPromise = null;
                 throw error;

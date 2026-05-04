@@ -1,10 +1,7 @@
-const { withMiddleware, redactKey } = require('./_middleware');
+const { withMiddleware, redactKey, resolveFalApiKey } = require('./_middleware');
 
 module.exports = withMiddleware(async function handler(req, res) {
-    const FAL_KEY =
-        req.headers['x-fal-api-key'] ||
-        req.headers['x-fal-api_key'] ||
-        process.env.FAL_KEY;
+    const FAL_KEY = resolveFalApiKey(req);
 
     if (!FAL_KEY) {
         return res.status(401).json({

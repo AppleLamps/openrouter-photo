@@ -1,10 +1,7 @@
-const { withMiddleware, redactKey } = require('./_middleware');
+const { withMiddleware, redactKey, resolveXaiApiKey } = require('./_middleware');
 
 module.exports = withMiddleware(async function handler(req, res) {
-    const XAI_API_KEY =
-        req.headers['x-xai-api-key'] ||
-        req.headers['x-xai-api_key'] ||
-        process.env.XAI_API_KEY;
+    const XAI_API_KEY = resolveXaiApiKey(req);
 
     if (!XAI_API_KEY) {
         return res.status(401).json({

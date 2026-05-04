@@ -419,6 +419,29 @@
                     </p>
                 </div>
 
+                <!-- App Access Token -->
+                <div class="settings-group">
+                    <label class="settings-label" for="setting-app-access-token">App Access Token</label>
+                    <div class="settings-inline">
+                        <input type="password" id="setting-app-access-token"
+                            class="settings-input settings-inline__input"
+                            placeholder="Optional token for protected deployments">
+                        <button type="button" id="setting-app-access-token-save"
+                            class="settings-btn settings-btn--inline settings-btn--sm">
+                            Save
+                        </button>
+                    </div>
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="setting-app-access-token-show">
+                        <span>Show token</span>
+                    </label>
+                    <span id="setting-app-access-token-status" class="settings-hint"></span>
+                    <p class="settings-hint">
+                        Optional. Only needed when a deployment protects server-side provider keys with
+                        <code>APP_ACCESS_TOKEN</code>.
+                    </p>
+                </div>
+
                 <!-- Model Selection -->
                 <div class="settings-group">
                     <label class="settings-label">Advanced</label>

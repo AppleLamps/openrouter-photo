@@ -1,4 +1,10 @@
-const { withMiddleware, redactKey, resolveOpenRouterApiKey } = require('./_middleware');
+const {
+    withMiddleware,
+    redactKey,
+    resolveOpenRouterApiKey,
+    resolveXaiApiKey,
+    resolveFalApiKey,
+} = require('./_middleware');
 const {
     getFalImageCostPerImage,
     isFalImageModel,
@@ -40,15 +46,8 @@ module.exports = withMiddleware(async function handler(req, res) {
     const isReveEditModel = model === 'fal-ai/reve/edit';
     const isFalEditModelForRequest = isFalEditModel(model);
 
-    const XAI_API_KEY =
-        req.headers['x-xai-api-key'] ||
-        req.headers['x-xai-api_key'] ||
-        process.env.XAI_API_KEY;
-
-    const FAL_KEY =
-        req.headers['x-fal-api-key'] ||
-        req.headers['x-fal-api_key'] ||
-        process.env.FAL_KEY;
+    const XAI_API_KEY = resolveXaiApiKey(req);
+    const FAL_KEY = resolveFalApiKey(req);
 
     const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -626,8 +625,6 @@ module.exports = withMiddleware(async function handler(req, res) {
                 model,
                 provider: 'fal',
                 estimated_cost: videoCost,
-                fal_status_url: submitData?.status_url || null,
-                fal_response_url: submitData?.response_url || null,
             });
         } catch (error) {
             console.error('Fal video API error:', redactKey(error));

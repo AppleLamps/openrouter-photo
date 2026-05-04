@@ -1294,6 +1294,10 @@ function initSettingsUI() {
     const falSaveBtn = document.getElementById('setting-fal-save');
     const falTestBtn = document.getElementById('setting-fal-test');
     const falSaveStatus = document.getElementById('setting-fal-save-status');
+    const appAccessTokenInput = document.getElementById('setting-app-access-token');
+    const appAccessTokenShow = document.getElementById('setting-app-access-token-show');
+    const appAccessTokenSaveBtn = document.getElementById('setting-app-access-token-save');
+    const appAccessTokenStatus = document.getElementById('setting-app-access-token-status');
 
     // Toggle settings based on model selection
     if (modelSelect) {
@@ -1425,6 +1429,37 @@ function initSettingsUI() {
                 showError(error?.message || 'Fal API key test failed.');
             } finally {
                 falTestBtn.disabled = false;
+            }
+        });
+    }
+
+    // Optional deployment-level token for access to protected server-side provider keys.
+    if (appAccessTokenInput) {
+        try {
+            appAccessTokenInput.value = localStorage.getItem('app_access_token') || '';
+        } catch {
+            appAccessTokenInput.value = '';
+        }
+
+        appAccessTokenInput.addEventListener('input', () => {
+            if (appAccessTokenStatus) appAccessTokenStatus.textContent = 'Unsaved';
+        });
+    }
+
+    if (appAccessTokenShow && appAccessTokenInput) {
+        appAccessTokenShow.addEventListener('change', () => {
+            appAccessTokenInput.type = appAccessTokenShow.checked ? 'text' : 'password';
+        });
+    }
+
+    if (appAccessTokenSaveBtn && appAccessTokenInput) {
+        appAccessTokenSaveBtn.addEventListener('click', () => {
+            try {
+                localStorage.setItem('app_access_token', appAccessTokenInput.value.trim());
+                if (appAccessTokenStatus) appAccessTokenStatus.textContent = 'Saved';
+                showSuccess('App access token saved.');
+            } catch {
+                showError('Failed to save app access token (storage unavailable).');
             }
         });
     }
@@ -1920,8 +1955,6 @@ async function handleGenerate(input, button) {
                 const poll = await pollVideoStatus(response.request_id, abortSignal, {
                     provider: response.provider,
                     model: response.model,
-                    fal_status_url: response.fal_status_url,
-                    fal_response_url: response.fal_response_url,
                 });
 
                 if (poll.status === 'completed' && poll.url) {

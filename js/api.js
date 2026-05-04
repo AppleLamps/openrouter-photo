@@ -11,6 +11,7 @@ const VIDEO_STATUS_ENDPOINT = '/api/video-status';
 const OPENROUTER_API_KEY_STORAGE_KEY = 'openrouter_api_key';
 const XAI_API_KEY_STORAGE_KEY = 'xai_api_key';
 const FAL_API_KEY_STORAGE_KEY = 'fal_api_key';
+const APP_ACCESS_TOKEN_STORAGE_KEY = 'app_access_token';
 const TEST_FAL_KEY_ENDPOINT = '/api/test-fal-key';
 
 /**
@@ -57,6 +58,27 @@ function getFalApiKey() {
     } catch {
         return null;
     }
+}
+
+/**
+ * Read the optional app access token used by protected deployments.
+ * Provider keys stored in localStorage still take precedence when present.
+ * @returns {string | null}
+ */
+function getAppAccessToken() {
+    try {
+        const raw = localStorage.getItem(APP_ACCESS_TOKEN_STORAGE_KEY);
+        if (!raw) return null;
+        const trimmed = raw.trim();
+        return trimmed.length > 0 ? trimmed : null;
+    } catch {
+        return null;
+    }
+}
+
+function getAppAccessHeaders() {
+    const appAccessToken = getAppAccessToken();
+    return appAccessToken ? { 'X-App-Access-Token': appAccessToken } : {};
 }
 
 /**
@@ -139,6 +161,7 @@ export async function generateImage(prompt, options = {}, signal = null) {
                 ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
                 ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
                 ...(falApiKey ? { 'X-FAL-Api-Key': falApiKey } : {}),
+                ...getAppAccessHeaders(),
             },
             body: JSON.stringify(requestBody),
             ...(signal ? { signal } : {})
@@ -229,6 +252,7 @@ export async function enhancePrompt(currentPrompt, imageUrls = [], customInstruc
             headers: {
                 'Content-Type': 'application/json',
                 ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
+                ...getAppAccessHeaders(),
             },
             body: JSON.stringify(requestBody),
         });
@@ -370,6 +394,7 @@ export async function getRandomPromptFromAI() {
             headers: {
                 'Content-Type': 'application/json',
                 ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
+                ...getAppAccessHeaders(),
             },
             body: JSON.stringify({}),
         });
@@ -416,13 +441,12 @@ export async function pollVideoStatus(requestId, signal = null, meta = {}) {
             'Content-Type': 'application/json',
             ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
             ...(falApiKey ? { 'X-FAL-Api-Key': falApiKey } : {}),
+            ...getAppAccessHeaders(),
         },
         body: JSON.stringify({
             request_id: requestId,
             ...(meta.provider ? { provider: meta.provider } : {}),
             ...(meta.model ? { model: meta.model } : {}),
-            ...(meta.fal_status_url ? { fal_status_url: meta.fal_status_url } : {}),
-            ...(meta.fal_response_url ? { fal_response_url: meta.fal_response_url } : {}),
         }),
         ...(signal ? { signal } : {}),
     });
