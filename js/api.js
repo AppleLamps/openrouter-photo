@@ -106,6 +106,7 @@ function getAppAccessHeaders() {
  * @property {boolean} [enable_web_search] - Enable web search for image generation (Nano Banana Pro)
  * @property {number} [xai_video_length] - xAI video duration (seconds)
  * @property {string} [xai_video_quality] - xAI video resolution (720p, 480p)
+ * @property {boolean} [generate_audio_switch] - Enable audio generation for supported video models
  */
 
 /**

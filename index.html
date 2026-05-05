@@ -491,11 +491,20 @@
                 <div class="settings-group settings-group--hidden" id="xai-video-quality-group">
                     <label class="settings-label" for="setting-xai-video-quality">Video Quality</label>
                     <select id="setting-xai-video-quality" class="settings-select" aria-label="Video Quality">
-                        <option value="720p" selected>720p</option>
                         <option value="480p">480p</option>
+                        <option value="720p" selected>720p</option>
                         <option value="1080p">1080p</option>
                     </select>
-                    <p class="settings-hint">Resolution for video generation.</p>
+                    <p class="settings-hint">Available resolutions vary by video model.</p>
+                </div>
+
+                <!-- PixVerse Audio -->
+                <div class="settings-group settings-group--hidden" id="generate-audio-group">
+                    <label class="settings-checkbox" for="setting-generate-audio-switch">
+                        <input type="checkbox" id="setting-generate-audio-switch" checked>
+                        <span>Generate audio</span>
+                    </label>
+                    <p class="settings-hint">PixVerse C1 can add native audio to generated videos.</p>
                 </div>
 
                 <!-- Image-to-Video Frames Hint -->

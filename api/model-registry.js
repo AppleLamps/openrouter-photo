@@ -38,6 +38,14 @@ const FAL_VIDEO_MODELS = {
         seedance20Advanced: true,
         pricePerSecond: { '720p': 0.3034 },
     },
+    'fal-ai/pixverse/c1/image-to-video': {
+        imageToVideo: true,
+        pixverseC1: true,
+        pricePerSecond: {
+            noAudio: { '360p': 0.03, '540p': 0.04, '720p': 0.05, '1080p': 0.095 },
+            withAudio: { '360p': 0.04, '540p': 0.05, '720p': 0.065, '1080p': 0.12 },
+        },
+    },
     'alibaba/happy-horse/reference-to-video': {
         imageToVideo: true,
         happyHorse: true,
