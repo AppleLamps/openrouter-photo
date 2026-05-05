@@ -80,6 +80,8 @@ function getFalImageCostPerImage(model, imageSize, estimateMegapixelsFromImageSi
         totalCost += inputPrice.amount * inputMegapixels * inputImageCount;
     }
 
+    // Gallery metadata stores a per-result cost, so request-level input charges
+    // are intentionally amortized across the returned images.
     return totalCost / imageCount;
 }
 

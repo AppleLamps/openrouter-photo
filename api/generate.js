@@ -312,6 +312,8 @@ module.exports = withMiddleware(async function handler(req, res) {
                 sync_mode: false,
                 enable_safety_checker: false,
                 output_format: 'png',
+                // Keep the payload aligned with the endpoint schema until the UI
+                // exposes custom LoRA selection.
                 loras: [],
             };
         } else if (isPhotaModel || isPhotaEditModel) {
