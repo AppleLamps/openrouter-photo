@@ -312,8 +312,9 @@ module.exports = withMiddleware(async function handler(req, res) {
                 sync_mode: false,
                 enable_safety_checker: false,
                 output_format: 'png',
-                // Keep the payload aligned with the endpoint schema until the UI
-                // exposes custom LoRA selection.
+                // The endpoint accepts a `loras` array, but the current UI does not
+                // collect user-specified LoRA weights yet, so send the schema-
+                // aligned empty default explicitly.
                 loras: [],
             };
         } else if (isPhotaModel || isPhotaEditModel) {

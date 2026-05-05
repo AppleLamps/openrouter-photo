@@ -19,6 +19,8 @@ const FAL_IMAGE_MODELS = {
     'fal-ai/flux-2/klein/9b/edit/lora': {
         edit: true,
         price: { type: 'mpix', amount: 0.015 },
+        // Fal documents input images for this endpoint as being resized to 1 MP
+        // for billing, so input cost is modeled as a fixed 1 MP per attachment.
         inputPrice: { type: 'mpix', amount: 0.015, megapixels: 1 },
     },
     'fal-ai/reve/edit': { edit: true, singleImageUrl: true, price: { type: 'flat', amount: 0.04 } },
