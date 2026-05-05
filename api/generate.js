@@ -609,6 +609,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             });
         }
 
+        const startImageUrl = normalizedInputImages[0];
+
         const falVideoPayload = {
             prompt: prompt.trim(),
             resolution: normalizedResolution,
@@ -632,9 +634,9 @@ module.exports = withMiddleware(async function handler(req, res) {
         if (isHappyHorse) {
             falVideoPayload.image_urls = normalizedInputImages;
         } else if (isPixverseC1) {
-            falVideoPayload.image_url = normalizedInputImages[0];
+            falVideoPayload.image_url = startImageUrl;
         } else if (isFalImageToVideo) {
-            falVideoPayload.image_url = normalizedInputImages[0];
+            falVideoPayload.image_url = startImageUrl;
             if (normalizedInputImages[1]) {
                 falVideoPayload.end_image_url = normalizedInputImages[1];
             }
