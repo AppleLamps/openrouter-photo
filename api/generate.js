@@ -557,6 +557,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
             model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
             isSeedance20Advanced;
+        // PixVerse C1 allows 1-15 second clips, unlike the other Fal video models here.
         const minFalDuration = isPixverseC1 ? 1 : isHappyHorse ? 3 : 4;
         const maxFalDuration = isPixverseC1 || isSeedance20 || isHappyHorse ? 15 : 12;
         const normalizedDuration =
@@ -656,12 +657,12 @@ module.exports = withMiddleware(async function handler(req, res) {
                 return res.status(502).json({ error: 'Fal video request did not return a request ID' });
             }
 
+            const pixverseRateTable = falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio'];
+            const pixverseRate = pixverseRateTable?.[normalizedResolution] || 0;
             const videoCost = isHappyHorse
                 ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
                 : isPixverseC1
-                    ? normalizedDuration * (
-                        falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio']?.[normalizedResolution] || 0
-                    )
+                    ? normalizedDuration * pixverseRate
                 : isSeedance20Advanced
                     ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
                 : 0.10;
