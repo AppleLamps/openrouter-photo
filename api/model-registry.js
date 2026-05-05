@@ -61,6 +61,7 @@ function getFalImageCostPerImage(model, imageSize, estimateMegapixelsFromImageSi
     const imageCount = Number.isFinite(options.imageCount) && options.imageCount > 0
         ? options.imageCount
         : 1;
+    if (imageCount <= 0) return 0;
 
     let totalCost = 0;
     if (price.type === 'mpix') {
@@ -75,10 +76,13 @@ function getFalImageCostPerImage(model, imageSize, estimateMegapixelsFromImageSi
     const inputImageCount = Number.isFinite(options.inputImageCount) && options.inputImageCount > 0
         ? options.inputImageCount
         : 0;
-    if (inputPrice?.type === 'mpix' && inputImageCount > 0) {
-        const inputMegapixels = Number.isFinite(inputPrice.megapixels) && inputPrice.megapixels > 0
-            ? inputPrice.megapixels
-            : 1;
+    const inputMegapixels = inputPrice?.megapixels;
+    if (
+        inputPrice?.type === 'mpix' &&
+        inputImageCount > 0 &&
+        Number.isFinite(inputMegapixels) &&
+        inputMegapixels > 0
+    ) {
         totalCost += inputPrice.amount * inputMegapixels * inputImageCount;
     }
 
