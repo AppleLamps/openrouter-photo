@@ -667,12 +667,12 @@ module.exports = withMiddleware(async function handler(req, res) {
                 return res.status(502).json({ error: 'Fal video request did not return a request ID' });
             }
 
-            const pixverseRateTable = falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio'];
-            const pixverseRate = pixverseRateTable?.[normalizedResolution] || 0;
             let videoCost = 0.10;
             if (isHappyHorse || isSeedance20Advanced) {
                 videoCost = normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0);
             } else if (isPixverseC1) {
+                const pixverseRateTable = falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio'];
+                const pixverseRate = pixverseRateTable?.[normalizedResolution] || 0;
                 videoCost = normalizedDuration * pixverseRate;
             }
 

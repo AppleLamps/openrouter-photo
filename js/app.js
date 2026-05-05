@@ -26,6 +26,25 @@ import {
 
 const SPEND_STORAGE_KEY = 'openrouter_spend_v1';
 const PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL = 'fal-ai/pixverse/c1/image-to-video';
+const SEEDANCE_20_ADVANCED_MODEL = 'bytedance/seedance-2.0/text-to-video';
+const VIDEO_QUALITY_PRESETS = {
+    default: {
+        options: ['480p', '720p', '1080p'],
+        defaultValue: '720p',
+    },
+    seedance20: {
+        options: ['480p', '720p'],
+        defaultValue: '720p',
+    },
+    highRes: {
+        options: ['720p', '1080p'],
+        defaultValue: '1080p',
+    },
+    pixverse: {
+        options: ['360p', '540p', '720p', '1080p'],
+        defaultValue: '720p',
+    },
+};
 
 /** @type {string[]} */
 let promptImageDataUrls = [];
@@ -1047,6 +1066,37 @@ function getGenerationSettings() {
     return settings;
 }
 
+function syncVideoQualityOptions(model) {
+    const videoQualitySelect = document.getElementById('setting-xai-video-quality');
+    if (!(videoQualitySelect instanceof HTMLSelectElement)) {
+        return;
+    }
+
+    let preset = VIDEO_QUALITY_PRESETS.default;
+    if (
+        model === 'grok-imagine-video' ||
+        model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
+        model === 'fal-ai/bytedance/seedance-2.0/image-to-video'
+    ) {
+        preset = VIDEO_QUALITY_PRESETS.seedance20;
+    } else if (model === 'alibaba/happy-horse/reference-to-video' || model === SEEDANCE_20_ADVANCED_MODEL) {
+        preset = VIDEO_QUALITY_PRESETS.highRes;
+    } else if (model === PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL) {
+        preset = VIDEO_QUALITY_PRESETS.pixverse;
+    }
+
+    const currentValue = videoQualitySelect.value;
+    videoQualitySelect.innerHTML = '';
+    preset.options.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        videoQualitySelect.appendChild(option);
+    });
+
+    videoQualitySelect.value = preset.options.includes(currentValue) ? currentValue : preset.defaultValue;
+}
+
 /**
  * Initialize the application
  */
@@ -1801,7 +1851,7 @@ function updateSettingsForModel(model) {
     const isSeedream = typeof model === 'string' && model.includes('seedream');
     const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
     const isPixverseC1 = model === PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL;
-    const isSeedance20Advanced = model === 'bytedance/seedance-2.0/text-to-video';
+    const isSeedance20Advanced = model === SEEDANCE_20_ADVANCED_MODEL;
     const isFalModel = typeof model === 'string' && (model.startsWith('fal-ai/') || isHappyHorse || isSeedance20Advanced);
     const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
     const isXaiVideo = model === 'grok-imagine-video';
@@ -1819,6 +1869,8 @@ function updateSettingsForModel(model) {
         isHappyHorse;
     const isXai = isXaiImage || isXaiVideo;
     const isVideoModel = isXaiVideo || isFalVideo;
+
+    syncVideoQualityOptions(model);
 
     // Show aspect ratio for Gemini, Seedream, Fal, and xAI models
     if (isGemini || isSeedream || isFalModel || isXai) {
