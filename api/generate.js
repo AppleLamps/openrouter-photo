@@ -24,6 +24,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         resolution, // legacy UI field; repurposed as Gemini image_config.image_size (1K/2K/4K)
         xai_video_length,
         xai_video_quality,
+        generate_audio_switch,
         image_urls = [], // optional image inputs (data URLs) for all models
     } = req.body;
 
@@ -548,6 +549,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     if (isFalVideoModelForRequest) {
         const falVideoConfig = getFalVideoModel(model);
         const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
+        const isPixverseC1 = model === 'fal-ai/pixverse/c1/image-to-video';
         const isSeedance20Advanced = model === 'bytedance/seedance-2.0/text-to-video';
         // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
         const parsedDuration = parseInt(xai_video_length, 10);
@@ -555,13 +557,15 @@ module.exports = withMiddleware(async function handler(req, res) {
             model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
             model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
             isSeedance20Advanced;
-        const minFalDuration = isHappyHorse ? 3 : 4;
-        const maxFalDuration = isSeedance20 || isHappyHorse ? 15 : 12;
+        const minFalDuration = isPixverseC1 ? 1 : isHappyHorse ? 3 : 4;
+        const maxFalDuration = isPixverseC1 || isSeedance20 || isHappyHorse ? 15 : 12;
         const normalizedDuration =
             Number.isFinite(parsedDuration) && parsedDuration >= minFalDuration && parsedDuration <= maxFalDuration
                 ? parsedDuration
                 : 5;
-        const validResolutions = isHappyHorse || isSeedance20Advanced
+        const validResolutions = isPixverseC1
+            ? ['360p', '540p', '720p', '1080p']
+            : isHappyHorse || isSeedance20Advanced
             ? ['720p', '1080p']
             : isSeedance20
             ? ['480p', '720p']
@@ -570,6 +574,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             typeof xai_video_quality === 'string' && validResolutions.includes(xai_video_quality)
                 ? xai_video_quality
                 : isHappyHorse ? '1080p' : '720p';
+        const normalizedGenerateAudio =
+            typeof generate_audio_switch === 'boolean' ? generate_audio_switch : isPixverseC1;
 
         // Seedance supports: 21:9, 16:9, 4:3, 1:1, 3:4, 9:16, auto.
         // Happy Horse supports: 16:9, 9:16, 1:1, 4:3, 3:4.
@@ -594,21 +600,28 @@ module.exports = withMiddleware(async function handler(req, res) {
 
         const falVideoPayload = {
             prompt: prompt.trim(),
-            aspect_ratio: falAspectRatio,
             resolution: normalizedResolution,
-            duration: isHappyHorse ? normalizedDuration : String(normalizedDuration),
+            duration: isHappyHorse || isPixverseC1 ? normalizedDuration : String(normalizedDuration),
         };
 
-        if (!isHappyHorse) {
+        if (isPixverseC1) {
+            falVideoPayload.generate_audio_switch = normalizedGenerateAudio;
+        } else if (!isHappyHorse) {
             falVideoPayload.generate_audio = true;
         }
 
-        if (!isSeedance20 || isHappyHorse || isSeedance20Advanced) {
+        if (!isPixverseC1) {
+            falVideoPayload.aspect_ratio = falAspectRatio;
+        }
+
+        if (isPixverseC1 || !isSeedance20 || isHappyHorse || isSeedance20Advanced) {
             falVideoPayload.enable_safety_checker = false;
         }
 
         if (isHappyHorse) {
             falVideoPayload.image_urls = normalizedInputImages;
+        } else if (isPixverseC1) {
+            falVideoPayload.image_url = normalizedInputImages[0];
         } else if (isFalImageToVideo) {
             falVideoPayload.image_url = normalizedInputImages[0];
             if (normalizedInputImages[1]) {
@@ -645,6 +658,10 @@ module.exports = withMiddleware(async function handler(req, res) {
 
             const videoCost = isHappyHorse
                 ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
+                : isPixverseC1
+                    ? normalizedDuration * (
+                        falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio']?.[normalizedResolution] || 0
+                    )
                 : isSeedance20Advanced
                     ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
                 : 0.10;
