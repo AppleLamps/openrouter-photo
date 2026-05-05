@@ -23,6 +23,7 @@ export const MODELS = [
     { id: 'black-forest-labs/flux.2-pro',                          name: 'Flux 2 Pro',             provider: 'Black Forest Labs', type: 'image', tier: 'quality' },
     { id: 'black-forest-labs/flux.2-max',                          name: 'Flux 2 Max',             provider: 'Black Forest Labs', type: 'image', tier: 'quality' },
     { id: 'black-forest-labs/flux.2-flex',                         name: 'Flux 2 Flex',            provider: 'Black Forest Labs', type: 'image', tier: 'balanced' },
+    { id: 'fal-ai/flux-2/klein/9b/edit/lora',                      name: 'Flux 2 Klein 9B LoRA',   provider: 'Black Forest Labs', type: 'edit',  tier: 'balanced', via: 'fal' },
 
     // ───── Google ─────
     { id: 'google/gemini-3-pro-image-preview',                     name: 'Gemini 3 Pro Image',     provider: 'Google',    type: 'image', tier: 'quality' },

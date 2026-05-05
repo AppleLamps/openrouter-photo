@@ -16,6 +16,11 @@ const FAL_IMAGE_MODELS = {
     'fal-ai/bitdance': { price: { type: 'flat', amount: 0.01 } },
     'fal-ai/qwen-image-max/text-to-image': { price: { type: 'flat', amount: 0.075 } },
     'fal-ai/qwen-image-max/edit': { edit: true, price: { type: 'flat', amount: 0.075 } },
+    'fal-ai/flux-2/klein/9b/edit/lora': {
+        edit: true,
+        price: { type: 'mpix', amount: 0.015 },
+        inputPrice: { type: 'mpix', amount: 0.015, megapixels: 1 },
+    },
     'fal-ai/reve/edit': { edit: true, singleImageUrl: true, price: { type: 'flat', amount: 0.04 } },
     'fal-ai/phota': {},
     'fal-ai/phota/edit': { edit: true, price: { type: 'resolution', oneK: 0.09, fourK: 0.18 } },
@@ -46,17 +51,36 @@ function getFalVideoModel(model) {
     return FAL_VIDEO_MODELS[model] || null;
 }
 
-function getFalImageCostPerImage(model, imageSize, estimateMegapixelsFromImageSize) {
+function getFalImageCostPerImage(model, imageSize, estimateMegapixelsFromImageSize, options = {}) {
     const config = getFalImageModel(model);
     const price = config?.price;
     if (!price) return 0;
+
+    const imageCount = Number.isFinite(options.imageCount) && options.imageCount > 0
+        ? options.imageCount
+        : 1;
+
+    let totalCost = 0;
     if (price.type === 'mpix') {
-        return price.amount * estimateMegapixelsFromImageSize(imageSize);
+        totalCost += price.amount * estimateMegapixelsFromImageSize(imageSize) * imageCount;
+    } else if (price.type === 'resolution') {
+        totalCost += (imageSize === '4K' ? price.fourK : price.oneK) * imageCount;
+    } else {
+        totalCost += price.amount * imageCount;
     }
-    if (price.type === 'resolution') {
-        return imageSize === '4K' ? price.fourK : price.oneK;
+
+    const inputPrice = config?.inputPrice;
+    const inputImageCount = Number.isFinite(options.inputImageCount) && options.inputImageCount > 0
+        ? options.inputImageCount
+        : 0;
+    if (inputPrice?.type === 'mpix' && inputImageCount > 0) {
+        const inputMegapixels = Number.isFinite(inputPrice.megapixels) && inputPrice.megapixels > 0
+            ? inputPrice.megapixels
+            : 1;
+        totalCost += inputPrice.amount * inputMegapixels * inputImageCount;
     }
-    return price.amount;
+
+    return totalCost / imageCount;
 }
 
 module.exports = {

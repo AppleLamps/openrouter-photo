@@ -43,6 +43,7 @@ module.exports = withMiddleware(async function handler(req, res) {
 
     const isFalModel = isFalImageModel(model);
     const isFalVideoModelForRequest = isFalVideoModel(model);
+    const isFluxKleinEditModel = model === 'fal-ai/flux-2/klein/9b/edit/lora';
     const isReveEditModel = model === 'fal-ai/reve/edit';
     const isFalEditModelForRequest = isFalEditModel(model);
 
@@ -112,7 +113,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             : imageSizePresetToAspectRatio(image_size);
 
     const maxInputImages =
-        model === 'fal-ai/phota/edit' ? 10 :
+        isFluxKleinEditModel ? 4 :
+            model === 'fal-ai/phota/edit' ? 10 :
             model === 'alibaba/happy-horse/reference-to-video' ? 9 :
                 3;
     const normalizedInputImages = Array.isArray(image_urls)
@@ -152,7 +154,8 @@ module.exports = withMiddleware(async function handler(req, res) {
         const isQwenImageMaxT2IModel = model === 'fal-ai/qwen-image-max/text-to-image';
         const isQwenImageMaxEditModel = model === 'fal-ai/qwen-image-max/edit';
         const isQwenImageMaxModel = isQwenImageMaxT2IModel || isQwenImageMaxEditModel;
-        const usesPresetImageSize = isErnieImageModel || isZImageModel || isBitdanceModel || isQwenImageMaxModel;
+        const usesPresetImageSize =
+            isErnieImageModel || isZImageModel || isBitdanceModel || isQwenImageMaxModel || isFluxKleinEditModel;
         const aspectRatioToFalImageSize = (ar) => {
             switch (ar) {
                 case '1:1':  return 'square_hd';
@@ -298,6 +301,19 @@ module.exports = withMiddleware(async function handler(req, res) {
                 output_format: 'png',
                 enable_safety_checker: false,
             };
+        } else if (isFluxKleinEditModel) {
+            // FLUX.2 [klein] 9B LoRA edit model.
+            // https://fal.ai/models/fal-ai/flux-2/klein/9b/edit/lora/api
+            falPayload = {
+                prompt: prompt.trim(),
+                image_size: falImageSize,
+                num_images: parsedNumImages,
+                num_inference_steps: 4,
+                sync_mode: false,
+                enable_safety_checker: false,
+                output_format: 'png',
+                loras: [],
+            };
         } else if (isPhotaModel || isPhotaEditModel) {
             // Phota uses the Fal queue API and aspect_ratio/resolution fields.
             // https://fal.ai/models/fal-ai/phota/api
@@ -424,8 +440,11 @@ module.exports = withMiddleware(async function handler(req, res) {
                             return res.status(502).json({ error: 'No images returned from Fal' });
                         }
 
-                        const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize);
                         const limited = falImages.slice(0, parsedNumImages);
+                        const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize, {
+                            imageCount: limited.length,
+                            inputImageCount: normalizedInputImages.length,
+                        });
                         const totalCost = costPerImage * limited.length;
 
                         return res.status(200).json({
@@ -485,8 +504,11 @@ module.exports = withMiddleware(async function handler(req, res) {
             // Fal pricing: flat $0.04/image (Seedream/Wan/Nucleus);
             //   Ernie: ~$0.015/Mpix; Z-Image Turbo: $0.0085/Mpix;
             //   BitDance: flat $0.01/image; Qwen-Image-Max: flat $0.075/image.
-            const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize);
             const limited = falImages.slice(0, parsedNumImages);
+            const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize, {
+                imageCount: limited.length,
+                inputImageCount: normalizedInputImages.length,
+            });
             const totalCost = costPerImage * limited.length;
 
             return res.status(200).json({
