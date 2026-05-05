@@ -558,19 +558,29 @@ module.exports = withMiddleware(async function handler(req, res) {
             model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
             isSeedance20Advanced;
         // PixVerse C1 allows 1-15 second clips, unlike the other Fal video models here.
-        const minFalDuration = isPixverseC1 ? 1 : isHappyHorse ? 3 : 4;
-        const maxFalDuration = isPixverseC1 || isSeedance20 || isHappyHorse ? 15 : 12;
+        let minFalDuration = 4;
+        let maxFalDuration = 12;
+        if (isPixverseC1) {
+            minFalDuration = 1;
+            maxFalDuration = 15;
+        } else if (isHappyHorse) {
+            minFalDuration = 3;
+            maxFalDuration = 15;
+        } else if (isSeedance20) {
+            maxFalDuration = 15;
+        }
         const normalizedDuration =
             Number.isFinite(parsedDuration) && parsedDuration >= minFalDuration && parsedDuration <= maxFalDuration
                 ? parsedDuration
                 : 5;
-        const validResolutions = isPixverseC1
-            ? ['360p', '540p', '720p', '1080p']
-            : isHappyHorse || isSeedance20Advanced
-            ? ['720p', '1080p']
-            : isSeedance20
-            ? ['480p', '720p']
-            : ['480p', '720p', '1080p'];
+        let validResolutions = ['480p', '720p', '1080p'];
+        if (isPixverseC1) {
+            validResolutions = ['360p', '540p', '720p', '1080p'];
+        } else if (isHappyHorse || isSeedance20Advanced) {
+            validResolutions = ['720p', '1080p'];
+        } else if (isSeedance20) {
+            validResolutions = ['480p', '720p'];
+        }
         const normalizedResolution =
             typeof xai_video_quality === 'string' && validResolutions.includes(xai_video_quality)
                 ? xai_video_quality
@@ -659,13 +669,12 @@ module.exports = withMiddleware(async function handler(req, res) {
 
             const pixverseRateTable = falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio'];
             const pixverseRate = pixverseRateTable?.[normalizedResolution] || 0;
-            const videoCost = isHappyHorse
-                ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
-                : isPixverseC1
-                    ? normalizedDuration * pixverseRate
-                : isSeedance20Advanced
-                    ? normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0)
-                : 0.10;
+            let videoCost = 0.10;
+            if (isHappyHorse || isSeedance20Advanced) {
+                videoCost = normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0);
+            } else if (isPixverseC1) {
+                videoCost = normalizedDuration * pixverseRate;
+            }
 
             // Return immediately — client will poll /api/video-status
             return res.status(202).json({
