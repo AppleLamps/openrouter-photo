@@ -442,6 +442,9 @@ module.exports = withMiddleware(async function handler(req, res) {
                             return res.status(502).json({ error: 'No images returned from Fal' });
                         }
 
+                        // Price attribution should follow the actual results we keep,
+                        // not just the requested count, because Fal can theoretically
+                        // return fewer images than requested.
                         const limited = falImages.slice(0, parsedNumImages);
                         const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize, {
                             imageCount: limited.length,
@@ -506,6 +509,9 @@ module.exports = withMiddleware(async function handler(req, res) {
             // Fal pricing: flat $0.04/image (Seedream/Wan/Nucleus);
             //   Ernie: ~$0.015/Mpix; Z-Image Turbo: $0.0085/Mpix;
             //   BitDance: flat $0.01/image; Qwen-Image-Max: flat $0.075/image.
+            // Price attribution should follow the actual results we keep, not just
+            // the requested count, because Fal can theoretically return fewer
+            // images than requested.
             const limited = falImages.slice(0, parsedNumImages);
             const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize, {
                 imageCount: limited.length,
