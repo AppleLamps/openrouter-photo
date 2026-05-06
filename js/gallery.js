@@ -378,28 +378,30 @@ async function getImageBlobForDownload(imageId) {
     }
 }
 
-async function downloadSelectedImages(button) {
-    const selectedIds = state.getSelectedImageIds();
-    if (selectedIds.length === 0) return;
+async function downloadImagesByIds(imageIds, button, options = {}) {
+    const ids = Array.from(new Set(imageIds || []));
+    if (ids.length === 0) return false;
 
-    const originalText = button.textContent;
-    button.disabled = true;
-    button.dataset.loading = 'true';
-    button.textContent = 'Preparing...';
+    const originalText = button?.textContent || '';
+    if (button) {
+        button.disabled = true;
+        button.dataset.loading = 'true';
+        button.textContent = 'Preparing...';
+    }
 
     try {
         const files = [];
-        for (const id of selectedIds) {
+        for (const id of ids) {
             const blob = await getImageBlobForDownload(id);
             if (!blob) continue;
             const extension = getExtensionFromType(blob.type);
             files.push({ id, blob, extension, type: blob.type });
         }
 
-        if (files.length === 0) return;
+        if (files.length === 0) return false;
 
-        if (files.length >= ZIP_DOWNLOAD_THRESHOLD) {
-            button.textContent = 'Zipping...';
+        if (options.forceZip || files.length >= ZIP_DOWNLOAD_THRESHOLD) {
+            if (button) button.textContent = 'Zipping...';
             try {
                 const JSZip = await loadJSZip();
                 const zip = new JSZip();
@@ -408,8 +410,8 @@ async function downloadSelectedImages(button) {
                     zip.file(`${prefix}-${id}.${extension}`, blob);
                 });
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
-                triggerBlobDownload(zipBlob, `ai-images-${files.length}.zip`);
-                return;
+                triggerBlobDownload(zipBlob, options.zipFilename || `ai-media-${files.length}.zip`);
+                return true;
             } catch (error) {
                 console.error('Bulk zip download failed, falling back to individual downloads:', error);
             }
@@ -419,13 +421,32 @@ async function downloadSelectedImages(button) {
             const prefix = type?.startsWith('video') ? 'ai-video' : 'ai-image';
             triggerBlobDownload(blob, `${prefix}-${id}.${extension}`);
         });
+        return true;
     } catch (error) {
-        console.error('Failed to download selected images:', error);
+        console.error('Failed to download images:', error);
+        return false;
     } finally {
-        button.dataset.loading = 'false';
-        button.textContent = originalText;
-        button.disabled = state.selectedImageIds.size === 0;
+        if (button) {
+            button.dataset.loading = 'false';
+            button.textContent = originalText;
+            button.disabled = typeof options.getDisabled === 'function' ? options.getDisabled() : false;
+        }
     }
+}
+
+async function downloadSelectedImages(button) {
+    await downloadImagesByIds(state.getSelectedImageIds(), button, {
+        getDisabled: () => state.selectedImageIds.size === 0,
+    });
+}
+
+export async function downloadAllImages(button) {
+    const allIds = state.getImages().map((image) => image.id);
+    return downloadImagesByIds(allIds, button, {
+        zipFilename: `ai-media-${allIds.length}.zip`,
+        forceZip: allIds.length > 1,
+        getDisabled: () => state.getImageCount() === 0,
+    });
 }
 
 /**

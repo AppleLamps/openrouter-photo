@@ -1607,6 +1607,12 @@ body.is-modal-open .spend-tracker {
     color: var(--text-muted);
 }
 
+.settings-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+}
+
 .settings-btn {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);
@@ -1645,11 +1651,25 @@ body.is-modal-open .spend-tracker {
     .settings-inline {
         flex-wrap: wrap;
     }
+
+    .settings-actions {
+        grid-template-columns: 1fr;
+    }
 }
 
 .settings-btn:hover {
     background: var(--bg-hover);
     border-color: var(--text-muted);
+}
+
+.settings-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.settings-btn:disabled:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
 }
 
 .settings-btn--danger {
@@ -1660,6 +1680,11 @@ body.is-modal-open .spend-tracker {
 .settings-btn--danger:hover {
     background: rgba(239, 68, 68, 0.1);
     border-color: #ef4444;
+}
+
+.settings-btn--danger:disabled:hover {
+    background: var(--bg-tertiary);
+    border-color: rgba(239, 68, 68, 0.3);
 }
 
 /* Modal loading state for full image */

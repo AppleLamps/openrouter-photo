@@ -11,7 +11,7 @@ import {
 } from './config.js';
 import { state } from './state.js';
 import { generateId } from './utils.js';
-import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, showErrorCard, initLightbox, closeLightbox } from './gallery.js';
+import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, showErrorCard, initLightbox, closeLightbox, downloadAllImages } from './gallery.js';
 import { formatBytes } from './image-utils.js';
 import { initSidebar, showCreateFolderModal } from './sidebar.js';
 import {
@@ -1151,6 +1151,7 @@ async function init() {
     const settingsClose = document.getElementById('settings-close');
     const surpriseBtn = document.getElementById('surprise-btn');
     const clearAllBtn = document.getElementById('clear-all-btn');
+    const downloadAllBtn = document.getElementById('download-all-btn');
 
     // Initialize gallery
     if (galleryContainer && emptyState) {
@@ -1266,6 +1267,9 @@ async function init() {
     if (clearAllBtn) {
         clearAllBtn.addEventListener('click', handleClearAll);
     }
+    if (downloadAllBtn) {
+        downloadAllBtn.addEventListener('click', handleDownloadAll);
+    }
 
     // Initialize settings UI interactions
     initSettingsUI();
@@ -1306,16 +1310,21 @@ async function updateStorageIndicator() {
     const storageBar = document.getElementById('storage-used');
     const storageText = document.getElementById('storage-text');
     const imageCount = document.getElementById('image-count');
+    const clearAllBtn = document.getElementById('clear-all-btn');
+    const downloadAllBtn = document.getElementById('download-all-btn');
 
     if (!storageBar && !storageText) return;
 
     try {
         const estimate = await state.getStorageEstimate();
         const imageTotal = state.getImageCount();
+        const hasImages = imageTotal > 0;
 
         if (imageCount) {
             imageCount.textContent = `${imageTotal} image${imageTotal !== 1 ? 's' : ''}`;
         }
+        if (clearAllBtn instanceof HTMLButtonElement) clearAllBtn.disabled = !hasImages;
+        if (downloadAllBtn instanceof HTMLButtonElement) downloadAllBtn.disabled = !hasImages;
 
         if (estimate.quota > 0) {
             const percentage = Math.min((estimate.used / estimate.quota) * 100, 100);
@@ -1338,8 +1347,11 @@ async function updateStorageIndicator() {
         }
     } catch (error) {
         console.error('Failed to update storage indicator:', error);
+        const imageTotal = state.getImageCount();
+        const hasImages = imageTotal > 0;
+        if (clearAllBtn instanceof HTMLButtonElement) clearAllBtn.disabled = !hasImages;
+        if (downloadAllBtn instanceof HTMLButtonElement) downloadAllBtn.disabled = !hasImages;
         if (storageText) {
-            const imageTotal = state.getImageCount();
             storageText.textContent = `${imageTotal} image${imageTotal !== 1 ? 's' : ''} stored`;
         }
     }
@@ -1352,10 +1364,16 @@ async function handleClearAll() {
     const imageTotal = state.getImageCount();
     if (imageTotal === 0) return;
 
-    const confirmed = confirm(`Are you sure you want to delete all ${imageTotal} images? This cannot be undone.`);
+    const confirmed = confirm(`Are you sure you want to delete all ${imageTotal} photos and videos? This cannot be undone.`);
     if (!confirmed) return;
 
     await state.clearAll();
+    updateStorageIndicator();
+}
+
+async function handleDownloadAll(event) {
+    const button = event?.currentTarget instanceof HTMLButtonElement ? event.currentTarget : null;
+    await downloadAllImages(button);
     updateStorageIndicator();
 }
 
