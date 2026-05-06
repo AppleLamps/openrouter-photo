@@ -27,7 +27,8 @@ const isTrustedFalQueueUrl = (rawUrl) => {
 };
 
 module.exports = withMiddleware(async function handler(req, res) {
-    const { request_id, provider, model } = req.body;
+    const input = req.method === 'GET' ? req.query : req.body;
+    const { request_id, provider, model } = input || {};
 
     if (!request_id || typeof request_id !== 'string') {
         return res.status(400).json({ error: 'request_id is required' });
@@ -195,4 +196,6 @@ module.exports = withMiddleware(async function handler(req, res) {
         console.error('Video status error:', redactKey(error));
         return res.status(500).json({ error: 'Internal server error' });
     }
+}, {
+    methods: ['GET', 'POST'],
 });

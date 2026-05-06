@@ -40,7 +40,7 @@ app.use('/api', (req, res, next) => {
             res.setHeader('Vary', 'Origin');
         }
     }
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-App-Access-Token');
     if (cors.blocked) {
         return res.status(403).json({ error: 'Origin not allowed' });
@@ -84,7 +84,7 @@ app.post('/api/random-prompt', (req, res) => {
     return randomPromptHandler(req, res);
 });
 
-app.post('/api/video-status', (req, res) => {
+app.all('/api/video-status', (req, res) => {
     return videoStatusHandler(req, res);
 });
 
