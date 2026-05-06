@@ -3,6 +3,34 @@ const { getFalVideoModel } = require('./model-registry');
 
 const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
 
+const normalizeStringParam = (value) => {
+    const candidate = Array.isArray(value) ? value[0] : value;
+    if (typeof candidate !== 'string') return null;
+    const trimmed = candidate.trim();
+    return trimmed || null;
+};
+
+const resolveFalVideoModelId = (value) => {
+    switch (normalizeStringParam(value)) {
+        case 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video':
+            return 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
+        case 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video':
+            return 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
+        case 'fal-ai/bytedance/seedance-2.0/text-to-video':
+            return 'fal-ai/bytedance/seedance-2.0/text-to-video';
+        case 'fal-ai/bytedance/seedance-2.0/image-to-video':
+            return 'fal-ai/bytedance/seedance-2.0/image-to-video';
+        case 'bytedance/seedance-2.0/text-to-video':
+            return 'bytedance/seedance-2.0/text-to-video';
+        case 'fal-ai/pixverse/c1/image-to-video':
+            return 'fal-ai/pixverse/c1/image-to-video';
+        case 'alibaba/happy-horse/reference-to-video':
+            return 'alibaba/happy-horse/reference-to-video';
+        default:
+            return null;
+    }
+};
+
 const buildUniqueUrls = (urls) => {
     const seen = new Set();
     const out = [];
@@ -28,9 +56,11 @@ const isTrustedFalQueueUrl = (rawUrl) => {
 
 module.exports = withMiddleware(async function handler(req, res) {
     const input = req.method === 'GET' ? req.query : req.body;
-    const { request_id, provider, model } = input || {};
+    const requestId = normalizeStringParam(input?.request_id);
+    const provider = normalizeStringParam(input?.provider);
+    const model = resolveFalVideoModelId(input?.model);
 
-    if (!request_id || typeof request_id !== 'string') {
+    if (!requestId) {
         return res.status(400).json({ error: 'request_id is required' });
     }
 
@@ -49,7 +79,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             });
         }
 
-        const falModel = getFalVideoModel(model) ? model : DEFAULT_FAL_VIDEO_MODEL;
+        const falModel = model && getFalVideoModel(model) ? model : DEFAULT_FAL_VIDEO_MODEL;
         const normalizedFalModel = falModel.startsWith('fal-ai/') ? falModel.slice('fal-ai/'.length) : falModel;
 
         const fetchFalJsonWithFallback = async (candidateUrls, errorPrefix) => {
@@ -90,8 +120,8 @@ module.exports = withMiddleware(async function handler(req, res) {
         try {
             // Only poll trusted Fal queue endpoints reconstructed from allowlisted model IDs.
             const statusCandidates = buildUniqueUrls([
-                `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}/status`,
-                `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(request_id)}/status`,
+                `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(requestId)}/status`,
+                `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(requestId)}/status`,
             ]);
             const statusResult = await fetchFalJsonWithFallback(statusCandidates, 'Failed to retrieve Fal video status');
             if (!statusResult.ok) {
@@ -103,8 +133,8 @@ module.exports = withMiddleware(async function handler(req, res) {
 
             const statusData = statusResult.data;
             const status = String(statusData?.status || '').toUpperCase();
-            const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(request_id)}`;
-            const normalizedResultBaseUrl = `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(request_id)}`;
+            const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(requestId)}`;
+            const normalizedResultBaseUrl = `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(requestId)}`;
             const resultCandidates = buildUniqueUrls([
                 isTrustedFalQueueUrl(statusData?.response_url) ? statusData.response_url : null,
                 resultBaseUrl,
@@ -159,7 +189,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     try {
-        const pollResponse = await fetch(`https://api.x.ai/v1/videos/${encodeURIComponent(request_id)}`, {
+        const pollResponse = await fetch(`https://api.x.ai/v1/videos/${encodeURIComponent(requestId)}`, {
             headers: {
                 Authorization: `Bearer ${XAI_API_KEY}`,
             },
