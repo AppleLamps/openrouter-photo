@@ -23,7 +23,6 @@ const FAL_IMAGE_MODELS = {
         // for billing, so input cost is modeled as a fixed 1 MP per attachment.
         inputPrice: { type: 'mpix', amount: 0.015, megapixels: 1 },
     },
-    'fal-ai/reve/edit': { edit: true, singleImageUrl: true, price: { type: 'flat', amount: 0.04 } },
     'fal-ai/phota': {},
     'fal-ai/phota/edit': { edit: true, price: { type: 'resolution', oneK: 0.09, fourK: 0.18 } },
 };
@@ -31,11 +30,13 @@ const FAL_IMAGE_MODELS = {
 const FAL_VIDEO_MODELS = {
     'fal-ai/bytedance/seedance/v1.5/pro/text-to-video': {},
     'fal-ai/bytedance/seedance/v1.5/pro/image-to-video': { imageToVideo: true },
-    'fal-ai/bytedance/seedance-2.0/text-to-video': { seedance20: true },
-    'fal-ai/bytedance/seedance-2.0/image-to-video': { seedance20: true, imageToVideo: true },
     'bytedance/seedance-2.0/text-to-video': {
         seedance20: true,
-        seedance20Advanced: true,
+        pricePerSecond: { '720p': 0.3034 },
+    },
+    'bytedance/seedance-2.0/image-to-video': {
+        seedance20: true,
+        imageToVideo: true,
         pricePerSecond: { '720p': 0.3034 },
     },
     'fal-ai/pixverse/c1/image-to-video': {
@@ -53,12 +54,21 @@ const FAL_VIDEO_MODELS = {
     },
 };
 
+const FAL_VIDEO_MODEL_REDIRECTS = {
+    'fal-ai/bytedance/seedance-2.0/text-to-video': 'bytedance/seedance-2.0/text-to-video',
+    'fal-ai/bytedance/seedance-2.0/image-to-video': 'bytedance/seedance-2.0/image-to-video',
+};
+
 function getFalImageModel(model) {
     return FAL_IMAGE_MODELS[model] || null;
 }
 
 function getFalVideoModel(model) {
     return FAL_VIDEO_MODELS[model] || null;
+}
+
+function normalizeFalVideoModel(model) {
+    return FAL_VIDEO_MODEL_REDIRECTS[model] || model;
 }
 
 function getFalImageCostPerImage(model, imageSize, estimateMegapixelsFromImageSize, options = {}) {
@@ -102,8 +112,9 @@ function getFalImageCostPerImage(model, imageSize, estimateMegapixelsFromImageSi
 module.exports = {
     getFalImageModel,
     getFalVideoModel,
+    normalizeFalVideoModel,
     getFalImageCostPerImage,
     isFalImageModel: (model) => Boolean(getFalImageModel(model)),
-    isFalVideoModel: (model) => Boolean(getFalVideoModel(model)),
+    isFalVideoModel: (model) => Boolean(getFalVideoModel(normalizeFalVideoModel(model))),
     isFalEditModel: (model) => Boolean(getFalImageModel(model)?.edit),
 };

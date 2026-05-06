@@ -22,11 +22,13 @@ import {
     DEFAULT_MODEL_ID,
     findModelById,
     getTriggerLabel,
+    normalizeModelId,
 } from './models.js';
 
 const SPEND_STORAGE_KEY = 'openrouter_spend_v1';
 const PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL = 'fal-ai/pixverse/c1/image-to-video';
-const SEEDANCE_20_ADVANCED_MODEL = 'bytedance/seedance-2.0/text-to-video';
+const SEEDANCE_20_TEXT_TO_VIDEO_MODEL = 'bytedance/seedance-2.0/text-to-video';
+const SEEDANCE_20_IMAGE_TO_VIDEO_MODEL = 'bytedance/seedance-2.0/image-to-video';
 const VIDEO_QUALITY_PRESETS = {
     default: {
         options: ['480p', '720p', '1080p'],
@@ -43,6 +45,16 @@ const VIDEO_QUALITY_PRESETS = {
     pixverse: {
         options: ['360p', '540p', '720p', '1080p'],
         defaultValue: '720p',
+    },
+};
+const IMAGE_RESOLUTION_PRESETS = {
+    gemini: {
+        options: ['1K', '2K', '4K'],
+        defaultValue: '1K',
+    },
+    xai: {
+        options: ['1K', '2K'],
+        defaultValue: '1K',
     },
 };
 
@@ -464,9 +476,7 @@ function createModelPicker() {
     let activeTab = 'all';
     let query = '';
 
-    if (!hidden.value || !findModelById(hidden.value)) {
-        hidden.value = DEFAULT_MODEL_ID;
-    }
+    hidden.value = normalizeModelId(hidden.value || DEFAULT_MODEL_ID);
 
     const syncTriggerLabel = () => {
         trigger.textContent = getTriggerLabel(hidden.value);
@@ -1047,7 +1057,7 @@ function getGenerationSettings() {
     const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
 
-    const model = modelSelect?.value || 'black-forest-labs/flux.2-pro';
+    const model = normalizeModelId(modelSelect?.value || DEFAULT_MODEL_ID);
 
     const parsedXaiVideoLength = parseInt(xaiVideoLengthInput?.value || 10, 10);
     const xaiVideoLength = Number.isFinite(parsedXaiVideoLength) ? parsedXaiVideoLength : 10;
@@ -1075,11 +1085,11 @@ function syncVideoQualityOptions(model) {
     let preset = VIDEO_QUALITY_PRESETS.default;
     if (
         model === 'grok-imagine-video' ||
-        model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
-        model === 'fal-ai/bytedance/seedance-2.0/image-to-video'
+        model === SEEDANCE_20_TEXT_TO_VIDEO_MODEL ||
+        model === SEEDANCE_20_IMAGE_TO_VIDEO_MODEL
     ) {
         preset = VIDEO_QUALITY_PRESETS.seedance20;
-    } else if (model === 'alibaba/happy-horse/reference-to-video' || model === SEEDANCE_20_ADVANCED_MODEL) {
+    } else if (model === 'alibaba/happy-horse/reference-to-video') {
         preset = VIDEO_QUALITY_PRESETS.highRes;
     } else if (model === PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL) {
         preset = VIDEO_QUALITY_PRESETS.pixverse;
@@ -1096,6 +1106,28 @@ function syncVideoQualityOptions(model) {
 
     videoQualitySelect.value = preset.options.includes(currentValue) ? currentValue : preset.defaultValue;
 }
+
+function syncImageResolutionOptions(model) {
+    const resolutionSelect = document.getElementById('setting-resolution');
+    if (!(resolutionSelect instanceof HTMLSelectElement)) {
+        return;
+    }
+
+    const preset = (model === 'grok-imagine-image' || model === 'grok-imagine-image-quality')
+        ? IMAGE_RESOLUTION_PRESETS.xai
+        : IMAGE_RESOLUTION_PRESETS.gemini;
+
+    const currentValue = resolutionSelect.value;
+    resolutionSelect.innerHTML = '';
+    preset.options.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        resolutionSelect.appendChild(option);
+    });
+    resolutionSelect.value = preset.options.includes(currentValue) ? currentValue : preset.defaultValue;
+}
+
 
 /**
  * Initialize the application
@@ -1851,25 +1883,24 @@ function updateSettingsForModel(model) {
     const isSeedream = typeof model === 'string' && model.includes('seedream');
     const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
     const isPixverseC1 = model === PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL;
-    const isSeedance20Advanced = model === SEEDANCE_20_ADVANCED_MODEL;
-    const isFalModel = typeof model === 'string' && (model.startsWith('fal-ai/') || isHappyHorse || isSeedance20Advanced);
-    const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
+    const isSeedance20 = model === SEEDANCE_20_TEXT_TO_VIDEO_MODEL || model === SEEDANCE_20_IMAGE_TO_VIDEO_MODEL;
+    const isFalModel = typeof model === 'string' && (model.startsWith('fal-ai/') || isHappyHorse || isSeedance20);
+    const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-quality';
     const isXaiVideo = model === 'grok-imagine-video';
     const isFalVideo =
         model === 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video' ||
         model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
-        model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
-        model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
-        isSeedance20Advanced ||
+        isSeedance20 ||
         isHappyHorse;
     const isFalImageToVideo =
         model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
-        model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
+        model === SEEDANCE_20_IMAGE_TO_VIDEO_MODEL ||
         isPixverseC1 ||
         isHappyHorse;
     const isXai = isXaiImage || isXaiVideo;
     const isVideoModel = isXaiVideo || isFalVideo;
 
+    syncImageResolutionOptions(model);
     syncVideoQualityOptions(model);
 
     // Show aspect ratio for Gemini, Seedream, Fal, and xAI models
@@ -1879,8 +1910,8 @@ function updateSettingsForModel(model) {
         aspectRatioGroup?.classList.add('settings-group--hidden');
     }
 
-    // Resolution/image size is Gemini-only
-    if (isGemini) {
+    // Resolution/image size is supported for Gemini and xAI image models.
+    if (isGemini || isXaiImage) {
         resolutionGroup?.classList.remove('settings-group--hidden');
     } else {
         resolutionGroup?.classList.add('settings-group--hidden');
@@ -2635,9 +2666,9 @@ async function handleAnimateImage(event) {
     // 3. Switch model to seedance image-to-video and set qty to 1
     const modelSelect = document.getElementById('setting-model');
     if (modelSelect) {
-        modelSelect.value = 'fal-ai/bytedance/seedance-2.0/image-to-video';
+        modelSelect.value = SEEDANCE_20_IMAGE_TO_VIDEO_MODEL;
         syncModelDropdownUI();
-        updateSettingsForModel('fal-ai/bytedance/seedance-2.0/image-to-video');
+        updateSettingsForModel(SEEDANCE_20_IMAGE_TO_VIDEO_MODEL);
     }
     const numImagesSelect = document.getElementById('setting-num-images');
     if (numImagesSelect) {
@@ -2685,9 +2716,9 @@ function restoreSettings(settings) {
     // Model selection (must be first to trigger UI updates)
     const modelSelect = document.getElementById('setting-model');
     if (modelSelect && settings.model) {
-        modelSelect.value = settings.model;
+        modelSelect.value = normalizeModelId(settings.model);
         syncModelDropdownUI();
-        updateSettingsForModel(settings.model);
+        updateSettingsForModel(modelSelect.value);
     }
 
     // Aspect ratio (OpenRouter / Gemini image_config)

@@ -1,5 +1,5 @@
 const { withMiddleware, redactKey, resolveXaiApiKey, resolveFalApiKey } = require('./_middleware');
-const { getFalVideoModel } = require('./model-registry');
+const { getFalVideoModel, normalizeFalVideoModel } = require('./model-registry');
 
 const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
 
@@ -16,12 +16,13 @@ const resolveFalVideoModelId = (value) => {
             return 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
         case 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video':
             return 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
-        case 'fal-ai/bytedance/seedance-2.0/text-to-video':
-            return 'fal-ai/bytedance/seedance-2.0/text-to-video';
-        case 'fal-ai/bytedance/seedance-2.0/image-to-video':
-            return 'fal-ai/bytedance/seedance-2.0/image-to-video';
         case 'bytedance/seedance-2.0/text-to-video':
             return 'bytedance/seedance-2.0/text-to-video';
+        case 'bytedance/seedance-2.0/image-to-video':
+            return 'bytedance/seedance-2.0/image-to-video';
+        case 'fal-ai/bytedance/seedance-2.0/text-to-video':
+        case 'fal-ai/bytedance/seedance-2.0/image-to-video':
+            return normalizeFalVideoModel(normalizeStringParam(value));
         case 'fal-ai/pixverse/c1/image-to-video':
             return 'fal-ai/pixverse/c1/image-to-video';
         case 'alibaba/happy-horse/reference-to-video':
@@ -80,7 +81,6 @@ module.exports = withMiddleware(async function handler(req, res) {
         }
 
         const falModel = model && getFalVideoModel(model) ? model : DEFAULT_FAL_VIDEO_MODEL;
-        const normalizedFalModel = falModel.startsWith('fal-ai/') ? falModel.slice('fal-ai/'.length) : falModel;
 
         const fetchFalJsonWithFallback = async (candidateUrls, errorPrefix) => {
             let lastStatus = 502;
@@ -121,7 +121,6 @@ module.exports = withMiddleware(async function handler(req, res) {
             // Only poll trusted Fal queue endpoints reconstructed from allowlisted model IDs.
             const statusCandidates = buildUniqueUrls([
                 `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(requestId)}/status`,
-                `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(requestId)}/status`,
             ]);
             const statusResult = await fetchFalJsonWithFallback(statusCandidates, 'Failed to retrieve Fal video status');
             if (!statusResult.ok) {
@@ -134,13 +133,9 @@ module.exports = withMiddleware(async function handler(req, res) {
             const statusData = statusResult.data;
             const status = String(statusData?.status || '').toUpperCase();
             const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(requestId)}`;
-            const normalizedResultBaseUrl = `https://queue.fal.run/${normalizedFalModel}/requests/${encodeURIComponent(requestId)}`;
             const resultCandidates = buildUniqueUrls([
                 isTrustedFalQueueUrl(statusData?.response_url) ? statusData.response_url : null,
-                resultBaseUrl,
                 `${resultBaseUrl}/response`,
-                normalizedResultBaseUrl,
-                `${normalizedResultBaseUrl}/response`,
             ]);
 
             const result = await fetchFalJsonWithFallback(resultCandidates, 'Failed to retrieve Fal video result');

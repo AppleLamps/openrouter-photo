@@ -34,14 +34,13 @@ export const MODELS = [
     { id: 'openai/gpt-5-image-mini',                               name: 'GPT-5 Image Mini',       provider: 'OpenAI',    type: 'image', tier: 'fast' },
 
     // ───── xAI: Grok ─────
-    { id: 'grok-imagine-image-pro',                                name: 'Grok Image Pro',         provider: 'xAI',       type: 'image', tier: 'quality' },
+    { id: 'grok-imagine-image-quality',                            name: 'Grok Image Quality',     provider: 'xAI',       type: 'image', tier: 'quality' },
     { id: 'grok-imagine-image',                                    name: 'Grok Image',             provider: 'xAI',       type: 'image', tier: 'balanced' },
     { id: 'grok-imagine-video',                                    name: 'Grok Video',             provider: 'xAI',       type: 'text-to-video', tier: 'quality' },
 
     // ───── Bytedance: Seedance (video) ─────
-    { id: 'fal-ai/bytedance/seedance-2.0/text-to-video',           name: 'Seedance 2.0',           provider: 'Bytedance', type: 'text-to-video',  tier: 'quality', via: 'fal' },
-    { id: 'fal-ai/bytedance/seedance-2.0/image-to-video',          name: 'Seedance 2.0',           provider: 'Bytedance', type: 'image-to-video', tier: 'quality', via: 'fal' },
-    { id: 'bytedance/seedance-2.0/text-to-video',                  name: 'Seedance 2.0 Pro',       provider: 'Bytedance', type: 'text-to-video',  tier: 'quality', via: 'fal' },
+    { id: 'bytedance/seedance-2.0/text-to-video',                  name: 'Seedance 2.0',           provider: 'Bytedance', type: 'text-to-video',  tier: 'quality', via: 'fal' },
+    { id: 'bytedance/seedance-2.0/image-to-video',                 name: 'Seedance 2.0',           provider: 'Bytedance', type: 'image-to-video', tier: 'quality', via: 'fal' },
     { id: 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video',      name: 'Seedance 1.5 Pro',       provider: 'Bytedance', type: 'text-to-video',  tier: 'quality', via: 'fal' },
     { id: 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video',     name: 'Seedance 1.5 Pro',       provider: 'Bytedance', type: 'image-to-video', tier: 'quality', via: 'fal' },
     { id: 'fal-ai/pixverse/c1/image-to-video',                     name: 'PixVerse C1',            provider: 'PixVerse',  type: 'image-to-video', tier: 'quality', via: 'fal' },
@@ -53,15 +52,9 @@ export const MODELS = [
     { id: 'fal-ai/wan/v2.7/pro/edit',                              name: 'Wan 2.7 Pro Edit',       provider: 'Wan',       type: 'edit',  tier: 'quality',  via: 'fal' },
     { id: 'fal-ai/wan/v2.7/edit',                                  name: 'Wan 2.7 Edit',           provider: 'Wan',       type: 'edit',  tier: 'balanced', via: 'fal' },
 
-    // ───── Sourceful: Riverflow ─────
-    { id: 'sourceful/riverflow-v2-max-preview',                    name: 'Riverflow 2 Max',        provider: 'Sourceful', type: 'image', tier: 'quality' },
-    { id: 'sourceful/riverflow-v2-standard-preview',               name: 'Riverflow 2 Standard',   provider: 'Sourceful', type: 'image', tier: 'balanced' },
-    { id: 'sourceful/riverflow-v2-fast-preview',                   name: 'Riverflow 2 Fast',       provider: 'Sourceful', type: 'image', tier: 'fast' },
-
     // ───── Other ─────
     { id: 'fal-ai/qwen-image-max/text-to-image',                   name: 'Qwen-Image Max',         provider: 'Qwen',      type: 'image', tier: 'quality',  via: 'fal' },
     { id: 'fal-ai/qwen-image-max/edit',                            name: 'Qwen-Image Max Edit',    provider: 'Qwen',      type: 'edit',  tier: 'quality',  via: 'fal' },
-    { id: 'fal-ai/reve/edit',                                      name: 'Reve Edit',              provider: 'Reve',      type: 'edit',  tier: 'balanced', via: 'fal' },
     { id: 'fal-ai/bitdance',                                       name: 'BitDance',               provider: 'BitDance',  type: 'image', tier: 'balanced', via: 'fal' },
     { id: 'fal-ai/z-image/turbo/lora',                             name: 'Z-Image Turbo',          provider: 'Tongyi',    type: 'image', tier: 'fast',     via: 'fal' },
     { id: 'fal-ai/phota',                                          name: 'Phota',                  provider: 'fal.ai',    type: 'image', tier: 'quality',  via: 'fal' },
@@ -97,8 +90,19 @@ export const TIER_LABEL = {
 /** Default selection if the persisted value isn't in the catalog anymore. */
 export const DEFAULT_MODEL_ID = 'fal-ai/z-image/turbo/lora';
 
+export const LEGACY_MODEL_REDIRECTS = {
+    'grok-imagine-image-pro': 'grok-imagine-image-quality',
+    'fal-ai/bytedance/seedance-2.0/text-to-video': 'bytedance/seedance-2.0/text-to-video',
+    'fal-ai/bytedance/seedance-2.0/image-to-video': 'bytedance/seedance-2.0/image-to-video',
+};
+
 export function findModelById(id) {
     return MODELS.find(m => m.id === id) || null;
+}
+
+export function normalizeModelId(id) {
+    const redirected = LEGACY_MODEL_REDIRECTS[id] || id;
+    return findModelById(redirected) ? redirected : DEFAULT_MODEL_ID;
 }
 
 export function getTriggerLabel(id) {

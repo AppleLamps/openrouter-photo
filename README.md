@@ -68,7 +68,6 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 | ByteDance (Fal) | Seedance 1.5 Pro Image-to-Video | Video | Fal |
 | xAI | Grok Imagine Image, Grok Imagine Image Pro | Image | xAI |
 | xAI | Grok Imagine Video | Video | xAI |
-| Sourceful | Riverflow v2 (Max, Standard, Fast) | Image | OpenRouter |
 
 ---
 
@@ -123,7 +122,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 - [Node.js](https://nodejs.org/) v18+
 - API key for at least one provider:
-  - [OpenRouter API Key](https://openrouter.ai/keys) — FLUX, Gemini, GPT-5, Seedream (OR), Riverflow
+  - [OpenRouter API Key](https://openrouter.ai/keys) — FLUX, Gemini, GPT-5, Seedream (OR)
   - [Fal API Key](https://fal.ai/dashboard/keys) — Seedream (Fal), Seedance 1.5 Pro
   - [xAI API Key](https://console.x.ai) — Grok image/video models
 
@@ -255,7 +254,7 @@ npx vercel --prod
 ### "API key is required"
 
 - Open Settings and enter the key for your selected model's provider
-- OpenRouter key for FLUX / Gemini / GPT-5 / Riverflow
+- OpenRouter key for FLUX / Gemini / GPT-5
 - Fal key for Seedream / Seedance models
 - xAI key for Grok models
 - Ensure the key is saved (click Save)

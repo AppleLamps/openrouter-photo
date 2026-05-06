@@ -98,10 +98,10 @@ function getAppAccessHeaders() {
  * @property {boolean} [use_turbo] - Turbo mode (Qwen only)
  * @property {string} [image_url] - Input image URL or data URI for editing (Qwen, FLUX Kontext, Wan text-to-image, Fibo)
  * @property {string[]} [image_urls] - Input image URLs/data URIs list (Seedream 4.5 Edit, Wan image-to-image, Nano Banana Pro)
- * @property {string} [aspect_ratio] - Aspect ratio (FLUX Kontext, Nano Banana Pro, Fibo)
+ * @property {string} [aspect_ratio] - Aspect ratio for supported image/video models
  * @property {string} [safety_tolerance] - Safety tolerance level 1-6 (FLUX Kontext only)
  * @property {boolean} [enhance_prompt] - Enhance prompt (FLUX Kontext, Wan image-to-image)
- * @property {string} [resolution] - Resolution (1K, 2K, 4K) for Nano Banana Pro
+ * @property {string} [resolution] - Resolution/image size (Gemini: 1K/2K/4K, xAI images: 1K/2K)
  * @property {boolean} [limit_generations] - Limit generations per prompt to 1 (Nano Banana Pro)
  * @property {boolean} [enable_web_search] - Enable web search for image generation (Nano Banana Pro)
  * @property {number} [xai_video_length] - xAI video duration (seconds)

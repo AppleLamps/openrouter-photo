@@ -11,22 +11,29 @@ const {
     isFalVideoModel,
     isFalEditModel,
     getFalVideoModel,
+    normalizeFalVideoModel,
 } = require('./model-registry');
 
 module.exports = withMiddleware(async function handler(req, res) {
     const {
         prompt,
-        model = 'black-forest-labs/flux.2-pro',
+        model: requestedModel = 'black-forest-labs/flux.2-pro',
         num_images = 1,
-        // UI sends these; only Gemini models currently support image_config options reliably
+        // UI sends these; mapped per provider below.
         aspect_ratio,
         image_size, // legacy "preset" from UI; used to derive aspect ratio if aspect_ratio isn't set
-        resolution, // legacy UI field; repurposed as Gemini image_config.image_size (1K/2K/4K)
+        resolution, // Gemini image_config.image_size (1K/2K/4K); xAI image resolution (1k/2k)
         xai_video_length,
         xai_video_quality,
         generate_audio_switch,
         image_urls = [], // optional image inputs (data URLs) for all models
     } = req.body;
+
+    const model = normalizeFalVideoModel(
+        requestedModel === 'grok-imagine-image-pro'
+            ? 'grok-imagine-image-quality'
+            : requestedModel
+    );
 
     if (!prompt || typeof prompt !== 'string') {
         return res.status(400).json({ error: 'Prompt is required' });
@@ -38,14 +45,13 @@ module.exports = withMiddleware(async function handler(req, res) {
         return res.status(400).json({ error: '`num_images` must be an integer between 1 and 4' });
     }
 
-    const isXaiImageModel = model === 'grok-imagine-image' || model === 'grok-imagine-image-pro';
+    const isXaiImageModel = model === 'grok-imagine-image' || model === 'grok-imagine-image-quality';
     const isXaiVideoModel = model === 'grok-imagine-video';
     const isXaiModel = isXaiImageModel || isXaiVideoModel;
 
     const isFalModel = isFalImageModel(model);
     const isFalVideoModelForRequest = isFalVideoModel(model);
     const isFluxKleinEditModel = model === 'fal-ai/flux-2/klein/9b/edit/lora';
-    const isReveEditModel = model === 'fal-ai/reve/edit';
     const isFalEditModelForRequest = isFalEditModel(model);
 
     const XAI_API_KEY = resolveXaiApiKey(req);
@@ -114,7 +120,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             : imageSizePresetToAspectRatio(image_size);
 
     const maxInputImages =
-        isFluxKleinEditModel ? 4 :
+        isXaiImageModel ? 5 :
+            isFluxKleinEditModel ? 4 :
             model === 'fal-ai/phota/edit' ? 10 :
             model === 'alibaba/happy-horse/reference-to-video' ? 9 :
                 3;
@@ -349,15 +356,6 @@ module.exports = withMiddleware(async function handler(req, res) {
                 enable_prompt_expansion: true,
                 enable_safety_checker: false,
             };
-        } else if (isReveEditModel) {
-            // Reve edit — flat $0.04/image. No image_size / steps / guidance.
-            // Takes a single `image_url` (string), not `image_urls` (array).
-            // https://fal.ai/models/fal-ai/reve/edit/api
-            falPayload = {
-                prompt: prompt.trim(),
-                num_images: parsedNumImages,
-                output_format: 'png',
-            };
         } else {
             falPayload = {
                 prompt: prompt.trim(),
@@ -369,12 +367,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         }
 
         if (isFalEditModelForRequest) {
-            // Reve takes a single `image_url`; the others take an `image_urls` array.
-            if (isReveEditModel) {
-                falPayload.image_url = normalizedInputImages[0];
-            } else {
-                falPayload.image_urls = normalizedInputImages;
-            }
+            falPayload.image_urls = normalizedInputImages;
         }
 
         try {
@@ -550,13 +543,11 @@ module.exports = withMiddleware(async function handler(req, res) {
         const falVideoConfig = getFalVideoModel(model);
         const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
         const isPixverseC1 = model === 'fal-ai/pixverse/c1/image-to-video';
-        const isSeedance20Advanced = model === 'bytedance/seedance-2.0/text-to-video';
         // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
         const parsedDuration = parseInt(xai_video_length, 10);
         const isSeedance20 =
-            model === 'fal-ai/bytedance/seedance-2.0/text-to-video' ||
-            model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
-            isSeedance20Advanced;
+            model === 'bytedance/seedance-2.0/text-to-video' ||
+            model === 'bytedance/seedance-2.0/image-to-video';
         // PixVerse C1 allows 1-15 second clips, unlike the other Fal video models here.
         let minFalDuration = 4;
         let maxFalDuration = 12;
@@ -576,7 +567,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         let validResolutions = ['480p', '720p', '1080p'];
         if (isPixverseC1) {
             validResolutions = ['360p', '540p', '720p', '1080p'];
-        } else if (isHappyHorse || isSeedance20Advanced) {
+        } else if (isHappyHorse) {
             validResolutions = ['720p', '1080p'];
         } else if (isSeedance20) {
             validResolutions = ['480p', '720p'];
@@ -600,7 +591,7 @@ module.exports = withMiddleware(async function handler(req, res) {
 
         const isFalImageToVideo =
             model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
-            model === 'fal-ai/bytedance/seedance-2.0/image-to-video' ||
+            model === 'bytedance/seedance-2.0/image-to-video' ||
             falVideoConfig?.imageToVideo === true;
 
         if (isFalImageToVideo && normalizedInputImages.length === 0) {
@@ -627,7 +618,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             falVideoPayload.aspect_ratio = falAspectRatio;
         }
 
-        if (isPixverseC1 || !isSeedance20 || isHappyHorse || isSeedance20Advanced) {
+        if (isPixverseC1 || !isSeedance20 || isHappyHorse) {
             falVideoPayload.enable_safety_checker = false;
         }
 
@@ -670,7 +661,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             }
 
             let videoCost = 0.10;
-            if (isHappyHorse || isSeedance20Advanced) {
+            if (isHappyHorse || isSeedance20) {
                 videoCost = normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0);
             } else if (isPixverseC1) {
                 const pixverseRateTable = falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio'];
@@ -736,22 +727,39 @@ module.exports = withMiddleware(async function handler(req, res) {
                         ? aspect_ratio.trim()
                         : null;
 
-                // xAI image API supports: model, prompt, n, response_format, aspect_ratio, image_url
-                // It does NOT support: size, quality
+                const normalizedXaiResolution =
+                    typeof resolution === 'string' && ['1K', '2K'].includes(resolution)
+                        ? resolution.toLowerCase()
+                        : null;
+
+                // xAI image API supports generation and JSON edit endpoints. It does
+                // not use OpenAI's multipart edit shape.
                 const xaiPayload = {
                     model,
                     prompt: xaiPrompt,
                     response_format: 'b64_json',
                     n: parsedNumImages,
                     ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
+                    ...(normalizedXaiResolution ? { resolution: normalizedXaiResolution } : {}),
                 };
 
-                // Pass first input image for image editing
+                let xaiEndpoint = 'https://api.x.ai/v1/images/generations';
                 if (normalizedInputImages.length > 0) {
-                    xaiPayload.image_url = normalizedInputImages[0];
+                    xaiEndpoint = 'https://api.x.ai/v1/images/edits';
+                    if (normalizedInputImages.length === 1) {
+                        xaiPayload.image = {
+                            type: 'image_url',
+                            url: normalizedInputImages[0],
+                        };
+                    } else {
+                        xaiPayload.images = normalizedInputImages.map((url) => ({
+                            type: 'image_url',
+                            url,
+                        }));
+                    }
                 }
 
-                const response = await fetch('https://api.x.ai/v1/images/generations', {
+                const response = await fetch(xaiEndpoint, {
                     method: 'POST',
                     headers: xaiHeaders,
                     body: JSON.stringify(xaiPayload),
@@ -775,7 +783,7 @@ module.exports = withMiddleware(async function handler(req, res) {
                 // Calculate cost per image based on model
                 const hasInputImage = normalizedInputImages.length > 0;
                 const inputImageCost = hasInputImage ? 0.002 : 0;
-                const perImageOutputCost = model === 'grok-imagine-image-pro' ? 0.07 : 0.02;
+                const perImageOutputCost = model === 'grok-imagine-image-quality' ? 0.07 : 0.02;
                 const actualCount = Math.min(images.length, parsedNumImages);
                 const totalCost = (perImageOutputCost * actualCount) + inputImageCost;
 

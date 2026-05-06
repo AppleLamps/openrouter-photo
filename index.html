@@ -446,10 +446,10 @@
                 <div class="settings-group">
                     <label class="settings-label">Advanced</label>
                     <p class="settings-hint settings-hint--flush">Aspect ratio is supported for Gemini, Seedream, Fal,
-                        and xAI models. Gemini image size is Gemini only; Grok models use their own size settings.</p>
+                        and xAI models. Image resolution is supported for Gemini and xAI image models.</p>
                 </div>
 
-                <!-- Aspect Ratio (Gemini and Seedream) -->
+                <!-- Aspect Ratio -->
                 <div class="settings-group settings-group--hidden" id="aspect-ratio-group">
                     <label class="settings-label" for="setting-aspect-ratio">Aspect Ratio</label>
                     <select id="setting-aspect-ratio" class="settings-select" aria-label="Aspect Ratio">
@@ -463,18 +463,18 @@
                         <option value="21:9">21:9 (Ultrawide)</option>
                         <option value="9:21">9:21</option>
                     </select>
-                    <p class="settings-hint">Applied for Gemini, Seedream, and Fal models.</p>
+                    <p class="settings-hint">Applied for Gemini, Seedream, Fal, and xAI models.</p>
                 </div>
 
-                <!-- Resolution (Gemini only) -->
+                <!-- Resolution / image size -->
                 <div class="settings-group settings-group--hidden" id="resolution-group">
-                    <label class="settings-label" for="setting-resolution">Gemini Image Size</label>
-                    <select id="setting-resolution" class="settings-select" aria-label="Gemini Image Size">
+                    <label class="settings-label" for="setting-resolution">Image Resolution</label>
+                    <select id="setting-resolution" class="settings-select" aria-label="Image Resolution">
                         <option value="1K" selected>1K</option>
                         <option value="2K">2K</option>
                         <option value="4K">4K</option>
                     </select>
-                    <p class="settings-hint">Only applied for Gemini image-generation models.</p>
+                    <p class="settings-hint">Applied for Gemini and xAI image-generation models.</p>
                 </div>
 
 
