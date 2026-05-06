@@ -174,7 +174,14 @@ function withMiddleware(handler, options = {}) {
         allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-App-Access-Token',
         skipBodyParse = false,
         rateLimit = {},
+        methods = ['POST'],
     } = options;
+    const allowedMethods = Array.from(new Set(
+        (Array.isArray(methods) ? methods : [methods])
+            .map((method) => String(method || '').toUpperCase())
+            .filter(Boolean)
+    ));
+    const allowMethodsHeader = [...allowedMethods, 'OPTIONS'].join(', ');
 
     return async function wrappedHandler(req, res) {
         // ---------- CORS ----------
@@ -183,7 +190,7 @@ function withMiddleware(handler, options = {}) {
             res.setHeader('Access-Control-Allow-Origin', cors.origin);
             res.setHeader('Vary', 'Origin');
         }
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', allowMethodsHeader);
         res.setHeader('Access-Control-Allow-Headers', allowHeaders);
 
         if (cors.blocked) {
@@ -195,8 +202,8 @@ function withMiddleware(handler, options = {}) {
             return res.status(200).end();
         }
 
-        // ---------- POST only ----------
-        if (req.method !== 'POST') {
+        // ---------- Method check ----------
+        if (!allowedMethods.includes(req.method)) {
             return res.status(405).json({ error: 'Method not allowed' });
         }
 
@@ -209,7 +216,7 @@ function withMiddleware(handler, options = {}) {
         }
 
         // ---------- Body parsing (Vercel compatibility) ----------
-        if (!skipBodyParse) {
+        if (!skipBodyParse && req.method !== 'GET' && req.method !== 'HEAD') {
             if (!req.body || typeof req.body !== 'object') {
                 try {
                     const chunks = [];
