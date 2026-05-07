@@ -313,31 +313,19 @@ async function loadJSZip() {
 
     if (!jsZipLoaderPromise) {
         jsZipLoaderPromise = new Promise((resolve, reject) => {
-            const existing = document.querySelector('script[data-jszip-loader]');
-            if (existing) {
-                existing.addEventListener('load', () => {
-                    if (window.JSZip) resolve(window.JSZip);
-                    else reject(new Error('JSZip failed to load'));
-                }, { once: true });
-                existing.addEventListener('error', () => reject(new Error('Failed to load JSZip')), { once: true });
-                return;
-            }
-
             const script = document.createElement('script');
-            script.src = '/vendor/jszip.min.js';
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
             script.async = true;
-            script.dataset.jszipLoader = 'true';
             script.onload = () => {
                 if (window.JSZip) resolve(window.JSZip);
-                else reject(new Error('JSZip failed to load'));
+                else reject(new Error('JSZip failed to load from CDN'));
             };
-            script.onerror = () => reject(new Error('Failed to load JSZip'));
+            script.onerror = () => reject(new Error('Failed to load JSZip from CDN'));
             document.head.appendChild(script);
-        })
-            .catch((error) => {
-                jsZipLoaderPromise = null;
-                throw error;
-            });
+        }).catch((error) => {
+            jsZipLoaderPromise = null;
+            throw error;
+        });
     }
     return jsZipLoaderPromise;
 }
