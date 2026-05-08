@@ -39,17 +39,20 @@ const ZIP_DOWNLOAD_THRESHOLD = 5;
 let jsZipLoaderPromise = null;
 
 /**
- * Swipe-to-close state for the lightbox (kept at module scope so it can be reset on close).
- * @type {{startX:number,startY:number,startTime:number,deltaY:number,isActive:boolean}}
+ * Swipe state for the lightbox (kept at module scope so it can be reset on close).
+ * Handles both swipe-to-close (vertical) and swipe-to-navigate (horizontal).
+ * @type {{startX:number,startY:number,startTime:number,deltaX:number,deltaY:number,isActive:boolean,direction:string|null}}
  */
-const lightboxSwipeState = { startX: 0, startY: 0, startTime: 0, deltaY: 0, isActive: false };
+const lightboxSwipeState = { startX: 0, startY: 0, startTime: 0, deltaX: 0, deltaY: 0, isActive: false, direction: null };
 
 function resetLightboxSwipeState() {
     lightboxSwipeState.startX = 0;
     lightboxSwipeState.startY = 0;
     lightboxSwipeState.startTime = 0;
+    lightboxSwipeState.deltaX = 0;
     lightboxSwipeState.deltaY = 0;
     lightboxSwipeState.isActive = false;
+    lightboxSwipeState.direction = null;
 
     const modal = document.getElementById('lightbox-modal');
     if (modal) {
@@ -57,6 +60,11 @@ function resetLightboxSwipeState() {
     }
     if (lightboxModalContentElement) {
         lightboxModalContentElement.style.transform = '';
+    }
+    const stageEl = document.querySelector('.modal__stage');
+    if (stageEl instanceof HTMLElement) {
+        stageEl.style.transform = '';
+        stageEl.style.transition = '';
     }
 }
 
@@ -1081,6 +1089,7 @@ async function openLightbox(image) {
     document.body.classList.add('is-modal-open');
 
     lockBodyScroll();
+    updateNavButtons();
 
     // Move focus into the dialog for better keyboard accessibility.
     if (closeBtn instanceof HTMLElement) {
@@ -1110,6 +1119,59 @@ async function openLightbox(image) {
 }
 
 /**
+ * Navigate to the next or previous image in the lightbox.
+ * @param {'next'|'prev'} direction
+ */
+function navigateLightbox(direction) {
+    if (!currentLightboxImageId) return;
+
+    const images = state.getFilteredImages();
+    if (images.length <= 1) return;
+
+    const currentIndex = images.findIndex(img => img.id === currentLightboxImageId);
+    if (currentIndex === -1) return;
+
+    let nextIndex;
+    if (direction === 'next') {
+        nextIndex = currentIndex + 1;
+        if (nextIndex >= images.length) return; // at the end
+    } else {
+        nextIndex = currentIndex - 1;
+        if (nextIndex < 0) return; // at the start
+    }
+
+    const nextImage = images[nextIndex];
+
+    // Revoke the previous image's blob URL before opening the next one
+    if (currentLightboxImageId) {
+        state.revokeFullImageUrl(currentLightboxImageId);
+    }
+
+    openLightbox(nextImage);
+    updateNavButtons();
+}
+
+/**
+ * Update the visibility of lightbox navigation buttons based on current position.
+ */
+function updateNavButtons() {
+    const prevBtn = document.querySelector('.modal__nav-btn--prev');
+    const nextBtn = document.querySelector('.modal__nav-btn--next');
+    if (!prevBtn || !nextBtn) return;
+
+    const images = state.getFilteredImages();
+    if (images.length <= 1) {
+        prevBtn.classList.add('modal__nav-btn--hidden');
+        nextBtn.classList.add('modal__nav-btn--hidden');
+        return;
+    }
+
+    const currentIndex = images.findIndex(img => img.id === currentLightboxImageId);
+    prevBtn.classList.toggle('modal__nav-btn--hidden', currentIndex <= 0);
+    nextBtn.classList.toggle('modal__nav-btn--hidden', currentIndex >= images.length - 1);
+}
+
+/**
  * Close lightbox modal
  */
 export function closeLightbox() {
@@ -1129,8 +1191,14 @@ export function closeLightbox() {
     modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('is-modal-open');
 
-    // Reset swipe-to-close state in case the modal is closed mid-gesture (e.g. ESC/backdrop).
+    // Reset swipe state in case the modal is closed mid-gesture (e.g. ESC/backdrop).
     resetLightboxSwipeState();
+
+    // Hide nav buttons
+    const prevBtn = document.querySelector('.modal__nav-btn--prev');
+    const nextBtn = document.querySelector('.modal__nav-btn--next');
+    if (prevBtn) prevBtn.classList.add('modal__nav-btn--hidden');
+    if (nextBtn) nextBtn.classList.add('modal__nav-btn--hidden');
 
     // Clean up full-resolution blob URL to free memory
     if (currentLightboxImageId) {
@@ -1186,12 +1254,37 @@ export function initLightbox() {
         modalImage.addEventListener('click', toggleUi);
     }
 
-    // Close on escape key
+    // Keyboard navigation: Escape to close, Arrow keys to navigate
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closeLightbox();
+        if (!modal.classList.contains('modal--active')) return;
+        switch (e.key) {
+            case 'Escape':
+                closeLightbox();
+                break;
+            case 'ArrowLeft':
+                navigateLightbox('prev');
+                break;
+            case 'ArrowRight':
+                navigateLightbox('next');
+                break;
         }
     });
+
+    // Navigation button click handlers
+    const prevBtn = modal.querySelector('.modal__nav-btn--prev');
+    const nextBtn = modal.querySelector('.modal__nav-btn--next');
+    if (prevBtn) {
+        prevBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigateLightbox('prev');
+        });
+    }
+    if (nextBtn) {
+        nextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigateLightbox('next');
+        });
+    }
 
     // Swipe down to close (touch devices)
     if (modalContent) {
@@ -1209,13 +1302,14 @@ export function initLightbox() {
             lightboxSwipeState.startX = e.touches[0].clientX;
             lightboxSwipeState.startY = e.touches[0].clientY;
             lightboxSwipeState.startTime = Date.now();
+            lightboxSwipeState.deltaX = 0;
             lightboxSwipeState.deltaY = 0;
             lightboxSwipeState.isActive = true;
+            lightboxSwipeState.direction = null;
         }, { passive: true });
 
         modalContent.addEventListener('touchmove', (e) => {
             if (!modal.classList.contains('modal--active')) {
-                // If we somehow receive move events while closed, discard swipe state.
                 resetLightboxSwipeState();
                 return;
             }
@@ -1227,13 +1321,31 @@ export function initLightbox() {
             const dx = x - lightboxSwipeState.startX;
             const dy = y - lightboxSwipeState.startY;
 
-            // Only treat as swipe-to-close when dragging downward more than sideways.
+            // Lock direction on first significant movement
+            if (!lightboxSwipeState.direction) {
+                if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+                lightboxSwipeState.direction = Math.abs(dx) >= Math.abs(dy) ? 'horizontal' : 'vertical';
+            }
+
+            if (lightboxSwipeState.direction === 'horizontal') {
+                lightboxSwipeState.deltaX = dx;
+                e.preventDefault();
+
+                const stageEl = modal.querySelector('.modal__stage');
+                if (stageEl instanceof HTMLElement) {
+                    const resistance = 0.4;
+                    const translateX = dx * resistance;
+                    stageEl.style.transition = 'none';
+                    stageEl.style.transform = `translate3d(${translateX}px, 0, 0)`;
+                }
+                return;
+            }
+
+            // Vertical: swipe-to-close (existing behaviour)
             if (dy <= 0 || Math.abs(dy) < Math.abs(dx)) return;
 
             lightboxSwipeState.deltaY = dy;
             modal.classList.add('modal--dragging');
-
-            // Prevent rubber-banding while dragging.
             e.preventDefault();
 
             const translateY = Math.min(dy, window.innerHeight * 0.65);
@@ -1245,15 +1357,42 @@ export function initLightbox() {
             lightboxSwipeState.isActive = false;
 
             const elapsed = Math.max(Date.now() - lightboxSwipeState.startTime, 1);
-            const velocity = lightboxSwipeState.deltaY / elapsed; // px/ms
+            const direction = lightboxSwipeState.direction;
+
+            if (direction === 'horizontal') {
+                const velocityX = lightboxSwipeState.deltaX / elapsed;
+                const absDx = Math.abs(lightboxSwipeState.deltaX);
+                const shouldNav = absDx > 50 || Math.abs(velocityX) > 0.3;
+
+                const stageEl = modal.querySelector('.modal__stage');
+                if (stageEl instanceof HTMLElement) {
+                    stageEl.style.transition = 'transform 0.25s ease';
+                    stageEl.style.transform = '';
+                    stageEl.addEventListener('transitionend', () => {
+                        stageEl.style.transition = '';
+                    }, { once: true });
+                }
+
+                if (shouldNav && absDx > 8) {
+                    suppressNextImageClick = true;
+                    navigateLightbox(lightboxSwipeState.deltaX < 0 ? 'next' : 'prev');
+                } else if (absDx > 6) {
+                    suppressNextImageClick = true;
+                }
+
+                lightboxSwipeState.direction = null;
+                lightboxSwipeState.deltaX = 0;
+                return;
+            }
+
+            // Vertical: swipe-to-close
+            const velocity = lightboxSwipeState.deltaY / elapsed;
             const shouldClose = lightboxSwipeState.deltaY > 110 || velocity > 0.85;
             const wasDragged = lightboxSwipeState.deltaY > 6;
 
             modal.classList.remove('modal--dragging');
             modalContent.style.transform = '';
 
-            // If the gesture moved enough to be a drag (not just a tap), eat the
-            // synthesized click that follows touchend so it doesn't toggle the UI.
             if (wasDragged) {
                 suppressNextImageClick = true;
             }

@@ -799,14 +799,62 @@ body.is-modal-open .spend-tracker {
     transition: none;
 }
 
+/* Navigation buttons (prev / next) */
+.modal__nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(12, 12, 14, 0.56);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    color: rgba(255, 255, 255, 0.82);
+    border-radius: 50%;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, opacity 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    z-index: 20;
+    cursor: pointer;
+    opacity: 1;
+}
+
+.modal__nav-btn--prev {
+    left: 18px;
+}
+
+.modal__nav-btn--next {
+    right: 18px;
+}
+
+.modal__nav-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.95);
+    transform: translateY(-50%) scale(1.06);
+}
+
+.modal__nav-btn:active {
+    transform: translateY(-50%) scale(0.94);
+}
+
+.modal__nav-btn--hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
 .modal--ui-hidden .modal__close,
-.modal--ui-hidden .modal__info {
+.modal--ui-hidden .modal__info,
+.modal--ui-hidden .modal__nav-btn {
     opacity: 0;
     pointer-events: none;
 }
 
 .modal__close,
-.modal__info {
+.modal__info,
+.modal__nav-btn {
     transition: opacity var(--transition-fast);
 }
 
@@ -910,6 +958,30 @@ body.is-modal-open .spend-tracker {
     .modal__close:active {
         background: rgba(0, 0, 0, 0.75);
         color: rgba(255, 255, 255, 1);
+    }
+
+    .modal__nav-btn {
+        width: 40px;
+        height: 40px;
+        background: rgba(0, 0, 0, 0.52);
+        border-color: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.9);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    .modal__nav-btn--prev {
+        left: calc(env(safe-area-inset-left) + 8px);
+    }
+
+    .modal__nav-btn--next {
+        right: calc(env(safe-area-inset-right) + 8px);
+    }
+
+    .modal__nav-btn svg {
+        width: 20px;
+        height: 20px;
     }
 
     .modal__info {
