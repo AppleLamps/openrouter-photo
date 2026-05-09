@@ -1,4 +1,4 @@
-const { withMiddleware, redactKey, resolveXaiApiKey } = require('./_middleware');
+const { withMiddleware, redactKey, resolveOpenRouterApiKey } = require('./_middleware');
 
 module.exports = withMiddleware(async function handler(req, res) {
     const { prompt, image_urls, custom_instructions } = req.body;
@@ -17,33 +17,31 @@ module.exports = withMiddleware(async function handler(req, res) {
     // Validate image_urls if provided
     const hasImages = Array.isArray(image_urls) && image_urls.length > 0;
 
-    const XAI_API_KEY = resolveXaiApiKey(req);
+    const OPENROUTER_API_KEY = resolveOpenRouterApiKey(req);
 
-    if (!XAI_API_KEY) {
+    if (!OPENROUTER_API_KEY) {
         return res.status(401).json({
-            code: 'XAI_API_KEY_REQUIRED',
-            error: 'xAI API key required',
+            code: 'OPENROUTER_API_KEY_REQUIRED',
+            error: 'OpenRouter API key required',
             help: {
-                message: 'Open Settings → paste your xAI API key. Create one at console.x.ai.',
-                url: 'https://console.x.ai/team/default/api-keys'
+                message: 'Open Settings → paste your OpenRouter API key. Create one at openrouter.ai/keys.',
+                url: 'https://openrouter.ai/keys'
             }
         });
     }
 
     try {
-        const model = 'grok-4.20-beta-latest-reasoning';
+        const model = 'x-ai/grok-4.1-fast';
 
-        // Build user message content - xAI Responses API format
+        // Build user message content — OpenAI-compatible multimodal format
         let userContent;
         if (hasImages) {
-            // Multimodal: input_image + input_text
             userContent = [
                 ...image_urls.slice(0, 4).map(url => ({
-                    type: 'input_image',
-                    image_url: url,
-                    detail: 'high'
+                    type: 'image_url',
+                    image_url: { url, detail: 'high' }
                 })),
-                { type: 'input_text', text: enhancementRequest }
+                { type: 'text', text: enhancementRequest }
             ];
         } else {
             userContent = enhancementRequest;
@@ -71,16 +69,17 @@ RULES:
 - No prompt syntax spam (no "4k, ultra HD, masterpiece, best quality")
 - Match prompt length to complexity: simple ideas get short prompts, complex ideas get detailed ones`;
 
-        // xAI Responses API
-        const response = await fetch('https://api.x.ai/v1/responses', {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${XAI_API_KEY}`,
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
                 'Content-Type': 'application/json',
+                'HTTP-Referer': req.headers.referer || 'https://ai-image-generator.vercel.app',
+                'X-Title': 'AI Image Generator'
             },
             body: JSON.stringify({
                 model,
-                input: [
+                messages: [
                     {
                         role: 'system',
                         content: systemPrompt
@@ -90,14 +89,13 @@ RULES:
                         content: userContent
                     }
                 ],
-                store: false,
-                safe_mode: false
+                max_tokens: 1000,
             }),
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('xAI API error:', redactKey(errorText));
+            console.error('OpenRouter API error:', redactKey(errorText));
             return res.status(response.status).json({
                 error: 'Failed to enhance prompt',
                 details: redactKey(errorText)
@@ -106,22 +104,7 @@ RULES:
 
         const data = await response.json();
 
-        // Extract text from xAI Responses API format
-        // Response output contains items; find the message with output_text
-        let enhancedPrompt = null;
-        if (data.output && Array.isArray(data.output)) {
-            for (const item of data.output) {
-                if (item.type === 'message' && item.content && Array.isArray(item.content)) {
-                    for (const block of item.content) {
-                        if (block.type === 'output_text' && block.text) {
-                            enhancedPrompt = block.text;
-                            break;
-                        }
-                    }
-                    if (enhancedPrompt) break;
-                }
-            }
-        }
+        const enhancedPrompt = data.choices?.[0]?.message?.content;
 
         if (!enhancedPrompt) {
             return res.status(500).json({ error: 'No content returned from API' });
