@@ -20,6 +20,7 @@ export const MODELS = [
     { id: 'fal-ai/bytedance/seedream/v5/lite/edit',                name: 'Seedream 5 Lite Edit',   provider: 'Bytedance', type: 'edit',  tier: 'fast',     via: 'fal' },
 
     // ───── Black Forest Labs: Flux ─────
+    { id: 'fal-ai/flux-pro/v1.1',                                  name: 'Flux 1.1 Pro',           provider: 'Black Forest Labs', type: 'image', tier: 'quality',  via: 'fal' },
     { id: 'black-forest-labs/flux.2-pro',                          name: 'Flux 2 Pro',             provider: 'Black Forest Labs', type: 'image', tier: 'quality' },
     { id: 'black-forest-labs/flux.2-max',                          name: 'Flux 2 Max',             provider: 'Black Forest Labs', type: 'image', tier: 'quality' },
     { id: 'black-forest-labs/flux.2-flex',                         name: 'Flux 2 Flex',            provider: 'Black Forest Labs', type: 'image', tier: 'balanced' },
