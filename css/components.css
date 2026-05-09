@@ -27,9 +27,9 @@ body.is-modal-open .spend-tracker {
     gap: 8px;
     padding: 8px 10px;
     border-radius: 999px;
-    border: 1px solid var(--border-color);
-    background: rgba(0, 0, 0, 0.35);
-    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.95);
     font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
@@ -39,7 +39,7 @@ body.is-modal-open .spend-tracker {
 }
 
 .spend-tracker:hover {
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.7);
 }
 
 /* Floating Input Bar */
@@ -616,7 +616,7 @@ body.is-modal-open .spend-tracker {
 
 .modal__eyebrow,
 .modal__section-label {
-    color: rgba(255, 255, 255, 0.46);
+    color: rgba(255, 255, 255, 0.56);
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -3028,4 +3028,18 @@ body.is-modal-open .spend-tracker {
 /* Model picker portaled to <body> on mobile (avoids transform containing-block) */
 .model-picker.input-bar__dropdown-menu--model.model-picker--open {
     display: flex;
+}
+
+/* Reduced motion: disable decorative animations */
+@media (prefers-reduced-motion: reduce) {
+
+    .input-bar__button--loading,
+    .input-bar__button .spin-icon,
+    .input-bar__icon-btn--loading {
+        animation: none;
+    }
+
+    .input-bar__input--flash {
+        animation: none;
+    }
 }

@@ -143,6 +143,8 @@ class State {
         this.listeners = new Set();
         /** @type {Map<string, string>} */
         this.blobUrls = new Map();
+        /** @type {Map<string, Blob>} - Raw thumbnail blobs for lazy URL creation */
+        this.thumbnailBlobs = new Map();
         /** @type {ImageStorage|null} */
         this.storage = null;
         /** @type {boolean} */
@@ -236,15 +238,17 @@ class State {
         const images = await this.storage.getAllImages();
 
         this.images = images.map(img => {
-            let thumbnailUrl = null;
-            if (img.thumbnailBlob) {
-                thumbnailUrl = createBlobUrl(img.thumbnailBlob);
-                this.blobUrls.set(`${img.id}-thumb`, thumbnailUrl);
-            }
-
             const mediaType = img.mediaType === 'video' ? 'video' : 'image';
             const sourceUrl = typeof img.sourceUrl === 'string' ? img.sourceUrl : null;
-            const displayUrl = mediaType === 'video' ? sourceUrl || '' : (thumbnailUrl || '');
+
+            // Store raw thumbnail blob for lazy URL creation instead of
+            // eagerly calling createBlobUrl for every image on startup.
+            if (img.thumbnailBlob) {
+                this.thumbnailBlobs.set(img.id, img.thumbnailBlob);
+            }
+
+            // Videos use sourceUrl; images get a blank URL until lazily resolved
+            const displayUrl = mediaType === 'video' ? sourceUrl || '' : '';
 
             return {
                 id: img.id,
@@ -258,6 +262,26 @@ class State {
                 generation: img.generation || null
             };
         });
+    }
+
+    /**
+     * Lazily materialise and return a thumbnail blob URL for an image.
+     * The blob URL is created on first call and cached for subsequent calls.
+     * @param {string} id - Image ID
+     * @returns {string|null} Thumbnail blob URL, or null if unavailable
+     */
+    getThumbnailUrl(id) {
+        // Return cached blob URL if already created
+        const existing = this.blobUrls.get(`${id}-thumb`);
+        if (existing) return existing;
+
+        // Create blob URL on demand from stored raw blob
+        const blob = this.thumbnailBlobs.get(id);
+        if (!blob) return null;
+
+        const url = createBlobUrl(blob);
+        this.blobUrls.set(`${id}-thumb`, url);
+        return url;
     }
 
     /**
@@ -513,7 +537,7 @@ class State {
 
         const removed = this.images.splice(index, 1)[0];
 
-        // Revoke blob URLs
+        // Revoke blob URLs and clean up raw blob reference
         const thumbUrl = this.blobUrls.get(`${id}-thumb`);
         const fullUrl = this.blobUrls.get(`${id}-full`);
         if (thumbUrl) {
@@ -524,6 +548,7 @@ class State {
             revokeBlobUrl(fullUrl);
             this.blobUrls.delete(`${id}-full`);
         }
+        this.thumbnailBlobs.delete(id);
 
         if (this.useFallback) {
             this.saveToLocalStorage();
@@ -553,9 +578,10 @@ class State {
     async clearAll() {
         await this.ready;
 
-        // Revoke all blob URLs
+        // Revoke all blob URLs and clear raw blobs
         this.blobUrls.forEach((url) => revokeBlobUrl(url));
         this.blobUrls.clear();
+        this.thumbnailBlobs.clear();
 
         this.images = [];
 
