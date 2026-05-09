@@ -1,4 +1,5 @@
 const FAL_IMAGE_MODELS = {
+    'fal-ai/flux-pro/v1.1': { price: { type: 'mpix', amount: 0.04 } },
     'fal-ai/bytedance/seedream/v4.5/text-to-image': { price: { type: 'flat', amount: 0.04 } },
     'fal-ai/bytedance/seedream/v4.5/edit': { edit: true, price: { type: 'flat', amount: 0.04 } },
     'fal-ai/bytedance/seedream/v5/lite/text-to-image': { price: { type: 'flat', amount: 0.04 } },

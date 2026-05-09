@@ -343,6 +343,16 @@ module.exports = withMiddleware(async function handler(req, res) {
                 resolution: photaResolution,
                 aspect_ratio: photaAspectRatio,
             };
+        } else if (model === 'fal-ai/flux-pro/v1.1') {
+            // FLUX1.1 [pro] — $0.04/Mpix, safety_tolerance "6" (most permissive).
+            // https://fal.ai/models/fal-ai/flux-pro/v1.1/api
+            falPayload = {
+                prompt: prompt.trim(),
+                image_size: falImageSize,
+                num_images: parsedNumImages,
+                output_format: 'jpeg',
+                safety_tolerance: '6',
+            };
         } else if (isQwenImageMaxModel) {
             // Qwen-Image-Max (text-to-image and edit) — flat $0.075/image.
             // 800-char prompt limit; built-in LLM prompt expansion.
