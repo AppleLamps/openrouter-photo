@@ -38,6 +38,43 @@ let isScrollLocked = false;
 const ZIP_DOWNLOAD_THRESHOLD = 5;
 let jsZipLoaderPromise = null;
 
+/** @type {IntersectionObserver|null} */
+let lazyObserver = null;
+
+/**
+ * Get or create the shared IntersectionObserver for lazy-loading gallery media.
+ * Observed elements must have `data-lazy-src` set; on intersection the src is
+ * applied and the element is unobserved.
+ */
+function getLazyObserver() {
+    if (lazyObserver) return lazyObserver;
+
+    lazyObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+
+            const el = entry.target;
+            const imageId = el.dataset.lazyImageId;
+
+            // For IndexedDB images, materialise the thumbnail blob URL on demand
+            if (imageId) {
+                const thumbUrl = state.getThumbnailUrl(imageId);
+                if (thumbUrl) {
+                    el.src = thumbUrl;
+                }
+            } else {
+                // Fallback: use the stored data-lazy-src
+                const src = el.dataset.lazySrc;
+                if (src) el.src = src;
+            }
+
+            lazyObserver.unobserve(el);
+        }
+    }, { rootMargin: '200px' });
+
+    return lazyObserver;
+}
+
 /**
  * Swipe state for the lightbox (kept at module scope so it can be reset on close).
  * Handles both swipe-to-close (vertical) and swipe-to-navigate (horizontal).
@@ -263,6 +300,11 @@ function preloadAndShowImage(image) {
  */
 function renderGallery() {
     if (!galleryElement) return;
+
+    // Disconnect stale observer entries before clearing DOM
+    if (lazyObserver) {
+        lazyObserver.disconnect();
+    }
 
     galleryElement.innerHTML = '';
 
@@ -659,6 +701,13 @@ function createImageCard(image, preloaded = false) {
     }, '✕');
 
     // Image or video element
+    // For non-preloaded images we defer setting src until the card enters the
+    // viewport via IntersectionObserver.  This also defers thumbnail blob-URL
+    // creation (see state.getThumbnailUrl) so startup doesn't pay the cost for
+    // off-screen images.
+    const needsLazy = !preloaded && !isVideo;
+    const resolvedSrc = needsLazy ? '' : image.url;
+
     const media = isVideo
         ? createElement('video', {
             className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
@@ -668,10 +717,17 @@ function createImageCard(image, preloaded = false) {
         })
         : createElement('img', {
             className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
-            src: image.url,
+            src: resolvedSrc,
             alt: image.prompt,
-            loading: 'lazy'
+            ...(needsLazy ? {} : { loading: 'lazy' })
         });
+
+    // Register non-preloaded images with the IntersectionObserver
+    if (needsLazy && media instanceof HTMLImageElement) {
+        media.dataset.lazyImageId = image.id;
+        if (image.url) media.dataset.lazySrc = image.url;
+        getLazyObserver().observe(media);
+    }
 
     if (media instanceof HTMLVideoElement) {
         media.muted = true;
@@ -942,7 +998,8 @@ async function openLightbox(image) {
         }
     } else if (modalImage) {
         modalImage.style.display = '';
-        modalImage.src = image.url;
+        // Use lazy-resolved thumbnail as immediate preview; full-res loads below
+        modalImage.src = state.getThumbnailUrl(image.id) || image.url;
         modalImage.alt = image.prompt;
         modalImage.classList.add('modal__image--loading');
         if (modalVideo) {

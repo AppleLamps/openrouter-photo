@@ -2059,18 +2059,24 @@ async function handleGenerate(input, button) {
 
         // Handle video generation 202 (pending) — poll client-side
         if (response.status === 'pending' && response.request_id) {
-            const VIDEO_POLL_INTERVAL = 3000;
-            const VIDEO_POLL_MAX = 120; // 6 min max
+            const VIDEO_POLL_INITIAL = 3000;
+            const VIDEO_POLL_MULTIPLIER = 1.5;
+            const VIDEO_POLL_MAX_INTERVAL = 15000;
+            const VIDEO_POLL_MAX_ELAPSED = 360000; // 6 min max
             let pollCount = 0;
+            let pollDelay = VIDEO_POLL_INITIAL;
+            let elapsed = 0;
 
-            while (pollCount < VIDEO_POLL_MAX) {
+            while (elapsed < VIDEO_POLL_MAX_ELAPSED) {
                 if (abortSignal.aborted) {
                     placeholderIds.forEach(id => removePlaceholder(id));
                     placeholderIds.forEach(id => placeholderMetadata.delete(id));
                     return;
                 }
 
-                await new Promise(r => setTimeout(r, VIDEO_POLL_INTERVAL));
+                await new Promise(r => setTimeout(r, pollDelay));
+                elapsed += pollDelay;
+                pollDelay = Math.min(pollDelay * VIDEO_POLL_MULTIPLIER, VIDEO_POLL_MAX_INTERVAL);
                 pollCount++;
 
                 const poll = await pollVideoStatus(response.request_id, abortSignal, {
@@ -2101,7 +2107,7 @@ async function handleGenerate(input, button) {
             }
 
             // If we exhausted all polls without completion
-            if (pollCount >= VIDEO_POLL_MAX && !(response.images && response.images.length > 0)) {
+            if (elapsed >= VIDEO_POLL_MAX_ELAPSED && !(response.images && response.images.length > 0)) {
                 placeholderIds.forEach(id => {
                     const metadata = placeholderMetadata.get(id);
                     if (metadata) {
