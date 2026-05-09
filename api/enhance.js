@@ -31,7 +31,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     try {
-        const model = 'x-ai/grok-4.1-fast';
+        const model = 'x-ai/grok-4.3';
 
         // Build user message content — OpenAI-compatible multimodal format
         let userContent;
