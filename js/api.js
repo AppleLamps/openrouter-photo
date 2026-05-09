@@ -236,7 +236,7 @@ export async function enhancePrompt(currentPrompt, imageUrls = [], customInstruc
     }
 
     try {
-        const xaiApiKey = getXaiApiKey();
+        const openRouterApiKey = getOpenRouterApiKey();
         const requestBody = { prompt: trimmedPrompt };
 
         // Include image URLs if provided
@@ -252,7 +252,7 @@ export async function enhancePrompt(currentPrompt, imageUrls = [], customInstruc
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
+                ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
                 ...getAppAccessHeaders(),
             },
             body: JSON.stringify(requestBody),
