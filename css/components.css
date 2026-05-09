@@ -3029,3 +3029,17 @@ body.is-modal-open .spend-tracker {
 .model-picker.input-bar__dropdown-menu--model.model-picker--open {
     display: flex;
 }
+
+/* Reduced motion: disable decorative animations */
+@media (prefers-reduced-motion: reduce) {
+
+    .input-bar__button--loading,
+    .input-bar__button .spin-icon,
+    .input-bar__icon-btn--loading {
+        animation: none;
+    }
+
+    .input-bar__input--flash {
+        animation: none;
+    }
+}

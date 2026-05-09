@@ -119,6 +119,12 @@
     }
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .empty-state__content {
+        animation: none;
+    }
+}
+
 .empty-state__icon {
     margin-bottom: var(--spacing-sm);
     opacity: 0.28;

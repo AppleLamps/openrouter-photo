@@ -1183,9 +1183,13 @@ async function init() {
     if (generateBtn && promptInput) {
         generateBtn.addEventListener('click', () => handleGenerate(promptInput, generateBtn));
 
-        // Handle Enter key (Shift+Enter for new line)
+        // Handle Enter key (Shift+Enter for new line, Ctrl/Cmd+Enter also generates)
         promptInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleGenerate(promptInput, generateBtn);
+            }
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 handleGenerate(promptInput, generateBtn);
             }

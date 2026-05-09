@@ -24,6 +24,8 @@
     aspect-ratio: 1;
     will-change: transform;
     contain: layout style paint;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 300px;
     -webkit-tap-highlight-color: transparent;
 }
 
