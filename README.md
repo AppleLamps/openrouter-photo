@@ -66,6 +66,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 | ByteDance (Fal) | Seedream 5 Lite T2I, Seedream 5 Lite Edit | Image | Fal |
 | ByteDance (Fal) | Seedance 1.5 Pro Text-to-Video | Video | Fal |
 | ByteDance (Fal) | Seedance 1.5 Pro Image-to-Video | Video | Fal |
+| fal.ai | FlashHead | Image-to-Video | Fal |
 | xAI | Grok Imagine Image, Grok Imagine Image Pro | Image | xAI |
 | xAI | Grok Imagine Video | Video | xAI |
 

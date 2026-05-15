@@ -46,6 +46,7 @@ export const MODELS = [
     { id: 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video',     name: 'Seedance 1.5 Pro',       provider: 'Bytedance', type: 'image-to-video', tier: 'quality', via: 'fal' },
     { id: 'fal-ai/pixverse/c1/image-to-video',                     name: 'PixVerse C1',            provider: 'PixVerse',  type: 'image-to-video', tier: 'quality', via: 'fal' },
     { id: 'alibaba/happy-horse/reference-to-video',                name: 'Happy Horse',            provider: 'Alibaba',   type: 'image-to-video', tier: 'quality', via: 'fal' },
+    { id: 'fal-ai/flashhead',                                      name: 'FlashHead',              provider: 'fal.ai',    type: 'image-to-video', tier: 'fast',    via: 'fal' },
 
     // ───── Wan ─────
     { id: 'fal-ai/wan/v2.7/pro/text-to-image',                     name: 'Wan 2.7 Pro',            provider: 'Wan',       type: 'image', tier: 'quality',  via: 'fal' },

@@ -29,6 +29,7 @@ const SPEND_STORAGE_KEY = 'openrouter_spend_v1';
 const PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL = 'fal-ai/pixverse/c1/image-to-video';
 const SEEDANCE_20_TEXT_TO_VIDEO_MODEL = 'bytedance/seedance-2.0/text-to-video';
 const SEEDANCE_20_IMAGE_TO_VIDEO_MODEL = 'bytedance/seedance-2.0/image-to-video';
+const FLASHHEAD_IMAGE_TO_VIDEO_MODEL = 'fal-ai/flashhead';
 const VIDEO_QUALITY_PRESETS = {
     default: {
         options: ['480p', '720p', '1080p'],
@@ -1056,11 +1057,17 @@ function getGenerationSettings() {
     const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
     const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
+    const flashheadVoiceSelect = document.getElementById('setting-flashhead-voice');
+    const flashheadStabilityInput = document.getElementById('setting-flashhead-stability');
 
     const model = normalizeModelId(modelSelect?.value || DEFAULT_MODEL_ID);
 
     const parsedXaiVideoLength = parseInt(xaiVideoLengthInput?.value || 10, 10);
     const xaiVideoLength = Number.isFinite(parsedXaiVideoLength) ? parsedXaiVideoLength : 10;
+    const parsedFlashHeadStability = parseFloat(flashheadStabilityInput?.value || 0.5);
+    const flashheadStability = Number.isFinite(parsedFlashHeadStability)
+        ? Math.min(Math.max(parsedFlashHeadStability, 0), 1)
+        : 0.5;
 
     const settings = {
         model,
@@ -1071,6 +1078,8 @@ function getGenerationSettings() {
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
         generate_audio_switch: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
+        flashhead_voice: flashheadVoiceSelect?.value || 'Aria',
+        flashhead_stability: flashheadStability,
     };
 
     return settings;
@@ -1899,12 +1908,14 @@ function updateSettingsForModel(model) {
     const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
     const generateAudioGroup = document.getElementById('generate-audio-group');
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
+    const flashheadSettingsGroup = document.getElementById('flashhead-settings-group');
     const falImageToVideoHintGroup = document.getElementById('fal-image-to-video-hint-group');
 
     const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedream = typeof model === 'string' && model.includes('seedream');
     const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
     const isPixverseC1 = model === PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL;
+    const isFlashHead = model === FLASHHEAD_IMAGE_TO_VIDEO_MODEL;
     const isSeedance20 = model === SEEDANCE_20_TEXT_TO_VIDEO_MODEL || model === SEEDANCE_20_IMAGE_TO_VIDEO_MODEL;
     const isFalModel = typeof model === 'string' && (model.startsWith('fal-ai/') || isHappyHorse || isSeedance20);
     const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-quality';
@@ -1918,15 +1929,16 @@ function updateSettingsForModel(model) {
         model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
         model === SEEDANCE_20_IMAGE_TO_VIDEO_MODEL ||
         isPixverseC1 ||
+        isFlashHead ||
         isHappyHorse;
     const isXai = isXaiImage || isXaiVideo;
-    const isVideoModel = isXaiVideo || isFalVideo;
+    const isVideoModel = isXaiVideo || isFalVideo || isFlashHead;
 
     syncImageResolutionOptions(model);
     syncVideoQualityOptions(model);
 
     // Show aspect ratio for Gemini, Seedream, Fal, and xAI models
-    if (isGemini || isSeedream || isFalModel || isXai) {
+    if (isGemini || isSeedream || (isFalModel && !isFlashHead) || isXai) {
         aspectRatioGroup?.classList.remove('settings-group--hidden');
     } else {
         aspectRatioGroup?.classList.add('settings-group--hidden');
@@ -1939,7 +1951,7 @@ function updateSettingsForModel(model) {
         resolutionGroup?.classList.add('settings-group--hidden');
     }
 
-    if (isVideoModel) {
+    if (isVideoModel && !isFlashHead) {
         xaiVideoLengthGroup?.classList.remove('settings-group--hidden');
         xaiVideoQualityGroup?.classList.remove('settings-group--hidden');
     } else {
@@ -1956,7 +1968,13 @@ function updateSettingsForModel(model) {
         generateAudioGroup?.classList.add('settings-group--hidden');
     }
 
-    if (isFalImageToVideo) {
+    if (isFlashHead) {
+        flashheadSettingsGroup?.classList.remove('settings-group--hidden');
+    } else {
+        flashheadSettingsGroup?.classList.add('settings-group--hidden');
+    }
+
+    if (isFalImageToVideo && !isFlashHead) {
         falImageToVideoHintGroup?.classList.remove('settings-group--hidden');
     } else {
         falImageToVideoHintGroup?.classList.add('settings-group--hidden');
@@ -2774,6 +2792,16 @@ function restoreSettings(settings) {
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
     if (generateAudioSwitch instanceof HTMLInputElement && typeof settings.generate_audio_switch === 'boolean') {
         generateAudioSwitch.checked = settings.generate_audio_switch;
+    }
+
+    const flashheadVoiceSelect = document.getElementById('setting-flashhead-voice');
+    if (flashheadVoiceSelect && settings.flashhead_voice) {
+        flashheadVoiceSelect.value = settings.flashhead_voice;
+    }
+
+    const flashheadStabilityInput = document.getElementById('setting-flashhead-stability');
+    if (flashheadStabilityInput && Number.isFinite(settings.flashhead_stability)) {
+        flashheadStabilityInput.value = settings.flashhead_stability;
     }
 
     // Number of images

@@ -26,6 +26,8 @@ module.exports = withMiddleware(async function handler(req, res) {
         xai_video_length,
         xai_video_quality,
         generate_audio_switch,
+        flashhead_voice,
+        flashhead_stability,
         image_urls = [], // optional image inputs (data URLs) for all models
     } = req.body;
 
@@ -553,6 +555,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         const falVideoConfig = getFalVideoModel(model);
         const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
         const isPixverseC1 = model === 'fal-ai/pixverse/c1/image-to-video';
+        const isFlashHead = model === 'fal-ai/flashhead';
         // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
         const parsedDuration = parseInt(xai_video_length, 10);
         const isSeedance20 =
@@ -612,23 +615,45 @@ module.exports = withMiddleware(async function handler(req, res) {
 
         const startImageUrl = normalizedInputImages[0];
 
-        const falVideoPayload = {
-            prompt: prompt.trim(),
-            resolution: normalizedResolution,
-            duration: isHappyHorse || isPixverseC1 ? normalizedDuration : String(normalizedDuration),
-        };
+        const validFlashHeadVoices = new Set([
+            'Aria', 'Roger', 'Sarah', 'Laura', 'Charlie', 'George', 'Callum', 'River', 'Liam', 'Charlotte',
+            'Alice', 'Matilda', 'Will', 'Jessica', 'Eric', 'Chris', 'Brian', 'Daniel', 'Lily', 'Bill',
+        ]);
+        const normalizedFlashHeadVoice =
+            typeof flashhead_voice === 'string' && validFlashHeadVoices.has(flashhead_voice)
+                ? flashhead_voice
+                : 'Aria';
+        const parsedFlashHeadStability = Number.parseFloat(flashhead_stability);
+        const normalizedFlashHeadStability =
+            Number.isFinite(parsedFlashHeadStability)
+                ? Math.min(Math.max(parsedFlashHeadStability, 0), 1)
+                : 0.5;
+
+        const falVideoPayload = isFlashHead
+            ? {
+                image_url: startImageUrl,
+                text: prompt.trim(),
+                voice: normalizedFlashHeadVoice,
+                stability: normalizedFlashHeadStability,
+                enable_safety_checker: false,
+            }
+            : {
+                prompt: prompt.trim(),
+                resolution: normalizedResolution,
+                duration: isHappyHorse || isPixverseC1 ? normalizedDuration : String(normalizedDuration),
+            };
 
         if (isPixverseC1) {
             falVideoPayload.generate_audio_switch = normalizedGenerateAudio;
-        } else if (!isHappyHorse) {
+        } else if (!isHappyHorse && !isFlashHead) {
             falVideoPayload.generate_audio = true;
         }
 
-        if (!isPixverseC1) {
+        if (!isPixverseC1 && !isFlashHead) {
             falVideoPayload.aspect_ratio = falAspectRatio;
         }
 
-        if (isPixverseC1 || !isSeedance20 || isHappyHorse) {
+        if (!isFlashHead && (isPixverseC1 || !isSeedance20 || isHappyHorse)) {
             falVideoPayload.enable_safety_checker = false;
         }
 
@@ -636,7 +661,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             falVideoPayload.image_urls = normalizedInputImages;
         } else if (isPixverseC1) {
             falVideoPayload.image_url = startImageUrl;
-        } else if (isFalImageToVideo) {
+        } else if (isFalImageToVideo && !isFlashHead) {
             falVideoPayload.image_url = startImageUrl;
             if (normalizedInputImages[1]) {
                 falVideoPayload.end_image_url = normalizedInputImages[1];
@@ -671,7 +696,9 @@ module.exports = withMiddleware(async function handler(req, res) {
             }
 
             let videoCost = 0.10;
-            if (isHappyHorse || isSeedance20) {
+            if (isFlashHead) {
+                videoCost = falVideoConfig?.price || 0;
+            } else if (isHappyHorse || isSeedance20) {
                 videoCost = normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0);
             } else if (isPixverseC1) {
                 const pixverseRateTable = falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio'];

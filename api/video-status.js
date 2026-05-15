@@ -27,6 +27,8 @@ const resolveFalVideoModelId = (value) => {
             return 'fal-ai/pixverse/c1/image-to-video';
         case 'alibaba/happy-horse/reference-to-video':
             return 'alibaba/happy-horse/reference-to-video';
+        case 'fal-ai/flashhead':
+            return 'fal-ai/flashhead';
         default:
             return null;
     }
@@ -135,6 +137,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(requestId)}`;
             const resultCandidates = buildUniqueUrls([
                 isTrustedFalQueueUrl(statusData?.response_url) ? statusData.response_url : null,
+                resultBaseUrl,
                 `${resultBaseUrl}/response`,
             ]);
 

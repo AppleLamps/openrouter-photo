@@ -1278,6 +1278,10 @@ body.is-modal-open .spend-tracker {
     margin-bottom: var(--spacing-xs);
 }
 
+.settings-label--stacked {
+    margin-top: var(--spacing-sm);
+}
+
 .settings-select {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md);

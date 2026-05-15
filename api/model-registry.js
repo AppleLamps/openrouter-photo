@@ -53,6 +53,11 @@ const FAL_VIDEO_MODELS = {
         happyHorse: true,
         pricePerSecond: { '720p': 0.14, '1080p': 0.28 },
     },
+    'fal-ai/flashhead': {
+        imageToVideo: true,
+        flashhead: true,
+        price: 0.015,
+    },
 };
 
 const FAL_VIDEO_MODEL_REDIRECTS = {
