@@ -14,6 +14,21 @@ const {
     normalizeFalVideoModel,
 } = require('./model-registry');
 
+const formatFalError = (errorText, fallbackMessage) => {
+    if (/content_policy_violation|content checker/i.test(String(errorText || ''))) {
+        return {
+            code: 'FAL_CONTENT_POLICY_VIOLATION',
+            error: 'Fal content policy rejected this request',
+            details: 'Fal rejected the prompt or attached image before generation. Try a different prompt or source image.',
+        };
+    }
+
+    return {
+        error: fallbackMessage,
+        details: redactKey(errorText),
+    };
+};
+
 module.exports = withMiddleware(async function handler(req, res) {
     const {
         prompt,
@@ -396,8 +411,7 @@ module.exports = withMiddleware(async function handler(req, res) {
                 if (!submitResponse.ok) {
                     const errorText = await submitResponse.text();
                     return res.status(submitResponse.status).json({
-                        error: 'Failed to start image generation via Fal',
-                        details: redactKey(errorText),
+                        ...formatFalError(errorText, 'Failed to start image generation via Fal'),
                     });
                 }
 
@@ -424,8 +438,7 @@ module.exports = withMiddleware(async function handler(req, res) {
                     if (!statusResponse.ok) {
                         const errorText = await statusResponse.text();
                         return res.status(statusResponse.status).json({
-                            error: 'Failed to retrieve Fal image status',
-                            details: redactKey(errorText),
+                            ...formatFalError(errorText, 'Failed to retrieve Fal image status'),
                         });
                     }
 
@@ -438,8 +451,7 @@ module.exports = withMiddleware(async function handler(req, res) {
                         if (!resultResponse.ok) {
                             const errorText = await resultResponse.text();
                             return res.status(resultResponse.status).json({
-                                error: 'Failed to retrieve Fal image result',
-                                details: redactKey(errorText),
+                                ...formatFalError(errorText, 'Failed to retrieve Fal image result'),
                             });
                         }
 
@@ -501,8 +513,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             if (!response.ok) {
                 const errorText = await response.text();
                 return res.status(response.status).json({
-                    error: 'Failed to generate image via Fal',
-                    details: redactKey(errorText),
+                    ...formatFalError(errorText, 'Failed to generate image via Fal'),
                 });
             }
 
@@ -683,8 +694,7 @@ module.exports = withMiddleware(async function handler(req, res) {
             if (!submitResponse.ok) {
                 const errorText = await submitResponse.text();
                 return res.status(submitResponse.status).json({
-                    error: 'Failed to start video generation via Fal',
-                    details: redactKey(errorText),
+                    ...formatFalError(errorText, 'Failed to start video generation via Fal'),
                 });
             }
 

@@ -157,7 +157,8 @@ const redactKey = (text) => {
         .replace(/sk-or-v1-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]')
         .replace(/xai-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]')
         .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]+/gi, '[REDACTED_API_KEY]')
-        .replace(/fal[_-][a-zA-Z0-9.\-_]{20,}/g, '[REDACTED_API_KEY]');
+        .replace(/fal[_-][a-zA-Z0-9.\-_]{20,}/g, '[REDACTED_API_KEY]')
+        .replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, '[REDACTED_IMAGE_DATA]');
 };
 
 /**
