@@ -1,5 +1,88 @@
 const { withMiddleware, redactKey, resolveOpenRouterApiKey } = require('./_middleware');
 
+const ENHANCE_MODEL = 'x-ai/grok-4.3';
+const MAX_ENHANCE_IMAGES = 2;
+
+function normalizeEnhanceImageUrls(imageUrls) {
+    if (!Array.isArray(imageUrls)) return [];
+    return imageUrls
+        .filter((url) => typeof url === 'string' && url.startsWith('data:image/'))
+        .slice(0, MAX_ENHANCE_IMAGES);
+}
+
+function buildUserContent(enhancementRequest, imageUrls) {
+    if (!imageUrls.length) return enhancementRequest;
+
+    return [
+        { type: 'text', text: enhancementRequest },
+        ...imageUrls.map((url) => ({
+            type: 'image_url',
+            image_url: { url, detail: 'low' }
+        })),
+    ];
+}
+
+function extractEnhancedPrompt(data) {
+    const content = data?.choices?.[0]?.message?.content;
+    if (typeof content === 'string') return content.trim();
+    if (Array.isArray(content)) {
+        return content
+            .map((part) => {
+                if (typeof part === 'string') return part;
+                if (typeof part?.text === 'string') return part.text;
+                return '';
+            })
+            .join('')
+            .trim();
+    }
+    return '';
+}
+
+async function requestOpenRouterEnhancement(req, apiKey, systemPrompt, enhancementRequest, imageUrls) {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': req.headers.referer || 'https://ai-image-generator.vercel.app',
+            'X-Title': 'AI Image Generator'
+        },
+        body: JSON.stringify({
+            model: ENHANCE_MODEL,
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: 'user',
+                    content: buildUserContent(enhancementRequest, imageUrls)
+                }
+            ],
+            max_tokens: 1000,
+        }),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        return {
+            ok: false,
+            status: response.status,
+            body: {
+                error: 'Failed to enhance prompt',
+                details: redactKey(errorText)
+            },
+        };
+    }
+
+    const data = await response.json();
+    return {
+        ok: true,
+        enhancedPrompt: extractEnhancedPrompt(data),
+        raw: data,
+    };
+}
+
 module.exports = withMiddleware(async function handler(req, res) {
     const { prompt, image_urls, custom_instructions } = req.body;
 
@@ -14,8 +97,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         ? `Original prompt:\n${prompt.trim()}\n\nEnhancement instructions:\n${customInstructions}\n\nRewrite the original prompt according to the enhancement instructions. Preserve the user's core subject and intent unless the instructions explicitly say to change them. Return only the final enhanced prompt.`
         : prompt.trim();
 
-    // Validate image_urls if provided
-    const hasImages = Array.isArray(image_urls) && image_urls.length > 0;
+    const normalizedImageUrls = normalizeEnhanceImageUrls(image_urls);
 
     const OPENROUTER_API_KEY = resolveOpenRouterApiKey(req);
 
@@ -31,22 +113,6 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     try {
-        const model = 'x-ai/grok-4.3';
-
-        // Build user message content — OpenAI-compatible multimodal format
-        let userContent;
-        if (hasImages) {
-            userContent = [
-                ...image_urls.slice(0, 4).map(url => ({
-                    type: 'image_url',
-                    image_url: { url, detail: 'high' }
-                })),
-                { type: 'text', text: enhancementRequest }
-            ];
-        } else {
-            userContent = enhancementRequest;
-        }
-
         const systemPrompt = `You are a prompt engineer for AI image generation. Take the user's idea and output a production-ready image generation prompt.
 
 OUTPUT FORMAT: Respond with ONLY the final prompt text. No labels, no markdown, no explanations, no mode or aspect ratio recommendations. Just the raw prompt.
@@ -69,52 +135,48 @@ RULES:
 - No prompt syntax spam (no "4k, ultra HD, masterpiece, best quality")
 - Match prompt length to complexity: simple ideas get short prompts, complex ideas get detailed ones`;
 
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': req.headers.referer || 'https://ai-image-generator.vercel.app',
-                'X-Title': 'AI Image Generator'
-            },
-            body: JSON.stringify({
-                model,
-                messages: [
-                    {
-                        role: 'system',
-                        content: systemPrompt
-                    },
-                    {
-                        role: 'user',
-                        content: userContent
-                    }
-                ],
-                max_tokens: 1000,
-            }),
-        });
+        const attempts = [
+            normalizedImageUrls,
+            ...(normalizedImageUrls.length > 1 ? [normalizedImageUrls.slice(0, 1)] : []),
+            ...(normalizedImageUrls.length > 0 ? [[]] : []),
+        ];
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('OpenRouter API error:', redactKey(errorText));
-            return res.status(response.status).json({
-                error: 'Failed to enhance prompt',
-                details: redactKey(errorText)
-            });
+        let lastEmptyResponse = null;
+        for (const attemptImageUrls of attempts) {
+            const result = await requestOpenRouterEnhancement(
+                req,
+                OPENROUTER_API_KEY,
+                systemPrompt,
+                enhancementRequest,
+                attemptImageUrls
+            );
+
+            if (!result.ok) {
+                console.error('OpenRouter API error:', result.body.details);
+                return res.status(result.status).json(result.body);
+            }
+
+            if (result.enhancedPrompt) {
+                return res.status(200).json({
+                    enhancedPrompt: result.enhancedPrompt
+                });
+            }
+
+            lastEmptyResponse = result.raw;
         }
 
-        const data = await response.json();
-
-        const enhancedPrompt = data.choices?.[0]?.message?.content;
-
-        if (!enhancedPrompt) {
-            return res.status(500).json({ error: 'No content returned from API' });
-        }
-
-        return res.status(200).json({
-            enhancedPrompt: enhancedPrompt.trim()
+        console.warn('OpenRouter returned empty enhancement response:', redactKey(JSON.stringify(lastEmptyResponse || {})));
+        return res.status(502).json({
+            error: 'OpenRouter returned an empty prompt. Try again or use fewer reference images.'
         });
     } catch (error) {
         console.error('Server error:', redactKey(error));
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
+
+module.exports.__test = {
+    buildUserContent,
+    extractEnhancedPrompt,
+    normalizeEnhanceImageUrls,
+};

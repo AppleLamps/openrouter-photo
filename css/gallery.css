@@ -373,20 +373,30 @@
 
 @media (max-width: 600px) {
     .gallery {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 158px), 1fr));
+        gap: 10px;
     }
 
     .gallery__card {
         border-radius: 10px;
+        content-visibility: visible;
+        contain-intrinsic-size: auto;
     }
 
     .gallery__placeholder {
         border-radius: 10px;
+        content-visibility: visible;
+        contain-intrinsic-size: auto;
     }
 
     .gallery__placeholder-glow {
         border-radius: 11px;
+    }
+}
+
+@media (max-width: 360px) {
+    .gallery {
+        grid-template-columns: 1fr;
     }
 }
 

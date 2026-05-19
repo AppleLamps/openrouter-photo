@@ -77,6 +77,7 @@ html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
     /* Dynamic viewport: avoids 100vh bugs when iOS toolbars show/hide */
     min-height: 100vh;
     min-height: 100dvh;

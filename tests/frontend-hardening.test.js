@@ -60,4 +60,24 @@ describe('frontend hardening', () => {
         assert.match(state, /url\.startsWith\('\/'\)/);
         assert.match(state, /isHostedImageUrl\(imageData\.url\)/);
     });
+
+    it('uses an adaptive mobile gallery grid', () => {
+        const gallery = read('css/gallery.css');
+        assert.match(gallery, /repeat\(auto-fit, minmax\(min\(100%, 158px\), 1fr\)\)/);
+        assert.match(gallery, /@media \(max-width: 360px\)/);
+        assert.match(gallery, /content-visibility: visible;/);
+    });
+
+    it('prevents root horizontal panning on mobile', () => {
+        const base = read('css/base.css');
+        const html = read('index.html');
+
+        assert.match(base, /html\s*\{[^}]*overflow-x: hidden;/s);
+        assert.match(html, /html\{[^}]*overflow-x:hidden;/);
+    });
+
+    it('stacks input bar dropdown controls onto a full mobile row', () => {
+        const components = read('css/components.css');
+        assert.match(components, /\.input-bar__actions-center\s*\{[^}]*flex: 0 0 100%;[^}]*width: 100%;/s);
+    });
 });
