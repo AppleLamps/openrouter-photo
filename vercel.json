@@ -48,6 +48,10 @@
             "dest": "/api/test-key.js"
         },
         {
+            "src": "/api/test-evolink-key",
+            "dest": "/api/test-evolink-key.js"
+        },
+        {
             "src": "/api/video-status",
             "dest": "/api/video-status.js"
         },

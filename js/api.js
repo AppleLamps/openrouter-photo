@@ -6,11 +6,13 @@ const API_ENDPOINT = '/api/generate';
 const ENHANCE_ENDPOINT = '/api/enhance';
 const TEST_KEY_ENDPOINT = '/api/test-key';
 const TEST_XAI_KEY_ENDPOINT = '/api/test-xai-key';
+const TEST_EVOLINK_KEY_ENDPOINT = '/api/test-evolink-key';
 const RANDOM_PROMPT_ENDPOINT = '/api/random-prompt';
 const VIDEO_STATUS_ENDPOINT = '/api/video-status';
 const OPENROUTER_API_KEY_STORAGE_KEY = 'openrouter_api_key';
 const XAI_API_KEY_STORAGE_KEY = 'xai_api_key';
 const FAL_API_KEY_STORAGE_KEY = 'fal_api_key';
+const EVOLINK_API_KEY_STORAGE_KEY = 'evolink_api_key';
 const APP_ACCESS_TOKEN_STORAGE_KEY = 'app_access_token';
 const TEST_FAL_KEY_ENDPOINT = '/api/test-fal-key';
 
@@ -52,6 +54,21 @@ function getXaiApiKey() {
 function getFalApiKey() {
     try {
         const raw = localStorage.getItem(FAL_API_KEY_STORAGE_KEY);
+        if (!raw) return null;
+        const trimmed = raw.trim();
+        return trimmed.length > 0 ? trimmed : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Read the user's Evolink API key from localStorage (if set).
+ * @returns {string | null}
+ */
+function getEvolinkApiKey() {
+    try {
+        const raw = localStorage.getItem(EVOLINK_API_KEY_STORAGE_KEY);
         if (!raw) return null;
         const trimmed = raw.trim();
         return trimmed.length > 0 ? trimmed : null;
@@ -157,6 +174,7 @@ export async function generateImage(prompt, options = {}, signal = null) {
         const openRouterApiKey = getOpenRouterApiKey();
         const xaiApiKey = getXaiApiKey();
         const falApiKey = getFalApiKey();
+        const evolinkApiKey = getEvolinkApiKey();
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: {
@@ -164,6 +182,7 @@ export async function generateImage(prompt, options = {}, signal = null) {
                 ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
                 ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
                 ...(falApiKey ? { 'X-FAL-Api-Key': falApiKey } : {}),
+                ...(evolinkApiKey ? { 'X-Evolink-Api-Key': evolinkApiKey } : {}),
                 ...getAppAccessHeaders(),
             },
             body: JSON.stringify(requestBody),
@@ -369,6 +388,39 @@ export async function testFalKey() {
         headers: {
             'Content-Type': 'application/json',
             'X-FAL-Api-Key': falApiKey,
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
+            err.code = errorData.code;
+            err.help = errorData.help;
+        }
+        throw err;
+    }
+}
+
+/**
+ * Test the user's Evolink API key.
+ * @returns {Promise<void>}
+ */
+export async function testEvolinkKey() {
+    const evolinkApiKey = getEvolinkApiKey();
+    if (!evolinkApiKey) {
+        const err = new Error('Evolink API key required');
+        err.code = 'EVOLINK_API_KEY_REQUIRED';
+        err.help = { url: 'https://evolink.ai/dashboard/keys' };
+        throw err;
+    }
+
+    const response = await fetch(TEST_EVOLINK_KEY_ENDPOINT, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Evolink-Api-Key': evolinkApiKey,
         },
         body: JSON.stringify({}),
     });

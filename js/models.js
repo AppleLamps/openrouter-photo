@@ -14,6 +14,8 @@
 export const MODELS = [
     // ───── Bytedance: Seedream (image) ─────
     { id: 'bytedance-seed/seedream-4.5',                           name: 'Seedream 4.5',           provider: 'Bytedance', type: 'image', tier: 'quality',  via: 'OpenRouter' },
+    { id: 'evolink/doubao-seedream-4.5',                           name: 'Seedream 4.5',           provider: 'Bytedance', type: 'image', tier: 'quality',  via: 'Evolink' },
+    { id: 'evolink/doubao-seedream-4.5/edit',                      name: 'Seedream 4.5 Edit',      provider: 'Bytedance', type: 'edit',  tier: 'quality',  via: 'Evolink' },
     { id: 'fal-ai/bytedance/seedream/v4.5/text-to-image',          name: 'Seedream 4.5',           provider: 'Bytedance', type: 'image', tier: 'quality',  via: 'fal' },
     { id: 'fal-ai/bytedance/seedream/v4.5/edit',                   name: 'Seedream 4.5 Edit',      provider: 'Bytedance', type: 'edit',  tier: 'quality',  via: 'fal' },
     { id: 'fal-ai/bytedance/seedream/v5/lite/text-to-image',       name: 'Seedream 5 Lite',        provider: 'Bytedance', type: 'image', tier: 'fast',     via: 'fal' },

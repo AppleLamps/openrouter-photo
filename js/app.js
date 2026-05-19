@@ -2,7 +2,7 @@
  * Main application entry point
  */
 
-import { generateImage, enhancePrompt, testOpenRouterKey, testXaiKey, testFalKey, getRandomPromptFromAI, pollVideoStatus } from './api.js';
+import { generateImage, enhancePrompt, testOpenRouterKey, testXaiKey, testFalKey, testEvolinkKey, getRandomPromptFromAI, pollVideoStatus } from './api.js';
 import {
     PROMPT_ATTACHMENTS_MAX,
     PROMPT_ATTACHMENT_MAX_BYTES,
@@ -56,6 +56,10 @@ const IMAGE_RESOLUTION_PRESETS = {
     xai: {
         options: ['1K', '2K'],
         defaultValue: '1K',
+    },
+    evolink: {
+        options: ['2K', '4K'],
+        defaultValue: '2K',
     },
 };
 
@@ -1122,9 +1126,12 @@ function syncImageResolutionOptions(model) {
         return;
     }
 
-    const preset = (model === 'grok-imagine-image' || model === 'grok-imagine-image-quality')
-        ? IMAGE_RESOLUTION_PRESETS.xai
-        : IMAGE_RESOLUTION_PRESETS.gemini;
+    let preset = IMAGE_RESOLUTION_PRESETS.gemini;
+    if (model === 'grok-imagine-image' || model === 'grok-imagine-image-quality') {
+        preset = IMAGE_RESOLUTION_PRESETS.xai;
+    } else if (typeof model === 'string' && model.startsWith('evolink/')) {
+        preset = IMAGE_RESOLUTION_PRESETS.evolink;
+    }
 
     const currentValue = resolutionSelect.value;
     resolutionSelect.innerHTML = '';
@@ -1410,6 +1417,11 @@ function initSettingsUI() {
     const falSaveBtn = document.getElementById('setting-fal-save');
     const falTestBtn = document.getElementById('setting-fal-test');
     const falSaveStatus = document.getElementById('setting-fal-save-status');
+    const evolinkKeyInput = document.getElementById('setting-evolink-key');
+    const evolinkKeyShow = document.getElementById('setting-evolink-key-show');
+    const evolinkSaveBtn = document.getElementById('setting-evolink-save');
+    const evolinkTestBtn = document.getElementById('setting-evolink-test');
+    const evolinkSaveStatus = document.getElementById('setting-evolink-save-status');
     const appAccessTokenInput = document.getElementById('setting-app-access-token');
     const appAccessTokenShow = document.getElementById('setting-app-access-token-show');
     const appAccessTokenSaveBtn = document.getElementById('setting-app-access-token-save');
@@ -1545,6 +1557,64 @@ function initSettingsUI() {
                 showError(error?.message || 'Fal API key test failed.');
             } finally {
                 falTestBtn.disabled = false;
+            }
+        });
+    }
+
+    // Load Evolink key into the settings input and persist changes to localStorage
+    if (evolinkKeyInput) {
+        try {
+            evolinkKeyInput.value = localStorage.getItem('evolink_api_key') || '';
+        } catch {
+            evolinkKeyInput.value = '';
+        }
+
+        evolinkKeyInput.addEventListener('input', () => {
+            if (evolinkSaveStatus) evolinkSaveStatus.textContent = 'Unsaved';
+        });
+    }
+
+    if (evolinkKeyShow && evolinkKeyInput) {
+        evolinkKeyShow.addEventListener('change', () => {
+            evolinkKeyInput.type = evolinkKeyShow.checked ? 'text' : 'password';
+        });
+    }
+
+    if (evolinkSaveBtn && evolinkKeyInput) {
+        evolinkSaveBtn.addEventListener('click', () => {
+            try {
+                localStorage.setItem('evolink_api_key', evolinkKeyInput.value.trim());
+                if (evolinkSaveStatus) evolinkSaveStatus.textContent = 'Saved';
+                showSuccess('Evolink API key saved.');
+            } catch {
+                showError('Failed to save Evolink API key (storage unavailable).');
+            }
+        });
+    }
+
+    if (evolinkTestBtn) {
+        evolinkTestBtn.addEventListener('click', async () => {
+            if (evolinkTestBtn.disabled) return;
+
+            if (evolinkSaveStatus) evolinkSaveStatus.textContent = 'Testing...';
+            evolinkTestBtn.disabled = true;
+
+            try {
+                if (evolinkKeyInput) {
+                    localStorage.setItem('evolink_api_key', evolinkKeyInput.value.trim());
+                }
+                await testEvolinkKey();
+                if (evolinkSaveStatus) evolinkSaveStatus.textContent = 'Key works';
+                showSuccess('Evolink API key is valid.');
+            } catch (error) {
+                if (evolinkSaveStatus) evolinkSaveStatus.textContent = '';
+                if (error?.code === 'EVOLINK_API_KEY_REQUIRED') {
+                    showEvolinkApiKeyPopup(error?.help);
+                    return;
+                }
+                showError(error?.message || 'Evolink API key test failed.');
+            } finally {
+                evolinkTestBtn.disabled = false;
             }
         });
     }
@@ -1913,6 +1983,7 @@ function updateSettingsForModel(model) {
 
     const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedream = typeof model === 'string' && model.includes('seedream');
+    const isEvolinkSeedream = typeof model === 'string' && model.startsWith('evolink/doubao-seedream-4.5');
     const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
     const isPixverseC1 = model === PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL;
     const isFlashHead = model === FLASHHEAD_IMAGE_TO_VIDEO_MODEL;
@@ -1937,15 +2008,15 @@ function updateSettingsForModel(model) {
     syncImageResolutionOptions(model);
     syncVideoQualityOptions(model);
 
-    // Show aspect ratio for Gemini, Seedream, Fal, and xAI models
-    if (isGemini || isSeedream || (isFalModel && !isFlashHead) || isXai) {
+    // Show aspect ratio for Gemini, Seedream, Fal, Evolink, and xAI models
+    if (isGemini || isSeedream || isEvolinkSeedream || (isFalModel && !isFlashHead) || isXai) {
         aspectRatioGroup?.classList.remove('settings-group--hidden');
     } else {
         aspectRatioGroup?.classList.add('settings-group--hidden');
     }
 
-    // Resolution/image size is supported for Gemini and xAI image models.
-    if (isGemini || isXaiImage) {
+    // Resolution/image size is supported for Gemini, xAI, and Evolink image models.
+    if (isGemini || isXaiImage || isEvolinkSeedream) {
         resolutionGroup?.classList.remove('settings-group--hidden');
     } else {
         resolutionGroup?.classList.add('settings-group--hidden');
@@ -2247,6 +2318,10 @@ async function handleGenerate(input, button) {
             showFalApiKeyPopup(error?.help);
             return;
         }
+        if (error?.code === 'EVOLINK_API_KEY_REQUIRED') {
+            showEvolinkApiKeyPopup(error?.help);
+            return;
+        }
         showError(error.message || 'Failed to generate image. Please try again.');
     } finally {
         isGenerating = false;
@@ -2537,6 +2612,69 @@ function showFalApiKeyPopup(help) {
         <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="Fal API key required">
             <div class="openrouter-key-modal__header">
                 <div class="openrouter-key-modal__title">Fal API key required</div>
+                <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
+            </div>
+            <div class="openrouter-key-modal__body">
+                <p class="openrouter-key-modal__message"></p>
+                <div class="openrouter-key-modal__actions">
+                    <a class="openrouter-key-modal__link" target="_blank" rel="noopener noreferrer">Get API key</a>
+                    <button type="button" class="openrouter-key-modal__ok">I pasted it</button>
+                </div>
+                <p class="openrouter-key-modal__hint">Your key is stored locally in your browser and sent with each request.</p>
+            </div>
+        </div>
+    `;
+
+    overlay.querySelector('.openrouter-key-modal__message').textContent = message;
+    overlay.querySelector('.openrouter-key-modal__link').href = url;
+
+    const close = () => overlay.classList.remove('openrouter-key-modal--active');
+    overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
+    overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
+    overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
+
+    document.body.appendChild(overlay);
+}
+
+/**
+ * Show a popup explaining how to get an Evolink API key, and focus the Settings key input.
+ * @param {{ message?: string, url?: string } | undefined} help
+ */
+function showEvolinkApiKeyPopup(help) {
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsPanel = document.getElementById('settings-panel');
+
+    if (settingsBtn && settingsPanel) {
+        openSettings(settingsBtn, settingsPanel);
+    }
+
+    const keyInput = document.getElementById('setting-evolink-key');
+    if (keyInput) {
+        keyInput.focus();
+        keyInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
+    const url = help?.url || 'https://evolink.ai/dashboard/keys';
+    const message =
+        help?.message ||
+        'You need an Evolink API key to use Evolink Seedream models. Create one at evolink.ai/dashboard/keys, then paste it into Settings.';
+
+    const existing = document.getElementById('evolink-key-modal');
+    if (existing) {
+        existing.querySelector('.openrouter-key-modal__message').textContent = message;
+        existing.querySelector('.openrouter-key-modal__link').href = url;
+        existing.classList.add('openrouter-key-modal--active');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'evolink-key-modal';
+    overlay.className = 'openrouter-key-modal openrouter-key-modal--active';
+    overlay.innerHTML = `
+        <div class="openrouter-key-modal__backdrop" role="presentation"></div>
+        <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="Evolink API key required">
+            <div class="openrouter-key-modal__header">
+                <div class="openrouter-key-modal__title">Evolink API key required</div>
                 <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
             </div>
             <div class="openrouter-key-modal__body">

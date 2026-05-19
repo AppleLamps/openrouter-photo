@@ -1,6 +1,6 @@
 # AI Image & Video Generator
 
-A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports multiple providers — OpenRouter, xAI, and Fal.
+A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports multiple providers: OpenRouter, xAI, Fal, and Evolink.
 
 ![No Build Tools](https://img.shields.io/badge/Build-None%20Required-green)
 ![Vercel Ready](https://img.shields.io/badge/Deploy-Vercel-black)
@@ -77,7 +77,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 - **Frontend:** HTML5, CSS3 (Custom Properties + Flexbox/Grid), Vanilla JavaScript (ES6 Modules)
 - **Backend:** Vercel Serverless Functions (Node.js) / Express for local development
 - **Storage:** IndexedDB (primary), localStorage (fallback)
-- **APIs:** OpenRouter, xAI, Fal
+- **APIs:** OpenRouter, xAI, Fal, Evolink
 
 ---
 
@@ -126,6 +126,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
   - [OpenRouter API Key](https://openrouter.ai/keys) — FLUX, Gemini, GPT-5, Seedream (OR)
   - [Fal API Key](https://fal.ai/dashboard/keys) — Seedream (Fal), Seedance 1.5 Pro
   - [xAI API Key](https://console.x.ai) — Grok image/video models
+  - [Evolink API Key](https://evolink.ai/dashboard/keys) - Seedream 4.5 via Evolink
 
 ### Local Development
 
@@ -151,7 +152,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 4. **Add your API key**
 
-   Click the settings icon and paste your API key(s). Use OpenRouter for most models, Fal for Seedream/Seedance, or xAI for Grok models.
+   Click the settings icon and paste your API key(s). Use OpenRouter for most models, Fal for Seedream/Seedance, xAI for Grok models, or Evolink for Seedream 4.5 via Evolink.
 
 ### Deploy to Vercel
 
@@ -218,6 +219,7 @@ npx vercel --prod
 | **OpenRouter API Key** | Key for OpenRouter-backed models | Text input with show/hide toggle |
 | **xAI API Key** | Key for Grok image/video models | Text input with show/hide toggle |
 | **Fal API Key** | Key for Seedream/Seedance Fal models | Text input with show/hide toggle |
+| **Evolink API Key** | Key for Evolink Seedream models | Text input with show/hide toggle |
 | **Aspect Ratio** | Output dimensions (Gemini, Seedream, Fal, xAI) | 1:1, 4:3, 3:4, 16:9, 9:16, 3:2, 2:3, 21:9, 9:21 |
 | **Gemini Image Size** | Output resolution (Gemini models only) | 1K, 2K, 4K |
 | **Video Length** | Duration for video models | 4–12 s (Seedance), 1–15 s (xAI) |
@@ -258,6 +260,7 @@ npx vercel --prod
 - OpenRouter key for FLUX / Gemini / GPT-5
 - Fal key for Seedream / Seedance models
 - xAI key for Grok models
+- Evolink key for Evolink Seedream models
 - Ensure the key is saved (click Save)
 
 ### Images not generating

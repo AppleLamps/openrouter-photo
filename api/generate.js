@@ -4,6 +4,7 @@ const {
     resolveOpenRouterApiKey,
     resolveXaiApiKey,
     resolveFalApiKey,
+    resolveEvolinkApiKey,
 } = require('./_middleware');
 const {
     getFalImageCostPerImage,
@@ -26,6 +27,32 @@ const formatFalError = (errorText, fallbackMessage) => {
     return {
         error: fallbackMessage,
         details: redactKey(errorText),
+    };
+};
+
+const formatEvolinkError = (errorText, fallbackMessage) => {
+    const parsed = (() => {
+        try {
+            return JSON.parse(String(errorText || ''));
+        } catch {
+            return null;
+        }
+    })();
+    const message = parsed?.error?.message || parsed?.message || String(errorText || '');
+    const code = parsed?.error?.code || parsed?.code || null;
+
+    if (/content_policy_violation|safety filters/i.test(message) || code === 'content_policy_violation') {
+        return {
+            code: 'EVOLINK_CONTENT_POLICY_VIOLATION',
+            error: 'Evolink content policy rejected this request',
+            details: 'Evolink rejected the prompt or attached image before generation. Try a different prompt or source image.',
+        };
+    }
+
+    return {
+        ...(code ? { code: String(code) } : {}),
+        error: fallbackMessage,
+        details: redactKey(message || errorText),
     };
 };
 
@@ -70,15 +97,19 @@ module.exports = withMiddleware(async function handler(req, res) {
     const isFalVideoModelForRequest = isFalVideoModel(model);
     const isFluxKleinEditModel = model === 'fal-ai/flux-2/klein/9b/edit/lora';
     const isFalEditModelForRequest = isFalEditModel(model);
+    const isEvolinkSeedreamModel =
+        model === 'evolink/doubao-seedream-4.5' ||
+        model === 'evolink/doubao-seedream-4.5/edit';
 
     const XAI_API_KEY = resolveXaiApiKey(req);
     const FAL_KEY = resolveFalApiKey(req);
+    const EVOLINK_API_KEY = resolveEvolinkApiKey(req);
 
     const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
     const OPENROUTER_API_KEY = resolveOpenRouterApiKey(req);
 
-    if (!isXaiModel && !isFalModel && !isFalVideoModelForRequest && !OPENROUTER_API_KEY) {
+    if (!isXaiModel && !isFalModel && !isFalVideoModelForRequest && !isEvolinkSeedreamModel && !OPENROUTER_API_KEY) {
         return res.status(401).json({
             code: 'OPENROUTER_API_KEY_REQUIRED',
             error: 'OpenRouter API key required',
@@ -111,6 +142,17 @@ module.exports = withMiddleware(async function handler(req, res) {
         });
     }
 
+    if (isEvolinkSeedreamModel && !EVOLINK_API_KEY) {
+        return res.status(401).json({
+            code: 'EVOLINK_API_KEY_REQUIRED',
+            error: 'Evolink API key required',
+            help: {
+                message: 'Open Settings, paste your Evolink API key, then try again.',
+                url: 'https://evolink.ai/dashboard/keys'
+            }
+        });
+    }
+
     const isGeminiModel = typeof model === 'string' && model.startsWith('google/gemini-');
     const isSeedreamModel = typeof model === 'string' && model.includes('seedream');
 
@@ -137,7 +179,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             : imageSizePresetToAspectRatio(image_size);
 
     const maxInputImages =
-        isXaiImageModel ? 5 :
+        isEvolinkSeedreamModel ? 14 :
+            isXaiImageModel ? 5 :
             isFluxKleinEditModel ? 4 :
             model === 'fal-ai/phota/edit' ? 10 :
             model === 'alibaba/happy-horse/reference-to-video' ? 9 :
@@ -147,6 +190,180 @@ module.exports = withMiddleware(async function handler(req, res) {
             .filter((u) => typeof u === 'string' && u.startsWith('data:image/'))
             .slice(0, maxInputImages)
         : [];
+
+    // ---------- Evolink Seedream 4.5 ----------
+    if (isEvolinkSeedreamModel) {
+        if (model.endsWith('/edit') && normalizedInputImages.length === 0) {
+            return res.status(400).json({
+                error: 'Edit models require at least one attached image. Please attach an image and try again.',
+            });
+        }
+
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        const evolinkHeaders = {
+            Authorization: `Bearer ${EVOLINK_API_KEY}`,
+            'Content-Type': 'application/json',
+        };
+        const normalizeEvolinkSize = (ar) => {
+            const allowed = new Set(['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
+            return allowed.has(ar) ? ar : 'auto';
+        };
+        const extractEvolinkResults = (data) => {
+            const candidates = [
+                data?.results,
+                data?.data?.results,
+                data?.output,
+                data?.data?.output,
+                data?.images,
+                data?.data?.images,
+            ];
+            for (const value of candidates) {
+                if (Array.isArray(value)) {
+                    return value
+                        .map((item) => {
+                            if (typeof item === 'string') return item;
+                            return item?.url || item?.image_url || item?.file_url || null;
+                        })
+                        .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url));
+                }
+            }
+            return [];
+        };
+        const uploadEvolinkReferenceImage = async (dataUrl, index) => {
+            const uploadResponse = await fetch('https://files-api.evolink.ai/api/v1/files/upload/base64', {
+                method: 'POST',
+                headers: evolinkHeaders,
+                body: JSON.stringify({
+                    base64_data: dataUrl,
+                    file_name: `seedream-reference-${Date.now()}-${index + 1}.jpg`,
+                }),
+            });
+
+            if (!uploadResponse.ok) {
+                const errorText = await uploadResponse.text();
+                const formatted = formatEvolinkError(errorText, 'Failed to upload reference image to Evolink');
+                const error = new Error(formatted.details || formatted.error);
+                error.status = uploadResponse.status;
+                error.payload = formatted;
+                throw error;
+            }
+
+            const uploadData = await uploadResponse.json();
+            const fileUrl = uploadData?.data?.file_url || uploadData?.data?.download_url || uploadData?.file_url;
+            if (!fileUrl || typeof fileUrl !== 'string') {
+                const error = new Error('Evolink file upload did not return a usable image URL');
+                error.status = 502;
+                error.payload = { error: error.message };
+                throw error;
+            }
+            return fileUrl;
+        };
+
+        try {
+            const uploadedImageUrls = normalizedInputImages.length > 0
+                ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
+                : [];
+
+            const quality = resolution === '4K' ? '4K' : '2K';
+            const evolinkPayload = {
+                model: 'doubao-seedream-4.5',
+                prompt: prompt.trim(),
+                n: parsedNumImages,
+                size: normalizeEvolinkSize(normalizedAspectRatio),
+                quality,
+                prompt_priority: 'standard',
+                ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
+            };
+
+            const createResponse = await fetch('https://api.evolink.ai/v1/images/generations', {
+                method: 'POST',
+                headers: evolinkHeaders,
+                body: JSON.stringify(evolinkPayload),
+            });
+
+            if (!createResponse.ok) {
+                const errorText = await createResponse.text();
+                return res.status(createResponse.status).json({
+                    ...formatEvolinkError(errorText, 'Failed to start image generation via Evolink'),
+                });
+            }
+
+            const createData = await createResponse.json();
+            const taskId = createData?.id || createData?.task_id || createData?.data?.id;
+            if (!taskId) {
+                return res.status(502).json({ error: 'Evolink request did not return a task ID' });
+            }
+
+            for (let attempt = 0; attempt < 45; attempt++) {
+                if (attempt > 0) {
+                    await delay(2000);
+                }
+
+                const taskResponse = await fetch(`https://api.evolink.ai/v1/tasks/${encodeURIComponent(taskId)}`, {
+                    headers: {
+                        Authorization: `Bearer ${EVOLINK_API_KEY}`,
+                    },
+                });
+
+                if (!taskResponse.ok) {
+                    const errorText = await taskResponse.text();
+                    return res.status(taskResponse.status).json({
+                        ...formatEvolinkError(errorText, 'Failed to retrieve Evolink task status'),
+                    });
+                }
+
+                const taskData = await taskResponse.json();
+                const status = String(taskData?.status || taskData?.data?.status || '').toLowerCase();
+
+                if (status === 'completed') {
+                    const results = extractEvolinkResults(taskData).slice(0, parsedNumImages);
+                    if (results.length === 0) {
+                        return res.status(502).json({ error: 'Evolink completed without returning image URLs' });
+                    }
+
+                    const requestMeta = {
+                        model: 'doubao-seedream-4.5',
+                        provider_name: 'evolink',
+                        generation_id: taskId,
+                        created_at: taskData?.created || createData?.created || null,
+                        usage: 0,
+                        credits_reserved: createData?.usage?.credits_reserved || null,
+                        imageCount: results.length,
+                        usage_pending: false,
+                    };
+
+                    return res.status(200).json({
+                        images: results.map((url) => ({
+                            url,
+                            model,
+                            cost: 0,
+                            provider: 'evolink',
+                        })),
+                        meta: {
+                            total_usage: 0,
+                            requests: [requestMeta],
+                            usage_pending: false,
+                        },
+                    });
+                }
+
+                if (status === 'failed') {
+                    const taskError = taskData?.error || taskData?.data?.error;
+                    return res.status(502).json({
+                        ...formatEvolinkError(JSON.stringify(taskError || taskData), 'Evolink image generation failed'),
+                    });
+                }
+            }
+
+            return res.status(504).json({ error: 'Evolink image generation timed out. Please try again.' });
+        } catch (error) {
+            if (error?.payload) {
+                return res.status(error.status || 502).json(error.payload);
+            }
+            console.error('Evolink API error:', redactKey(error));
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
 
     // ---------- Fal Seedream models ----------
     if (isFalModel) {

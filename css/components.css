@@ -1527,7 +1527,8 @@ body.is-modal-open .spend-tracker {
 
 #setting-openrouter-test-status,
 #setting-xai-save-status,
-#setting-fal-save-status {
+#setting-fal-save-status,
+#setting-evolink-save-status {
     margin-top: 8px;
 }
 
