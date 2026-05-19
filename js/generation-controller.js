@@ -159,7 +159,7 @@ export function setPromptAttachments(urls) {
     renderPromptAttachments();
 }
 
-function getAttachedImageUrls(limit = PROMPT_ATTACHMENTS_MAX) {
+export function getAttachedImageUrls(limit = PROMPT_ATTACHMENTS_MAX) {
     const images = [
         ...promptImageDataUrls,
         ...deps.getExtraImageUrls(),

@@ -31,6 +31,7 @@ import {
 } from './model-picker.js';
 import {
     compressImageForUpload,
+    getAttachedImageUrls,
     initGenerationController,
     restoreSettings,
     setPromptAttachments,

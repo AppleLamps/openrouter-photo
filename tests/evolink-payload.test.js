@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
     buildSeedreamPayload,
     buildZImageTurboPayload,
+    getEvolinkImageCostPerImage,
     normalizeZImageAspectRatio,
     normalizeSeedreamQuality,
 } = require('../api/providers/evolink');
@@ -75,5 +76,11 @@ describe('evolink payload builders', () => {
         assert.equal(normalizeZImageAspectRatio('21:9'), '16:9');
         assert.equal(normalizeZImageAspectRatio('9:21'), '9:16');
         assert.equal(normalizeZImageAspectRatio('unknown'), '1:1');
+    });
+
+    it('prices Evolink image output from transaction-derived USD costs', () => {
+        assert.equal(getEvolinkImageCostPerImage('evolink/z-image-turbo'), 0.004);
+        assert.equal(getEvolinkImageCostPerImage('evolink/doubao-seedream-4.5'), 0.035569230769);
+        assert.equal(getEvolinkImageCostPerImage('evolink/doubao-seedream-4.5/edit'), 0.035569230769);
     });
 });

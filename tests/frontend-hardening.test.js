@@ -44,4 +44,13 @@ describe('frontend hardening', () => {
         assert.match(gallery, /if \(videoUrl\) \{\s+videoAttributes\.src = videoUrl;/);
         assert.doesNotMatch(gallery, /src: image\.url,\s+preload: 'metadata'/);
     });
+
+    it('uses the generation attachment helper for prompt enhancement', () => {
+        const app = read('js/app.js');
+        const controller = read('js/generation-controller.js');
+
+        assert.match(controller, /export function getAttachedImageUrls/);
+        assert.match(app, /getAttachedImageUrls,/);
+        assert.match(app, /enhancePrompt\(prompt, getAttachedImageUrls\(\)/);
+    });
 });

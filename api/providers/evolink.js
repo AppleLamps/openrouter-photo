@@ -1,5 +1,5 @@
 const { redactKey } = require('../_middleware');
-const { getEvolinkConfig } = require('../model-catalog');
+const { getEvolinkConfig, getModelPricing } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
 
 const EVOLINK_SEEDREAM_ASPECT_RATIOS = new Set(['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
@@ -15,6 +15,14 @@ const Z_IMAGE_ASPECT_FALLBACK = {
 function normalizeZImageAspectRatio(ratio) {
     if (Z_IMAGE_TURBO_ASPECT_RATIOS.has(ratio)) return ratio;
     return Z_IMAGE_ASPECT_FALLBACK[ratio] || '1:1';
+}
+
+function getEvolinkImageCostPerImage(model) {
+    const price = getModelPricing(model)?.price;
+    if (price?.type === 'flat' && Number.isFinite(price.amount)) {
+        return price.amount;
+    }
+    return 0;
 }
 
 function extractEvolinkResults(data) {
@@ -231,6 +239,7 @@ async function handleEvolink(ctx) {
 
     try {
         const { variant, apiModel, qualityOptions } = evolinkConfig;
+        const costPerImage = getEvolinkImageCostPerImage(model);
         const uploadedImageUrls = normalizedInputImages.length > 0
             ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
             : [];
@@ -256,7 +265,7 @@ async function handleEvolink(ctx) {
                     provider_name: 'evolink',
                     generation_id: taskResult.taskId,
                     created_at: taskResult.taskData?.created || taskResult.createData?.created || null,
-                    usage: taskResult.createData?.usage?.credits_reserved || 0,
+                    usage: costPerImage,
                     credits_reserved: taskResult.createData?.usage?.credits_reserved || null,
                     imageCount: 1,
                     usage_pending: false,
@@ -267,7 +276,7 @@ async function handleEvolink(ctx) {
                 images: allResults.map((url) => ({
                     url,
                     model,
-                    cost: 0,
+                    cost: costPerImage,
                     provider: 'evolink',
                 })),
                 meta: {
@@ -298,7 +307,7 @@ async function handleEvolink(ctx) {
             provider_name: 'evolink',
             generation_id: taskResult.taskId,
             created_at: taskResult.taskData?.created || taskResult.createData?.created || null,
-            usage: 0,
+            usage: costPerImage * results.length,
             credits_reserved: taskResult.createData?.usage?.credits_reserved || null,
             imageCount: results.length,
             usage_pending: false,
@@ -308,11 +317,11 @@ async function handleEvolink(ctx) {
             images: results.map((url) => ({
                 url,
                 model,
-                cost: 0,
+                cost: costPerImage,
                 provider: 'evolink',
             })),
             meta: {
-                total_usage: 0,
+                total_usage: costPerImage * results.length,
                 requests: [requestMeta],
                 usage_pending: false,
             },
@@ -330,6 +339,7 @@ module.exports = {
     handleEvolink,
     buildSeedreamPayload,
     buildZImageTurboPayload,
+    getEvolinkImageCostPerImage,
     normalizeZImageAspectRatio,
     normalizeSeedreamQuality,
 };

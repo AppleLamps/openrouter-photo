@@ -196,4 +196,10 @@ describe('model catalog — pricing', () => {
         const pricing = getModelPricing('grok-imagine-video');
         assert.equal(pricing.perSecondOutput, 0.05);
     });
+
+    it('exposes Evolink transaction-derived image pricing', () => {
+        assert.equal(getModelPricing('evolink/z-image-turbo').price.amount, 0.004);
+        assert.equal(getModelPricing('evolink/doubao-seedream-4.5').price.amount, 0.035569230769);
+        assert.equal(getModelPricing('evolink/doubao-seedream-4.5/edit').price.amount, 0.035569230769);
+    });
 });
