@@ -24,6 +24,7 @@ describe('vercel config', () => {
     });
 
     it('configures generate duration without legacy builds conflict', () => {
+        assert.equal(config.framework, null);
         assert.equal(config.builds, undefined);
         assert.equal(config.fluid, true);
         assert.ok(config.functions['api/generate.js'].maxDuration >= 120);
