@@ -9,6 +9,7 @@ const testFalKeyHandler = require('./api/test-fal-key');
 const testEvolinkKeyHandler = require('./api/test-evolink-key');
 const randomPromptHandler = require('./api/random-prompt');
 const videoStatusHandler = require('./api/video-status');
+const imageProxyHandler = require('./api/image-proxy');
 const { API_CORS_ALLOW_HEADERS } = require('./api/_middleware');
 
 const app = express();
@@ -104,6 +105,10 @@ app.post('/api/random-prompt', (req, res) => {
 
 app.all('/api/video-status', (req, res) => {
     return videoStatusHandler(req, res);
+});
+
+app.get('/api/image-proxy', (req, res) => {
+    return imageProxyHandler(req, res);
 });
 
 function startServer(port) {

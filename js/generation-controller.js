@@ -433,6 +433,7 @@ async function handleGenerate(input, button, retryOptions = null) {
                     settings: storableSettings,
                     folderId: folderId,
                     mediaType,
+                    sourceUrl: image.source_url || image.sourceUrl || null,
                     generation: {
                         model: image.model || null,
                         cost: image.cost || 0,

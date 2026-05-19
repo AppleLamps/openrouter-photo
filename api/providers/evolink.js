@@ -25,6 +25,21 @@ function getEvolinkImageCostPerImage(model) {
     return 0;
 }
 
+function buildEvolinkProxyUrl(url) {
+    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+}
+
+function toEvolinkImage(url, model, cost) {
+    return {
+        url: buildEvolinkProxyUrl(url),
+        source_url: url,
+        sourceUrl: url,
+        model,
+        cost,
+        provider: 'evolink',
+    };
+}
+
 function extractEvolinkResults(data) {
     const candidates = [
         data?.results,
@@ -274,10 +289,7 @@ async function handleEvolink(ctx) {
 
             return res.status(200).json({
                 images: allResults.map((url) => ({
-                    url,
-                    model,
-                    cost: costPerImage,
-                    provider: 'evolink',
+                    ...toEvolinkImage(url, model, costPerImage),
                 })),
                 meta: {
                     total_usage: requestMeta.reduce((sum, req) => sum + (req.usage || 0), 0),
@@ -287,42 +299,42 @@ async function handleEvolink(ctx) {
             });
         }
 
-        const payload = buildSeedreamPayload({
-            apiModel,
-            prompt,
-            parsedNumImages,
-            normalizedAspectRatio,
-            resolution,
-            uploadedImageUrls,
-            qualityOptions,
-        });
-        const taskResult = await createAndPollTask(payload);
-        if (taskResult.error) {
-            return res.status(taskResult.error.status).json(taskResult.error.payload);
+        const allResults = [];
+        const requestMeta = [];
+
+        for (let index = 0; index < parsedNumImages; index++) {
+            const payload = buildSeedreamPayload({
+                apiModel,
+                prompt,
+                parsedNumImages: 1,
+                normalizedAspectRatio,
+                resolution,
+                uploadedImageUrls,
+                qualityOptions,
+            });
+            const taskResult = await createAndPollTask(payload);
+            if (taskResult.error) {
+                return res.status(taskResult.error.status).json(taskResult.error.payload);
+            }
+
+            allResults.push(...taskResult.results.slice(0, 1));
+            requestMeta.push({
+                model,
+                provider_name: 'evolink',
+                generation_id: taskResult.taskId,
+                created_at: taskResult.taskData?.created || taskResult.createData?.created || null,
+                usage: costPerImage,
+                credits_reserved: taskResult.createData?.usage?.credits_reserved || null,
+                imageCount: 1,
+                usage_pending: false,
+            });
         }
 
-        const results = taskResult.results.slice(0, parsedNumImages);
-        const requestMeta = {
-            model,
-            provider_name: 'evolink',
-            generation_id: taskResult.taskId,
-            created_at: taskResult.taskData?.created || taskResult.createData?.created || null,
-            usage: costPerImage * results.length,
-            credits_reserved: taskResult.createData?.usage?.credits_reserved || null,
-            imageCount: results.length,
-            usage_pending: false,
-        };
-
         return res.status(200).json({
-            images: results.map((url) => ({
-                url,
-                model,
-                cost: costPerImage,
-                provider: 'evolink',
-            })),
+            images: allResults.map((url) => toEvolinkImage(url, model, costPerImage)),
             meta: {
-                total_usage: costPerImage * results.length,
-                requests: [requestMeta],
+                total_usage: requestMeta.reduce((sum, req) => sum + (req.usage || 0), 0),
+                requests: requestMeta,
                 usage_pending: false,
             },
         });
@@ -339,6 +351,7 @@ module.exports = {
     handleEvolink,
     buildSeedreamPayload,
     buildZImageTurboPayload,
+    buildEvolinkProxyUrl,
     getEvolinkImageCostPerImage,
     normalizeZImageAspectRatio,
     normalizeSeedreamQuality,

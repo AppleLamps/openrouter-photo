@@ -42,6 +42,10 @@
             "dest": "/api/video-status.js"
         },
         {
+            "src": "/api/image-proxy",
+            "dest": "/api/image-proxy.js"
+        },
+        {
             "src": "/css/(.*)",
             "dest": "/css/$1"
         },
