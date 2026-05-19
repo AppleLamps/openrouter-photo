@@ -26,6 +26,9 @@ let lastFocusedElement = null;
 /** @type {string|null} */
 let currentLightboxImageId = null;
 
+/** @type {number} */
+let lightboxLoadToken = 0;
+
 /** @type {HTMLElement|null} */
 let lightboxModalContentElement = null;
 
@@ -102,6 +105,18 @@ function resetLightboxSwipeState() {
     if (stageEl instanceof HTMLElement) {
         stageEl.style.transform = '';
         stageEl.style.transition = '';
+    }
+}
+
+function isCurrentLightboxLoad(modal, imageId, token) {
+    return currentLightboxImageId === imageId
+        && lightboxLoadToken === token
+        && modal.classList.contains('modal--active');
+}
+
+function revokeStaleFullImageUrl(imageId, fullUrl) {
+    if (fullUrl) {
+        state.revokeFullImageUrl(imageId, fullUrl);
     }
 }
 
@@ -364,13 +379,13 @@ async function loadJSZip() {
     if (!jsZipLoaderPromise) {
         jsZipLoaderPromise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+            script.src = '/public/vendor/jszip.min.js';
             script.async = true;
             script.onload = () => {
                 if (window.JSZip) resolve(window.JSZip);
-                else reject(new Error('JSZip failed to load from CDN'));
+                else reject(new Error('JSZip failed to load from local vendor bundle'));
             };
-            script.onerror = () => reject(new Error('Failed to load JSZip from CDN'));
+            script.onerror = () => reject(new Error('Failed to load JSZip from local vendor bundle'));
             document.head.appendChild(script);
         }).catch((error) => {
             jsZipLoaderPromise = null;
@@ -686,13 +701,17 @@ function createImageCard(image, preloaded = false) {
     const deleteBtn = createElement('button', {
         className: 'gallery__delete-btn',
         title: 'Delete image',
-        onClick: (e) => {
+        onClick: async (e) => {
             e.stopPropagation();
 
             if (pendingDeletions.has(image.id)) {
                 // Second press - confirm deletion
                 resetConfirmationState(image.id);
-                state.removeImage(image.id);
+                try {
+                    await state.removeImage(image.id);
+                } catch (error) {
+                    console.error('Failed to delete image:', error);
+                }
             } else {
                 // First press - show confirmation
                 handleFirstDeletePress(image.id);
@@ -707,14 +726,18 @@ function createImageCard(image, preloaded = false) {
     // off-screen images.
     const needsLazy = !preloaded && !isVideo;
     const resolvedSrc = needsLazy ? '' : image.url;
+    const videoUrl = isVideo ? (image.sourceUrl || image.url || '') : '';
+    const videoAttributes = {
+        className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
+        preload: 'metadata',
+        'aria-label': image.prompt
+    };
+    if (videoUrl) {
+        videoAttributes.src = videoUrl;
+    }
 
     const media = isVideo
-        ? createElement('video', {
-            className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
-            src: image.url,
-            preload: 'metadata',
-            'aria-label': image.prompt
-        })
+        ? createElement('video', videoAttributes)
         : createElement('img', {
             className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
             src: resolvedSrc,
@@ -897,26 +920,22 @@ export function showErrorCard(placeholderId, errorMessage, prompt, onRetry) {
     const entry = placeholderElements.get(placeholderId);
     if (!entry || !galleryElement) return;
     const placeholder = entry.element;
+    const icon = createElement('div', { className: 'gallery__error-card-icon' });
+    icon.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+    `;
 
     const errorCard = createElement('div', {
         className: 'gallery__error-card',
         'data-error-id': placeholderId
     }, [
-        createElement('div', { className: 'gallery__error-card-icon' }, [
-            createElement('svg', {
-                xmlns: 'http://www.w3.org/2000/svg',
-                viewBox: '0 0 24 24',
-                fill: 'none',
-                stroke: 'currentColor',
-                'stroke-width': '2',
-                'stroke-linecap': 'round',
-                'stroke-linejoin': 'round'
-            }, [
-                createElement('circle', { cx: '12', cy: '12', r: '10' }),
-                createElement('line', { x1: '12', y1: '8', x2: '12', y2: '12' }),
-                createElement('line', { x1: '12', y1: '16', x2: '12.01', y2: '16' })
-            ])
-        ]),
+        icon,
         createElement('div', { className: 'gallery__error-card-message' }, errorMessage),
         createElement('div', { className: 'gallery__error-card-actions' }, [
             createElement('button', {
@@ -981,14 +1000,20 @@ async function openLightbox(image) {
 
     // Track current image for memory cleanup on close
     currentLightboxImageId = image.id;
+    const loadToken = ++lightboxLoadToken;
 
     // Defensive: ensure any previous swipe/drag state is cleared before opening.
     resetLightboxSwipeState();
 
     if (image.mediaType === 'video') {
         if (modalVideo) {
+            const videoUrl = image.sourceUrl || image.url || '';
             modalVideo.style.display = 'block';
-            modalVideo.src = image.url;
+            if (videoUrl) {
+                modalVideo.src = videoUrl;
+            } else {
+                modalVideo.removeAttribute('src');
+            }
             modalVideo.classList.add('modal__image--loading');
             modalVideo.load();
         }
@@ -1158,7 +1183,11 @@ async function openLightbox(image) {
     // Load full resolution media after modal is visible
     if (image.mediaType === 'video' && modalVideo) {
         const fullUrl = await state.getFullImageUrl(image.id);
-        if (fullUrl && modal.classList.contains('modal--active')) {
+        if (!isCurrentLightboxLoad(modal, image.id, loadToken)) {
+            revokeStaleFullImageUrl(image.id, fullUrl);
+            return;
+        }
+        if (fullUrl) {
             modalVideo.src = fullUrl;
             modalVideo.load();
             modalVideo.play().catch((error) => {
@@ -1168,7 +1197,11 @@ async function openLightbox(image) {
         modalVideo.classList.remove('modal__image--loading');
     } else if (modalImage) {
         const fullUrl = await state.getFullImageUrl(image.id);
-        if (fullUrl && modal.classList.contains('modal--active')) {
+        if (!isCurrentLightboxLoad(modal, image.id, loadToken)) {
+            revokeStaleFullImageUrl(image.id, fullUrl);
+            return;
+        }
+        if (fullUrl) {
             modalImage.src = fullUrl;
         }
         modalImage.classList.remove('modal__image--loading');
@@ -1262,6 +1295,7 @@ export function closeLightbox() {
         state.revokeFullImageUrl(currentLightboxImageId);
         currentLightboxImageId = null;
     }
+    lightboxLoadToken += 1;
 
     unlockBodyScroll();
 

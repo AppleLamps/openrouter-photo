@@ -1,5 +1,5 @@
 const { withMiddleware, redactKey, resolveXaiApiKey, resolveFalApiKey } = require('./_middleware');
-const { getFalVideoModel, normalizeFalVideoModel } = require('./model-registry');
+const { getFalVideoModel, normalizeModelId, isKnownFalVideoModelId } = require('./model-catalog');
 
 const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
 
@@ -11,27 +11,9 @@ const normalizeStringParam = (value) => {
 };
 
 const resolveFalVideoModelId = (value) => {
-    switch (normalizeStringParam(value)) {
-        case 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video':
-            return 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
-        case 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video':
-            return 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video';
-        case 'bytedance/seedance-2.0/text-to-video':
-            return 'bytedance/seedance-2.0/text-to-video';
-        case 'bytedance/seedance-2.0/image-to-video':
-            return 'bytedance/seedance-2.0/image-to-video';
-        case 'fal-ai/bytedance/seedance-2.0/text-to-video':
-        case 'fal-ai/bytedance/seedance-2.0/image-to-video':
-            return normalizeFalVideoModel(normalizeStringParam(value));
-        case 'fal-ai/pixverse/c1/image-to-video':
-            return 'fal-ai/pixverse/c1/image-to-video';
-        case 'alibaba/happy-horse/reference-to-video':
-            return 'alibaba/happy-horse/reference-to-video';
-        case 'fal-ai/flashhead':
-            return 'fal-ai/flashhead';
-        default:
-            return null;
-    }
+    const normalized = normalizeStringParam(value);
+    if (!normalized) return null;
+    return isKnownFalVideoModelId(normalized) ? normalizeModelId(normalized) : null;
 };
 
 const buildUniqueUrls = (urls) => {

@@ -7,6 +7,7 @@ import { ImageStorage } from './storage.js';
 import { dataUriToBlob, generateThumbnail, compressFullImage, createBlobUrl, revokeBlobUrl } from './image-utils.js';
 
 const LEGACY_STORAGE_KEY = 'ai-image-generator-images';
+const FOLDERS_STORAGE_KEY = 'ai-image-generator-folders';
 const FALLBACK_ID_PREFIX = 'legacy';
 
 /**
@@ -37,6 +38,15 @@ const PHOTO_VISIBILITY_KEY = 'photo_visibility_mode';
 
 const createFallbackId = () =>
     `${FALLBACK_ID_PREFIX}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const setLocalStorageItem = (key, value) => {
+    try {
+        localStorage.setItem(key, value);
+    } catch (error) {
+        console.error(`Failed to save ${key} to localStorage:`, error);
+        throw error;
+    }
+};
 
 const normalizeStoredImages = (stored) => {
     if (!Array.isArray(stored)) {
@@ -200,32 +210,41 @@ class State {
 
             console.log(`Migrating ${legacyImages.length} images from localStorage...`);
 
+            const remainingLegacyImages = [];
             for (const img of legacyImages) {
-                if (img.url && img.url.startsWith('data:')) {
-                    try {
-                        let fullBlob = dataUriToBlob(img.url);
-                        fullBlob = await compressFullImage(fullBlob);
-                        const thumbnailBlob = await generateThumbnail(fullBlob);
+                if (!img?.url || !img.url.startsWith('data:')) {
+                    remainingLegacyImages.push(img);
+                    continue;
+                }
 
-                        await this.storage.saveImage(
-                            {
-                                id: img.id,
-                                prompt: img.prompt,
-                                createdAt: img.createdAt,
-                                settings: img.settings
-                            },
-                            fullBlob,
-                            thumbnailBlob
-                        );
-                    } catch (err) {
-                        console.error(`Failed to migrate image ${img.id}:`, err);
-                    }
+                try {
+                    let fullBlob = dataUriToBlob(img.url);
+                    fullBlob = await compressFullImage(fullBlob);
+                    const thumbnailBlob = await generateThumbnail(fullBlob);
+
+                    await this.storage.saveImage(
+                        {
+                            id: img.id,
+                            prompt: img.prompt,
+                            createdAt: img.createdAt,
+                            settings: img.settings
+                        },
+                        fullBlob,
+                        thumbnailBlob
+                    );
+                } catch (err) {
+                    console.error(`Failed to migrate image ${img.id}:`, err);
+                    remainingLegacyImages.push(img);
                 }
             }
 
-            // Only remove localStorage after successful migration
-            localStorage.removeItem(LEGACY_STORAGE_KEY);
-            console.log('Migration complete');
+            if (remainingLegacyImages.length === 0) {
+                localStorage.removeItem(LEGACY_STORAGE_KEY);
+                console.log('Migration complete');
+            } else {
+                localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(remainingLegacyImages));
+                console.warn(`Migration incomplete: kept ${remainingLegacyImages.length} images in localStorage.`);
+            }
         } catch (error) {
             console.error('Migration failed:', error);
         }
@@ -291,7 +310,7 @@ class State {
         if (this.useFallback || !this.storage) {
             // Fallback: load from localStorage
             try {
-                const stored = localStorage.getItem('ai-image-generator-folders');
+                const stored = localStorage.getItem(FOLDERS_STORAGE_KEY);
                 if (stored) {
                     this.folders = JSON.parse(stored);
                 }
@@ -504,10 +523,11 @@ class State {
     /**
      * Revoke full-resolution blob URL to free memory (call when lightbox closes)
      * @param {string} id - Image ID
+     * @param {string|null} expectedUrl - When provided, only revoke this exact URL
      */
-    revokeFullImageUrl(id) {
+    revokeFullImageUrl(id, expectedUrl = null) {
         const fullUrl = this.blobUrls.get(`${id}-full`);
-        if (fullUrl) {
+        if (fullUrl && (!expectedUrl || fullUrl === expectedUrl)) {
             revokeBlobUrl(fullUrl);
             this.blobUrls.delete(`${id}-full`);
         }
@@ -535,7 +555,20 @@ class State {
         const index = this.images.findIndex(img => img.id === id);
         if (index === -1) return;
 
-        const removed = this.images.splice(index, 1)[0];
+        const removed = this.images[index];
+
+        if (this.useFallback) {
+            this.images.splice(index, 1);
+            this.saveToLocalStorage();
+        } else {
+            try {
+                await this.storage.deleteImage(id);
+                this.images.splice(index, 1);
+            } catch (error) {
+                console.error('Failed to delete from IndexedDB:', error);
+                throw error;
+            }
+        }
 
         // Revoke blob URLs and clean up raw blob reference
         const thumbUrl = this.blobUrls.get(`${id}-thumb`);
@@ -549,16 +582,6 @@ class State {
             this.blobUrls.delete(`${id}-full`);
         }
         this.thumbnailBlobs.delete(id);
-
-        if (this.useFallback) {
-            this.saveToLocalStorage();
-        } else {
-            try {
-                await this.storage.deleteImage(id);
-            } catch (error) {
-                console.error('Failed to delete from IndexedDB:', error);
-            }
-        }
 
         this.notifyListeners('remove', removed);
     }
@@ -648,7 +671,7 @@ class State {
         } else {
             // Fallback: save to localStorage
             const folders = [...this.folders, folder];
-            localStorage.setItem('ai-image-generator-folders', JSON.stringify(folders));
+            setLocalStorageItem(FOLDERS_STORAGE_KEY, JSON.stringify(folders));
         }
 
         this.folders.push(folder);
@@ -667,15 +690,20 @@ class State {
         const folder = this.folders.find(f => f.id === id);
         if (!folder) throw new Error(`Folder ${id} not found`);
 
-        folder.name = newName.trim();
+        const trimmedName = newName.trim();
 
         if (!this.useFallback && this.storage) {
-            await this.storage.updateFolder(id, { name: folder.name });
+            await this.storage.updateFolder(id, { name: trimmedName });
+            folder.name = trimmedName;
         } else {
-            localStorage.setItem('ai-image-generator-folders', JSON.stringify(this.folders));
+            const nextFolders = this.folders.map(item =>
+                item.id === id ? { ...item, name: trimmedName } : item
+            );
+            setLocalStorageItem(FOLDERS_STORAGE_KEY, JSON.stringify(nextFolders));
+            this.folders = nextFolders;
         }
 
-        this.notifyListeners('folder-rename', folder);
+        this.notifyListeners('folder-rename', this.getFolder(id));
     }
 
     /**
@@ -694,12 +722,14 @@ class State {
             await this.moveImagesToFolder(imagesToMove.map(img => img.id), null);
         }
 
-        this.folders.splice(index, 1);
+        const nextFolders = this.folders.filter(folder => folder.id !== id);
 
         if (!this.useFallback && this.storage) {
             await this.storage.deleteFolder(id);
+            this.folders = nextFolders;
         } else {
-            localStorage.setItem('ai-image-generator-folders', JSON.stringify(this.folders));
+            setLocalStorageItem(FOLDERS_STORAGE_KEY, JSON.stringify(nextFolders));
+            this.folders = nextFolders;
         }
 
         // Reset selected folder if the deleted folder was selected
@@ -781,8 +811,8 @@ class State {
      * @param {'all'|'folder-only'} mode
      */
     setPhotoVisibilityMode(mode) {
+        setLocalStorageItem(PHOTO_VISIBILITY_KEY, mode);
         this._photoVisibilityMode = mode;
-        localStorage.setItem(PHOTO_VISIBILITY_KEY, mode);
         this.notifyListeners('settings-changed', { photoVisibility: mode });
     }
 
@@ -876,7 +906,13 @@ class State {
      * @param {ImageData|null} data - Related data
      */
     notifyListeners(action, data) {
-        this.listeners.forEach(listener => listener(action, data));
+        this.listeners.forEach(listener => {
+            try {
+                listener(action, data);
+            } catch (error) {
+                console.error('State listener failed:', error);
+            }
+        });
     }
 }
 

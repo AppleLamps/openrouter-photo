@@ -2,6 +2,8 @@
  * API module for communicating with the serverless function
  */
 
+import { VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES } from './config.js';
+
 const API_ENDPOINT = '/api/generate';
 const ENHANCE_ENDPOINT = '/api/enhance';
 const TEST_KEY_ENDPOINT = '/api/test-key';
@@ -15,6 +17,19 @@ const FAL_API_KEY_STORAGE_KEY = 'fal_api_key';
 const EVOLINK_API_KEY_STORAGE_KEY = 'evolink_api_key';
 const APP_ACCESS_TOKEN_STORAGE_KEY = 'app_access_token';
 const TEST_FAL_KEY_ENDPOINT = '/api/test-fal-key';
+
+const encoder = new TextEncoder();
+
+function getUtf8ByteLength(value) {
+    return encoder.encode(value).length;
+}
+
+function assertPayloadWithinLimit(serializedBody) {
+    if (getUtf8ByteLength(serializedBody) <= VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES) return;
+    const err = new Error('Attached images are too large for deployment. Use fewer or smaller reference images.');
+    err.code = 'REQUEST_PAYLOAD_TOO_LARGE';
+    throw err;
+}
 
 /**
  * Read the user's OpenRouter API key from localStorage (if set).
@@ -175,6 +190,9 @@ export async function generateImage(prompt, options = {}, signal = null) {
         const xaiApiKey = getXaiApiKey();
         const falApiKey = getFalApiKey();
         const evolinkApiKey = getEvolinkApiKey();
+        const serializedBody = JSON.stringify(requestBody);
+        assertPayloadWithinLimit(serializedBody);
+
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: {
@@ -185,7 +203,7 @@ export async function generateImage(prompt, options = {}, signal = null) {
                 ...(evolinkApiKey ? { 'X-Evolink-Api-Key': evolinkApiKey } : {}),
                 ...getAppAccessHeaders(),
             },
-            body: JSON.stringify(requestBody),
+            body: serializedBody,
             ...(signal ? { signal } : {})
         });
 
@@ -269,6 +287,9 @@ export async function enhancePrompt(currentPrompt, imageUrls = [], customInstruc
             requestBody.custom_instructions = customInstructions.trim();
         }
 
+        const serializedBody = JSON.stringify(requestBody);
+        assertPayloadWithinLimit(serializedBody);
+
         const response = await fetch(ENHANCE_ENDPOINT, {
             method: 'POST',
             headers: {
@@ -276,7 +297,7 @@ export async function enhancePrompt(currentPrompt, imageUrls = [], customInstruc
                 ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
                 ...getAppAccessHeaders(),
             },
-            body: JSON.stringify(requestBody),
+            body: serializedBody,
         });
 
         if (!response.ok) {

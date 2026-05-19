@@ -9,12 +9,24 @@ const testFalKeyHandler = require('./api/test-fal-key');
 const testEvolinkKeyHandler = require('./api/test-evolink-key');
 const randomPromptHandler = require('./api/random-prompt');
 const videoStatusHandler = require('./api/video-status');
+const { API_CORS_ALLOW_HEADERS } = require('./api/_middleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Increase body size limit to handle base64 image attachments (image-to-video can send 2 frames)
-app.use(express.json({ limit: '20mb' }));
+const REQUEST_BODY_LIMIT = '4mb';
+
+// Match Vercel's 4.5 MB function payload ceiling with headroom for JSON overhead.
+app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
+app.use((err, _req, res, next) => {
+    if (err?.type === 'entity.too.large') {
+        return res.status(413).json({
+            code: 'REQUEST_PAYLOAD_TOO_LARGE',
+            error: 'Attached images are too large for deployment. Use fewer or smaller reference images.',
+        });
+    }
+    return next(err);
+});
 
 function getAllowedCorsOrigin(req) {
     const raw = process.env.ALLOWED_ORIGIN || '';
@@ -42,7 +54,7 @@ app.use('/api', (req, res, next) => {
         }
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-Evolink-Api-Key, X-App-Access-Token');
+    res.setHeader('Access-Control-Allow-Headers', API_CORS_ALLOW_HEADERS);
     if (cors.blocked) {
         return res.status(403).json({ error: 'Origin not allowed' });
     }
@@ -56,6 +68,7 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/vendor', express.static(path.join(__dirname, 'public', 'vendor')));
 app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
+app.use('/shared', express.static(path.join(__dirname, 'shared')));
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));

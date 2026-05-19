@@ -204,7 +204,7 @@
                     </div>
 
                     <div id="empty-state-no-key" class="empty-state__no-key">
-                        <p class="empty-state__no-key-text">You need an OpenRouter API key to generate images.</p>
+                        <p class="empty-state__no-key-text">You need a Fal API key to generate with the default model.</p>
                         <button id="empty-state-add-key-btn" class="empty-state__button" type="button">
                             Add API Key
                         </button>
@@ -301,8 +301,7 @@
                             </div>
                         </div>
                         <div class="input-bar__inline-dropdown model-picker-dropdown" id="model-dropdown">
-                            <input id="setting-model" type="hidden"
-                                value="fal-ai/z-image/turbo/lora">
+                            <input id="setting-model" type="hidden" value="">
                             <button id="model-trigger" type="button"
                                 class="input-bar__inline-select input-bar__dropdown-trigger" aria-haspopup="dialog"
                                 aria-expanded="false" title="Model">
@@ -811,6 +810,11 @@
     <link rel="modulepreload" href="js/sidebar.js">
     <link rel="modulepreload" href="js/utils.js">
     <link rel="modulepreload" href="js/config.js">
+    <link rel="modulepreload" href="js/settings-keys.js">
+    <link rel="modulepreload" href="js/spend-tracker.js">
+    <link rel="modulepreload" href="js/model-picker.js">
+    <link rel="modulepreload" href="js/generation-controller.js">
+    <link rel="modulepreload" href="js/model-capabilities.js">
     <link rel="modulepreload" href="js/models.js">
     <link rel="modulepreload" href="js/prompts.js">
 

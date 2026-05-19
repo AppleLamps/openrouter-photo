@@ -5,8 +5,25 @@
 
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_RATE_LIMIT_MAX = 60;
+const VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
+const RATE_LIMIT_PRUNE_INTERVAL_MS = 60 * 1000;
+const API_CORS_ALLOW_HEADERS = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-Evolink-Api-Key, X-App-Access-Token';
 const rateLimitBuckets = new Map();
 const SERVER_PROVIDER_KEY_ACCESS_HEADER = 'x-app-access-token';
+let lastRateLimitPruneMs = 0;
+
+const parseOptionalInteger = (raw) => {
+    if (raw == null || String(raw).trim() === '') return null;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const resolveIntegerSetting = (envName, optionValue, defaultValue) => {
+    const envValue = parseOptionalInteger(process.env[envName]);
+    if (envValue !== null) return envValue;
+    if (typeof optionValue === 'number' && Number.isFinite(optionValue)) return optionValue;
+    return defaultValue;
+};
 
 const getRequestOrigin = (req) => {
     const proto = req.headers['x-forwarded-proto'] || (req.socket?.encrypted ? 'https' : 'http');
@@ -42,12 +59,28 @@ const getClientId = (req) => {
     return req.socket?.remoteAddress || 'unknown';
 };
 
+function pruneExpiredRateLimitBuckets(now = Date.now()) {
+    for (const [key, bucket] of rateLimitBuckets.entries()) {
+        if (!bucket || bucket.resetMs <= now) {
+            rateLimitBuckets.delete(key);
+        }
+    }
+    lastRateLimitPruneMs = now;
+}
+
+function maybePruneExpiredRateLimitBuckets(now) {
+    if (now - lastRateLimitPruneMs >= RATE_LIMIT_PRUNE_INTERVAL_MS) {
+        pruneExpiredRateLimitBuckets(now);
+    }
+}
+
 const checkRateLimit = (req, options = {}) => {
-    const windowMs = Number.parseInt(process.env.API_RATE_LIMIT_WINDOW_MS || '', 10) || options.windowMs || DEFAULT_RATE_LIMIT_WINDOW_MS;
-    const max = Number.parseInt(process.env.API_RATE_LIMIT_MAX || '', 10) || options.max || DEFAULT_RATE_LIMIT_MAX;
+    const windowMs = resolveIntegerSetting('API_RATE_LIMIT_WINDOW_MS', options.windowMs, DEFAULT_RATE_LIMIT_WINDOW_MS);
+    const max = resolveIntegerSetting('API_RATE_LIMIT_MAX', options.max, DEFAULT_RATE_LIMIT_MAX);
     if (max <= 0) return { allowed: true, remaining: 0, resetMs: Date.now() + windowMs };
 
     const now = Date.now();
+    maybePruneExpiredRateLimitBuckets(now);
     const key = `${getClientId(req)}:${req.url || ''}`;
     let bucket = rateLimitBuckets.get(key);
     if (!bucket || bucket.resetMs <= now) {
@@ -169,6 +202,20 @@ const redactKey = (text) => {
         .replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, '[REDACTED_IMAGE_DATA]');
 };
 
+function parseContentLength(req) {
+    const raw = req.headers?.['content-length'];
+    if (typeof raw !== 'string' || raw.trim() === '') return null;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function payloadTooLargeResponse(res) {
+    return res.status(413).json({
+        code: 'REQUEST_PAYLOAD_TOO_LARGE',
+        error: 'Attached images are too large for deployment. Use fewer or smaller reference images.',
+    });
+}
+
 /**
  * Wrap an async handler with standard CORS, method-check, and body-parsing boilerplate.
  *
@@ -180,7 +227,7 @@ const redactKey = (text) => {
  */
 function withMiddleware(handler, options = {}) {
     const {
-        allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-Evolink-Api-Key, X-App-Access-Token',
+        allowHeaders = API_CORS_ALLOW_HEADERS,
         skipBodyParse = false,
         rateLimit = {},
         methods = ['POST'],
@@ -226,10 +273,20 @@ function withMiddleware(handler, options = {}) {
 
         // ---------- Body parsing (Vercel compatibility) ----------
         if (!skipBodyParse && req.method !== 'GET' && req.method !== 'HEAD') {
+            const contentLength = parseContentLength(req);
+            if (contentLength !== null && contentLength > VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES) {
+                return payloadTooLargeResponse(res);
+            }
+
             if (!req.body || typeof req.body !== 'object') {
                 try {
                     const chunks = [];
+                    let totalBytes = 0;
                     for await (const chunk of req) {
+                        totalBytes += Buffer.byteLength(chunk);
+                        if (totalBytes > VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES) {
+                            return payloadTooLargeResponse(res);
+                        }
                         chunks.push(chunk);
                     }
                     const body = Buffer.concat(chunks).toString();
@@ -245,4 +302,17 @@ function withMiddleware(handler, options = {}) {
     };
 }
 
-module.exports = { withMiddleware, redactKey, resolveOpenRouterApiKey, resolveXaiApiKey, resolveFalApiKey, resolveEvolinkApiKey };
+module.exports = {
+    withMiddleware,
+    redactKey,
+    resolveOpenRouterApiKey,
+    resolveXaiApiKey,
+    resolveFalApiKey,
+    resolveEvolinkApiKey,
+    VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES,
+    API_CORS_ALLOW_HEADERS,
+    __test: {
+        rateLimitBuckets,
+        pruneExpiredRateLimitBuckets,
+    },
+};

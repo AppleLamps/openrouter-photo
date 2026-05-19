@@ -1,35 +1,12 @@
 {
+    "$schema": "https://openapi.vercel.sh/vercel.json",
     "version": 2,
-    "builds": [
-        {
-            "src": "api/*.js",
-            "use": "@vercel/node"
-        },
-        {
-            "src": "*.html",
-            "use": "@vercel/static"
-        },
-        {
-            "src": "css/**",
-            "use": "@vercel/static"
-        },
-        {
-            "src": "js/**",
-            "use": "@vercel/static"
-        },
-        {
-            "src": "public/**",
-            "use": "@vercel/static"
-        },
-        {
-            "src": "sw.js",
-            "use": "@vercel/static"
-        },
-        {
-            "src": "favicon.svg",
-            "use": "@vercel/static"
+    "fluid": true,
+    "functions": {
+        "api/generate.js": {
+            "maxDuration": 120
         }
-    ],
+    },
     "routes": [
         {
             "src": "/api/generate",
@@ -48,6 +25,14 @@
             "dest": "/api/test-key.js"
         },
         {
+            "src": "/api/test-xai-key",
+            "dest": "/api/test-xai-key.js"
+        },
+        {
+            "src": "/api/test-fal-key",
+            "dest": "/api/test-fal-key.js"
+        },
+        {
             "src": "/api/test-evolink-key",
             "dest": "/api/test-evolink-key.js"
         },
@@ -62,6 +47,10 @@
         {
             "src": "/js/(.*)",
             "dest": "/js/$1"
+        },
+        {
+            "src": "/shared/(.*)",
+            "dest": "/shared/$1"
         },
         {
             "src": "/public/(.*)",

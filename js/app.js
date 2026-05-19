@@ -2,78 +2,39 @@
  * Main application entry point
  */
 
-import { generateImage, enhancePrompt, testOpenRouterKey, testXaiKey, testFalKey, testEvolinkKey, getRandomPromptFromAI, pollVideoStatus } from './api.js';
+import { enhancePrompt, getRandomPromptFromAI } from './api.js';
 import {
-    PROMPT_ATTACHMENTS_MAX,
     PROMPT_ATTACHMENT_MAX_BYTES,
     PROMPT_ATTACHMENT_MAX_DIMENSION,
     PROMPT_ATTACHMENT_JPEG_QUALITY
 } from './config.js';
 import { state } from './state.js';
-import { generateId } from './utils.js';
-import { initGallery, showPlaceholder, removePlaceholder, removeAllPlaceholders, showErrorCard, initLightbox, closeLightbox, downloadAllImages } from './gallery.js';
+import { initGallery, initLightbox, closeLightbox, downloadAllImages } from './gallery.js';
 import { formatBytes } from './image-utils.js';
-import { initSidebar, showCreateFolderModal } from './sidebar.js';
+import { initSidebar } from './sidebar.js';
 import {
-    MODELS,
-    CAPABILITY_TABS,
-    TYPE_PILL_LABEL,
-    TIER_LABEL,
+    ANIMATE_MODEL_ID,
     DEFAULT_MODEL_ID,
-    findModelById,
-    getTriggerLabel,
-    normalizeModelId,
+    getApiKey,
 } from './models.js';
-
-const SPEND_STORAGE_KEY = 'openrouter_spend_v1';
-const PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL = 'fal-ai/pixverse/c1/image-to-video';
-const SEEDANCE_20_TEXT_TO_VIDEO_MODEL = 'bytedance/seedance-2.0/text-to-video';
-const SEEDANCE_20_IMAGE_TO_VIDEO_MODEL = 'bytedance/seedance-2.0/image-to-video';
-const FLASHHEAD_IMAGE_TO_VIDEO_MODEL = 'fal-ai/flashhead';
-const VIDEO_QUALITY_PRESETS = {
-    default: {
-        options: ['480p', '720p', '1080p'],
-        defaultValue: '720p',
-    },
-    seedance20: {
-        options: ['480p', '720p'],
-        defaultValue: '720p',
-    },
-    highRes: {
-        options: ['720p', '1080p'],
-        defaultValue: '1080p',
-    },
-    pixverse: {
-        options: ['360p', '540p', '720p', '1080p'],
-        defaultValue: '720p',
-    },
-};
-const IMAGE_RESOLUTION_PRESETS = {
-    gemini: {
-        options: ['1K', '2K', '4K'],
-        defaultValue: '1K',
-    },
-    xai: {
-        options: ['1K', '2K'],
-        defaultValue: '1K',
-    },
-    evolink: {
-        options: ['2K', '4K'],
-        defaultValue: '2K',
-    },
-};
-
-/** @type {string[]} */
-let promptImageDataUrls = [];
-
-/** @type {boolean} - Prevents race condition from rapid button clicks */
-let isGenerating = false;
-
-/** @type {AbortController|null} - For canceling generation */
-let generationAbortController = null;
-
-/** @type {Map<string, {prompt: string, settings: Object}>} - Track placeholder metadata for retry */
-let placeholderMetadata = new Map();
+import {
+    initApiKeySettings,
+    initApiKeyPopupContext,
+    showApiKeyPopupForCode,
+} from './settings-keys.js';
+import { initSpendTracker } from './spend-tracker.js';
+import {
+    initModelPicker,
+    syncModelDropdownUI,
+    syncNumImagesDropdownUI,
+    updateSettingsForModel,
+} from './model-picker.js';
+import {
+    compressImageForUpload,
+    initGenerationController,
+    restoreSettings,
+    setPromptAttachments,
+} from './generation-controller.js';
 
 /** @type {string|null} - Single image data URI for image-to-image models */
 let inputImageDataUri = null;
@@ -84,195 +45,24 @@ let storageIndicatorQueued = false;
 let storageIndicatorInFlight = false;
 let storageIndicatorNeedsRerun = false;
 
-function renderPromptAttachments() {
-    const container = document.getElementById('prompt-attachments');
-    if (!container) return;
-
-    container.innerHTML = '';
-
-    promptImageDataUrls.forEach((url, index) => {
-        const wrap = document.createElement('div');
-        wrap.className = 'input-bar__attachment';
-
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = `Attached image ${index + 1}`;
-
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'input-bar__attachment-remove';
-        remove.setAttribute('aria-label', 'Remove attached image');
-        remove.textContent = '✕';
-        remove.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            promptImageDataUrls.splice(index, 1);
-            renderPromptAttachments();
-        });
-
-        wrap.appendChild(img);
-        wrap.appendChild(remove);
-        container.appendChild(wrap);
-    });
-}
-
-/**
- * Compress an image file for API submission (max 1024px, JPEG 85% quality)
- * This keeps payloads under Vercel's 4.5MB limit
- * @param {File} file - Original image file
- * @returns {Promise<string>} - Compressed data URL
- */
-async function compressImageForUpload(file) {
-    const MAX_SIZE = PROMPT_ATTACHMENT_MAX_DIMENSION;
-    const QUALITY = PROMPT_ATTACHMENT_JPEG_QUALITY;
-
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-
-        img.onload = () => {
-            URL.revokeObjectURL(url);
-
-            let { width, height } = img;
-
-            // Only resize if larger than MAX_SIZE
-            if (width > MAX_SIZE || height > MAX_SIZE) {
-                if (width > height) {
-                    height = Math.round((height * MAX_SIZE) / width);
-                    width = MAX_SIZE;
-                } else {
-                    width = Math.round((width * MAX_SIZE) / height);
-                    height = MAX_SIZE;
-                }
-            }
-
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-
-            // Use JPEG for best compression ratio
-            const dataUrl = canvas.toDataURL('image/jpeg', QUALITY);
-            resolve(dataUrl);
-        };
-
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error('Failed to load image for compression'));
-        };
-
-        img.src = url;
-    });
-}
-
-async function addPromptImageFiles(files) {
-    const list = Array.from(files || []).filter((f) => f && f.type && f.type.startsWith('image/'));
-    if (list.length === 0) return;
-
-    for (const file of list) {
-        if (promptImageDataUrls.length >= PROMPT_ATTACHMENTS_MAX) {
-            showError(`Maximum ${PROMPT_ATTACHMENTS_MAX} images can be attached.`);
-            break;
-        }
-        if (file.size > PROMPT_ATTACHMENT_MAX_BYTES) {
-            showError(`Image "${file.name}" is too large (max 8MB).`);
-            continue;
-        }
-
-        try {
-            // Compress image to reduce payload size (Vercel limit: 4.5MB)
-            const dataUrl = await compressImageForUpload(file);
-            if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
-                promptImageDataUrls.push(dataUrl);
-                renderPromptAttachments();
-            }
-        } catch (error) {
-            console.error('Failed to compress image:', error);
-            showError(`Failed to process "${file.name}".`);
-        }
-    }
-}
-
-function clearPromptAttachments() {
-    promptImageDataUrls = [];
-    const input = document.getElementById('prompt-image-input');
-    if (input instanceof HTMLInputElement) input.value = '';
-    renderPromptAttachments();
-}
-
-function getAttachedImageUrls(limit = PROMPT_ATTACHMENTS_MAX) {
-    const images = [
-        ...promptImageDataUrls,
-        ...(inputImageDataUri ? [inputImageDataUri] : []),
-        ...multiImageDataUris,
-    ].filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
-
-    return Array.from(new Set(images)).slice(0, limit);
-}
-
-function safeParseJson(text) {
-    try {
-        return JSON.parse(text);
-    } catch {
-        return null;
-    }
-}
-
-function loadSpendState() {
-    const raw = (() => {
-        try {
-            return localStorage.getItem(SPEND_STORAGE_KEY);
-        } catch {
-            return null;
-        }
-    })();
-
-    const parsed = raw ? safeParseJson(raw) : null;
-    if (!parsed || typeof parsed !== 'object') {
-        return { total: 0, byModel: {} };
-    }
-
-    const total = typeof parsed.total === 'number' && Number.isFinite(parsed.total) ? parsed.total : 0;
-    const byModel = parsed.byModel && typeof parsed.byModel === 'object' ? parsed.byModel : {};
-    const pending = parsed.pending === true;
-    return { total, byModel, pending };
-}
-
-function saveSpendState(state) {
-    try {
-        localStorage.setItem(SPEND_STORAGE_KEY, JSON.stringify(state));
-    } catch {
-        // ignore storage failures
-    }
-}
-
-function formatUsd(amount) {
-    const safe = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(safe);
-}
-
-/**
- * Escape a string for safe insertion into HTML.
- * @param {string} str
- * @returns {string}
- */
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-function updateSpendTrackerUI() {
-    const pill = document.getElementById('spend-tracker');
-    if (!pill) return;
-    const spend = loadSpendState();
-    pill.textContent = spend.pending
-        ? `Spent: ~${formatUsd(spend.total)}`
-        : `Spent: ${formatUsd(spend.total)}`;
-    pill.title = spend.pending ? 'Some costs are pending from OpenRouter.' : '';
-}
+const API_KEY_EMPTY_STATE = {
+    openrouter: {
+        text: 'You need an OpenRouter API key to generate with the selected model.',
+        code: 'OPENROUTER_API_KEY_REQUIRED',
+    },
+    xai: {
+        text: 'You need an xAI API key to generate with the selected model.',
+        code: 'XAI_API_KEY_REQUIRED',
+    },
+    fal: {
+        text: 'You need a Fal API key to generate with the selected model.',
+        code: 'FAL_API_KEY_REQUIRED',
+    },
+    evolink: {
+        text: 'You need an Evolink API key to generate with the selected model.',
+        code: 'EVOLINK_API_KEY_REQUIRED',
+    },
+};
 
 function scheduleStorageIndicatorUpdate() {
     if (storageIndicatorQueued) return;
@@ -307,843 +97,40 @@ function scheduleStorageIndicatorUpdate() {
     }
 }
 
-/**
- * Global registry of open dropdowns — document-level pointer/key handlers
- * close them all, instead of attaching N×2 listeners per dropdown.
- * @type {Set<{ element: HTMLElement, close: () => void, portaledMenu?: HTMLElement }>}
- */
-const _openDropdowns = new Set();
+function updateEmptyStateKeyPrompt() {
+    const text = document.querySelector('.empty-state__no-key-text');
+    if (!text) return null;
 
-// Close open dropdowns on outside interaction. Use pointerdown + capture so we run
-// before nested targets inside a portaled menu receive the event (bubble order would
-// otherwise close the picker before row clicks fire when #model-menu is under <body>).
-document.addEventListener('pointerdown', (e) => {
-    for (const entry of _openDropdowns) {
-        if (!entry.element.classList.contains('is-open')) continue;
-        const target = e.target;
-        if (!(target instanceof Node)) continue;
-        if (entry.element.contains(target)) continue;
-        // Model picker moves #model-menu to <body> on narrow viewports; treat it as part of the dropdown.
-        if (entry.portaledMenu?.contains(target)) continue;
-        entry.close();
-    }
-}, true);
-
-// Single document-level handler: close any open dropdown on Escape
-document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    for (const entry of _openDropdowns) {
-        if (!entry.element.classList.contains('is-open')) continue;
-        entry.close();
-    }
-});
-
-/**
- * Create a reusable dropdown controller
- * @param {Object} config - Dropdown configuration
- * @param {string} config.dropdownId - ID of the dropdown container element
- * @param {string} config.hiddenId - ID of the hidden input element
- * @param {string} config.triggerId - ID of the trigger button element
- * @param {string} config.menuId - ID of the menu element
- * @param {string} [config.defaultValue] - Default value if hidden is empty
- * @param {string} [config.placeholder] - Placeholder text when no value
- * @param {boolean} [config.showTitle] - Whether to set title attribute on trigger
- * @param {boolean} [config.dispatchChange] - Whether to dispatch change event on value set
- * @param {Function} [config.formatDisplay] - Custom function to format display text
- * @returns {{ syncUI: Function, setValue: Function, close: Function } | null}
- */
-function createDropdown(config) {
-    const {
-        dropdownId,
-        hiddenId,
-        triggerId,
-        menuId,
-        defaultValue,
-        placeholder = 'Select',
-        showTitle = false,
-        dispatchChange = false,
-        formatDisplay = (v) => v || placeholder
-    } = config;
-
-    const dropdown = document.getElementById(dropdownId);
-    const hidden = document.getElementById(hiddenId);
-    const trigger = document.getElementById(triggerId);
-    const menu = document.getElementById(menuId);
-
-    if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) {
-        return null;
-    }
-
-    const syncUI = () => {
-        const v = hidden.value || '';
-        trigger.textContent = formatDisplay(v);
-        if (showTitle) {
-            trigger.title = v || placeholder;
-        }
-        menu.querySelectorAll('.input-bar__dropdown-item').forEach((btn) => {
-            const selected = btn.getAttribute('data-value') === v;
-            btn.setAttribute('aria-selected', selected ? 'true' : 'false');
-        });
-    };
-
-    const close = () => {
-        dropdown.classList.remove('is-open');
-        trigger.setAttribute('aria-expanded', 'false');
-    };
-
-    const open = () => {
-        dropdown.classList.add('is-open');
-        trigger.setAttribute('aria-expanded', 'true');
-    };
-
-    const setValue = (value) => {
-        hidden.value = String(value);
-        syncUI();
-        if (dispatchChange) {
-            hidden.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-    };
-
-    // Set default value if needed
-    if (defaultValue && !hidden.value) {
-        const first = menu.querySelector('.input-bar__dropdown-item[data-value]');
-        const firstVal = first?.getAttribute?.('data-value');
-        if (firstVal) hidden.value = firstVal;
-    }
-
-    // Initial sync
-    syncUI();
-
-    // Event listeners
-    trigger.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropdown.classList.contains('is-open') ? close() : open();
-    });
-
-    menu.addEventListener('click', (e) => {
-        const target = e.target;
-        if (!(target instanceof HTMLElement)) return;
-        const item = target.closest('.input-bar__dropdown-item');
-        if (!(item instanceof HTMLButtonElement)) return;
-        const value = item.getAttribute('data-value');
-        if (!value) return;
-        setValue(value);
-        close();
-    });
-
-    // Register with global dropdown handler instead of per-dropdown document listeners
-    _openDropdowns.add({ element: dropdown, close });
-
-    return { syncUI, setValue, close };
-}
-
-// Store dropdown controllers for external access
-let modelDropdown = null;
-let numImagesDropdown = null;
-
-function syncNumImagesDropdownUI() {
-    if (numImagesDropdown) {
-        numImagesDropdown.syncUI();
-    }
-}
-
-function syncModelDropdownUI() {
-    if (modelDropdown) {
-        modelDropdown.syncUI();
-    }
-}
-
-function initModelDropdown() {
-    modelDropdown = createModelPicker();
-}
-
-/**
- * Build the searchable, tab-filtered, provider-grouped model picker.
- * Returns the same { syncUI, setValue, close } shape as createDropdown so the
- * rest of the app (which calls modelDropdown.syncUI() / .setValue()) keeps working.
- */
-function createModelPicker() {
-    const dropdown = document.getElementById('model-dropdown');
-    const trigger = document.getElementById('model-trigger');
-    const menu = document.getElementById('model-menu');
-    const hidden = document.getElementById('setting-model');
-    const search = /** @type {HTMLInputElement|null} */ (document.getElementById('model-picker-search'));
-    const closeBtn = document.getElementById('model-picker-close');
-    const tabsEl = document.getElementById('model-picker-tabs');
-    const listEl = document.getElementById('model-picker-list');
-
-    if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement)
-        || !menu || !search || !tabsEl || !listEl) {
-        return null;
-    }
-
-    let activeTab = 'all';
-    let query = '';
-
-    hidden.value = normalizeModelId(hidden.value || DEFAULT_MODEL_ID);
-
-    const syncTriggerLabel = () => {
-        trigger.textContent = getTriggerLabel(hidden.value);
-        trigger.title = hidden.value || 'Select model';
-    };
-
-    // ── Tabs ─────────────────────────────────────────────────────────
-    tabsEl.innerHTML = '';
-    CAPABILITY_TABS.forEach(tab => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'model-picker__tab';
-        btn.dataset.tab = tab.id;
-        btn.setAttribute('role', 'tab');
-        btn.textContent = tab.label;
-        if (tab.id === activeTab) btn.setAttribute('aria-selected', 'true');
-        btn.addEventListener('click', () => {
-            activeTab = tab.id;
-            tabsEl.querySelectorAll('.model-picker__tab').forEach(t => {
-                t.setAttribute('aria-selected', t === btn ? 'true' : 'false');
-            });
-            renderList();
-        });
-        tabsEl.appendChild(btn);
-    });
-
-    // ── Filtering ────────────────────────────────────────────────────
-    const matches = (m) => {
-        const tabDef = CAPABILITY_TABS.find(t => t.id === activeTab);
-        if (tabDef?.types && !tabDef.types.includes(m.type)) return false;
-        if (!query) return true;
-        const q = query.toLowerCase();
-        return m.name.toLowerCase().includes(q)
-            || m.provider.toLowerCase().includes(q)
-            || (m.via || '').toLowerCase().includes(q)
-            || m.id.toLowerCase().includes(q);
-    };
-
-    const setValue = (value) => {
-        if (!value || hidden.value === value) {
-            hidden.value = value || hidden.value;
-        } else {
-            hidden.value = value;
-        }
-        syncTriggerLabel();
-        // Update aria-selected on rows
-        listEl.querySelectorAll('.model-picker__row').forEach((row) => {
-            row.setAttribute('aria-selected', row.getAttribute('data-value') === hidden.value ? 'true' : 'false');
-        });
-        hidden.dispatchEvent(new Event('change', { bubbles: true }));
-    };
-
-    // ── Row construction ─────────────────────────────────────────────
-    const buildBadge = (cls, text) => {
-        const span = document.createElement('span');
-        span.className = `model-picker__badge ${cls}`;
-        span.textContent = text;
-        return span;
-    };
-
-    const buildRow = (m) => {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'model-picker__row';
-        row.setAttribute('role', 'option');
-        row.setAttribute('data-value', m.id);
-        row.setAttribute('aria-selected', hidden.value === m.id ? 'true' : 'false');
-
-        const main = document.createElement('div');
-        main.className = 'model-picker__row-main';
-
-        const name = document.createElement('span');
-        name.className = 'model-picker__row-name';
-        name.textContent = m.name;
-        main.appendChild(name);
-
-        const badges = document.createElement('div');
-        badges.className = 'model-picker__row-badges';
-
-        const typeText = TYPE_PILL_LABEL[m.type];
-        if (typeText) badges.appendChild(buildBadge(`model-picker__badge--type model-picker__badge--type-${m.type}`, typeText));
-        if (m.tier) badges.appendChild(buildBadge(`model-picker__badge--tier model-picker__badge--tier-${m.tier}`, TIER_LABEL[m.tier] || m.tier));
-        if (m.via) badges.appendChild(buildBadge('model-picker__badge--via', `via ${m.via}`));
-
-        main.appendChild(badges);
-        row.appendChild(main);
-
-        // Selection check (visible only when aria-selected="true" via CSS)
-        const check = document.createElement('span');
-        check.className = 'model-picker__row-check';
-        check.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-        row.appendChild(check);
-
-        row.addEventListener('click', () => {
-            setValue(m.id);
-            close();
-        });
-        return row;
-    };
-
-    const renderList = () => {
-        listEl.innerHTML = '';
-        const filtered = MODELS.filter(matches);
-
-        if (filtered.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'model-picker__empty';
-            empty.textContent = 'No models match your search.';
-            listEl.appendChild(empty);
-            return;
-        }
-
-        // Group by provider, preserving the order each provider first appears in MODELS.
-        const groups = new Map();
-        filtered.forEach(m => {
-            if (!groups.has(m.provider)) groups.set(m.provider, []);
-            groups.get(m.provider).push(m);
-        });
-
-        groups.forEach((models, provider) => {
-            const group = document.createElement('div');
-            group.className = 'model-picker__group';
-
-            const header = document.createElement('div');
-            header.className = 'model-picker__group-header';
-            header.textContent = provider;
-            group.appendChild(header);
-
-            models.forEach(m => group.appendChild(buildRow(m)));
-            listEl.appendChild(group);
-        });
-    };
-
-    // ── Open / close ─────────────────────────────────────────────────
-    const close = () => {
-        dropdown.classList.remove('is-open');
-        document.body.classList.remove('model-picker-open');
-        trigger.setAttribute('aria-expanded', 'false');
-        // If the menu was portaled to <body> (mobile), move it back
-        if (menu.parentElement === document.body) {
-            menu.classList.remove('model-picker--open');
-            dropdown.appendChild(menu);
-        }
-    };
-
-    const open = () => {
-        dropdown.classList.add('is-open');
-        document.body.classList.add('model-picker-open');
-        trigger.setAttribute('aria-expanded', 'true');
-        // On narrow viewports, .input-bar uses transform, which makes it the
-        // containing block for position:fixed children. Portal the menu to <body>
-        // so it can fill the viewport as a full-screen bottom sheet (matches sidebar overlay breakpoint).
-        if (window.matchMedia('(max-width: 900px)').matches && menu.parentElement !== document.body) {
-            document.body.appendChild(menu);
-            menu.classList.add('model-picker--open');
-        }
-        renderList();
-        // Focus search after the menu renders so iOS doesn't suppress the keyboard.
-        requestAnimationFrame(() => {
-            search.value = query;
-            search.focus({ preventScroll: true });
-        });
-        // Scroll the selected row into view
-        requestAnimationFrame(() => {
-            const sel = listEl.querySelector('[aria-selected="true"]');
-            if (sel instanceof HTMLElement) sel.scrollIntoView({ block: 'nearest' });
-        });
-    };
-
-    trigger.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropdown.classList.contains('is-open') ? close() : open();
-    });
-
-    search.addEventListener('input', () => {
-        query = search.value.trim();
-        renderList();
-    });
-
-    search.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            // Pick the first matching row.
-            const first = listEl.querySelector('.model-picker__row');
-            if (first instanceof HTMLElement) first.click();
-        } else if (e.key === 'Escape') {
-            close();
-        }
-    });
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            close();
-            trigger.focus({ preventScroll: true });
-        });
-    }
-
-    // Close when clicking the backdrop on mobile
-    menu.addEventListener('click', (e) => {
-        if (e.target === menu) close();
-    });
-
-    _openDropdowns.add({ element: dropdown, close, portaledMenu: menu });
-
-    syncTriggerLabel();
-    renderList();
-
-    return {
-        syncUI: syncTriggerLabel,
-        setValue,
-        close,
-    };
-}
-
-function initNumImagesDropdown() {
-    numImagesDropdown = createDropdown({
-        dropdownId: 'num-images-dropdown',
-        hiddenId: 'setting-num-images',
-        triggerId: 'num-images-trigger',
-        menuId: 'num-images-menu',
-        formatDisplay: (v) => v || '2'
-    });
-}
-
-/**
- * Initialize folder selector dropdown
- */
-function initFolderSelectorDropdown() {
-    const dropdown = document.getElementById('folder-selector-dropdown');
-    const hidden = document.getElementById('selected-folder');
-    const trigger = document.getElementById('folder-selector-trigger');
-    const menu = document.getElementById('folder-selector-menu');
-    const nameSpan = trigger?.querySelector('.folder-selector__name');
-
-    if (!dropdown || !(hidden instanceof HTMLInputElement) || !(trigger instanceof HTMLButtonElement) || !menu) {
-        return;
-    }
-
-    const close = () => {
-        dropdown.classList.remove('is-open');
-        trigger.setAttribute('aria-expanded', 'false');
-    };
-
-    const open = () => {
-        dropdown.classList.add('is-open');
-        trigger.setAttribute('aria-expanded', 'true');
-    };
-
-    const setValue = (folderId, folderName, updateSidebar = false) => {
-        hidden.value = folderId || '';
-        if (nameSpan) {
-            nameSpan.textContent = folderName || 'All Photos';
-        }
-        // Optionally update sidebar selection to keep in sync
-        if (updateSidebar && state.selectedFolderId !== folderId) {
-            state.setSelectedFolder(folderId || null);
-        }
-        close();
-    };
-
-    const syncWithSidebar = () => {
-        // Sync folder selector with sidebar's selected folder
-        const selectedFolderId = state.selectedFolderId;
-        if (selectedFolderId) {
-            const folder = state.getFolder(selectedFolderId);
-            if (folder) {
-                hidden.value = folder.id;
-                if (nameSpan) nameSpan.textContent = folder.name;
-            }
-        } else {
-            hidden.value = '';
-            if (nameSpan) nameSpan.textContent = 'All Photos';
-        }
-    };
-
-    const renderMenu = () => {
-        menu.innerHTML = '';
-
-        // "All Photos" option
-        const allOption = document.createElement('button');
-        allOption.type = 'button';
-        allOption.className = 'input-bar__dropdown-item';
-        allOption.setAttribute('role', 'option');
-        allOption.setAttribute('data-value', '');
-        allOption.setAttribute('aria-selected', hidden.value === '' ? 'true' : 'false');
-        allOption.textContent = 'All Photos';
-        allOption.addEventListener('click', () => setValue('', 'All Photos', true));
-        menu.appendChild(allOption);
-
-        // Folder options
-        const folders = state.getFolders();
-        folders.forEach(folder => {
-            const option = document.createElement('button');
-            option.type = 'button';
-            option.className = 'input-bar__dropdown-item';
-            option.setAttribute('role', 'option');
-            option.setAttribute('data-value', folder.id);
-            option.setAttribute('aria-selected', hidden.value === folder.id ? 'true' : 'false');
-            option.textContent = folder.name;
-            option.addEventListener('click', () => setValue(folder.id, folder.name, true));
-            menu.appendChild(option);
-        });
-
-        // "New Folder" option
-        const newFolderOption = document.createElement('button');
-        newFolderOption.type = 'button';
-        newFolderOption.className = 'input-bar__dropdown-item input-bar__dropdown-item--action';
-        newFolderOption.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Folder`;
-        newFolderOption.addEventListener('click', () => {
-            close();
-            showCreateFolderModal((folder) => {
-                setValue(folder.id, folder.name, true);
-            });
-        });
-        menu.appendChild(newFolderOption);
-    };
-
-    // Initial render
-    renderMenu();
-
-    // Sync with sidebar selection on init
-    syncWithSidebar();
-
-    // Re-render menu and sync when folders or selection change
-    state.subscribe((action) => {
-        if (action === 'folder-add' || action === 'folder-rename' || action === 'folder-delete') {
-            renderMenu();
-            syncWithSidebar();
-        }
-        if (action === 'folder-selected') {
-            // When sidebar folder selection changes, update the dropdown
-            syncWithSidebar();
-        }
-    });
-
-    trigger.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropdown.classList.contains('is-open')) {
-            close();
-        } else {
-            renderMenu(); // Refresh options before opening
-            open();
-        }
-    });
-
-    // Register with global dropdown handler instead of per-dropdown document listeners
-    _openDropdowns.add({ element: dropdown, close });
-}
-
-function recordSpend(meta, imagesReturned) {
-    if (!meta || typeof meta !== 'object') return;
-    const requests = Array.isArray(meta.requests) ? meta.requests : [];
-    if (requests.length === 0) return;
-
-    const spend = loadSpendState();
-    const hasPending =
-        meta.usage_pending === true ||
-        requests.some((req) => req && req.usage_pending === true);
-
-    const images = typeof imagesReturned === 'number' && Number.isFinite(imagesReturned) ? imagesReturned : 0;
-    const imagesPerGeneration = requests.length > 0 ? images / requests.length : 0;
-
-    for (const req of requests) {
-        const model = typeof req?.model === 'string' ? req.model : 'unknown';
-        const usage = typeof req?.usage === 'number' && Number.isFinite(req.usage) ? req.usage : 0;
-
-        if (!spend.byModel[model]) {
-            spend.byModel[model] = { cost: 0, generations: 0, images: 0 };
-        }
-
-        spend.byModel[model].cost += usage;
-        spend.byModel[model].generations += 1;
-        spend.byModel[model].images += imagesPerGeneration;
-        spend.total += usage;
-    }
-
-    if (hasPending) {
-        spend.pending = true;
-    }
-
-    saveSpendState(spend);
-    updateSpendTrackerUI();
-}
-
-function openSpendBreakdownModal() {
-    const spend = loadSpendState();
-    const entries = Object.entries(spend.byModel)
-        .map(([model, v]) => ({
-            model,
-            cost: typeof v?.cost === 'number' ? v.cost : 0,
-            generations: typeof v?.generations === 'number' ? v.generations : 0,
-            images: typeof v?.images === 'number' ? v.images : 0,
-        }))
-        .sort((a, b) => b.cost - a.cost);
-
-    const totalGenerations = entries.reduce((sum, entry) => sum + entry.generations, 0);
-    const totalImages = entries.reduce((sum, entry) => sum + entry.images, 0);
-    const roundedImages = Number.isFinite(totalImages) ? Math.round(totalImages) : 0;
-    const averagePerImage = roundedImages > 0 ? spend.total / roundedImages : 0;
-    const topEntry = entries[0] || null;
-    const hasSpend = entries.length > 0;
-
-    const existing = document.getElementById('spend-breakdown-modal');
-    if (existing) {
-        existing.remove();
-    }
-
-    const overlay = document.createElement('div');
-    overlay.id = 'spend-breakdown-modal';
-    overlay.className = 'openrouter-key-modal openrouter-key-modal--active spend-breakdown-modal';
-
-    const formatSmallUsd = (amount) => {
-        const safe = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
-        if (safe > 0 && safe < 0.01) {
-            return `$${safe.toFixed(4)}`;
-        }
-        return formatUsd(safe);
-    };
-    const totalValue = spend.pending ? `~${formatSmallUsd(spend.total)}` : formatSmallUsd(spend.total);
-
-    const getModelDisplay = (model) => {
-        const catalogModel = findModelById(model);
-        const name = catalogModel?.name || model.split('/').slice(-2).join(' / ') || model;
-        const provider = catalogModel
-            ? `${catalogModel.provider}${catalogModel.via ? ` via ${catalogModel.via}` : ''}`
-            : model;
-        return { name, provider };
-    };
-
-    const rowsHtml = entries.length
-        ? entries
-            .map((e, index) => {
-                const imgCount = Number.isFinite(e.images) ? Math.round(e.images) : 0;
-                const avgCost = imgCount > 0 ? e.cost / imgCount : 0;
-                const modelDisplay = getModelDisplay(e.model);
-                return `
-                    <tr>
-                        <td class="spend-breakdown__rank"><span>${index + 1}</span></td>
-                        <td class="spend-breakdown__model">
-                            <span class="spend-breakdown__model-name">${escapeHtml(modelDisplay.name)}</span>
-                            <span class="spend-breakdown__model-provider">${escapeHtml(modelDisplay.provider)}</span>
-                        </td>
-                        <td class="spend-breakdown__cost">${formatSmallUsd(e.cost)}</td>
-                        <td class="spend-breakdown__cost">${formatSmallUsd(avgCost)}</td>
-                        <td class="spend-breakdown__stat">${e.generations}</td>
-                        <td class="spend-breakdown__stat">${imgCount}</td>
-                    </tr>
-                `;
-            })
-            .join('')
-        : '';
-
-    const topModelDisplay = topEntry ? getModelDisplay(topEntry.model) : null;
-    const hint = spend.pending
-        ? 'Some OpenRouter costs are still pending. Fal and xAI estimates are recorded when the app can calculate them.'
-        : 'Spend is stored locally in this browser and updates after each completed generation.';
-
-    overlay.innerHTML = `
-        <div class="openrouter-key-modal__backdrop" role="presentation"></div>
-        <div class="openrouter-key-modal__card spend-breakdown__card" role="dialog" aria-modal="true" aria-label="Spend breakdown">
-            <div class="openrouter-key-modal__header">
-                <div>
-                    <p class="spend-breakdown__eyebrow">Usage ledger</p>
-                    <h2 class="openrouter-key-modal__title">Spend breakdown</h2>
-                </div>
-                <button type="button" class="openrouter-key-modal__close" aria-label="Close">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                </button>
-            </div>
-            <div class="openrouter-key-modal__body">
-                <div class="spend-breakdown__summary" aria-label="Spend summary">
-                    <div class="spend-breakdown__metric spend-breakdown__metric--primary">
-                        <span class="spend-breakdown__metric-label">Total spent</span>
-                        <span class="spend-breakdown__metric-value">${totalValue}</span>
-                        ${spend.pending ? '<span class="spend-breakdown__pending">Pending costs included</span>' : ''}
-                    </div>
-                    <div class="spend-breakdown__metric">
-                        <span class="spend-breakdown__metric-label">Generations</span>
-                        <span class="spend-breakdown__metric-value">${totalGenerations}</span>
-                    </div>
-                    <div class="spend-breakdown__metric">
-                        <span class="spend-breakdown__metric-label">Images</span>
-                        <span class="spend-breakdown__metric-value">${roundedImages}</span>
-                    </div>
-                    <div class="spend-breakdown__metric">
-                        <span class="spend-breakdown__metric-label">Avg / image</span>
-                        <span class="spend-breakdown__metric-value">${formatSmallUsd(averagePerImage)}</span>
-                    </div>
-                </div>
-                ${topEntry ? `
-                    <div class="spend-breakdown__top-model">
-                        <span class="spend-breakdown__top-label">Top spend</span>
-                        <span class="spend-breakdown__top-name">${escapeHtml(topModelDisplay.name)}</span>
-                        <span class="spend-breakdown__top-cost">${formatSmallUsd(topEntry.cost)}</span>
-                    </div>
-                ` : ''}
-                ${hasSpend ? `
-                    <div class="spend-breakdown__table-container">
-                        <table class="spend-breakdown__table">
-                            <thead>
-                                <tr>
-                                    <th class="spend-breakdown__rank-heading">#</th>
-                                    <th>Model</th>
-                                    <th>Spend</th>
-                                    <th>Avg / image</th>
-                                    <th>Runs</th>
-                                    <th>Images</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${rowsHtml}
-                            </tbody>
-                        </table>
-                    </div>
-                ` : `
-                    <div class="spend-breakdown__empty">
-                        <div class="spend-breakdown__empty-icon">$</div>
-                        <h3>No spend recorded yet</h3>
-                        <p>Generate an image and this view will break down cost by model.</p>
-                    </div>
-                `}
-                <p class="openrouter-key-modal__hint">${hint}</p>
-                <div class="spend-breakdown__actions">
-                    ${hasSpend ? '<button type="button" class="spend-breakdown__reset">Reset spend history</button>' : ''}
-                    <button type="button" class="spend-breakdown__done">Done</button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const close = () => {
-        document.removeEventListener('keydown', handleKeydown);
-        overlay.remove();
-        document.body.classList.remove('is-modal-open');
-    };
-    overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
-    overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
-    overlay.querySelector('.spend-breakdown__done')?.addEventListener('click', close);
-    overlay.querySelector('.spend-breakdown__reset')?.addEventListener('click', () => {
-        if (!window.confirm('Reset local spend history? This only clears the counter in this browser.')) return;
-        saveSpendState({ total: 0, byModel: {}, pending: false });
-        updateSpendTrackerUI();
-        close();
-        openSpendBreakdownModal();
-    });
-
-    const handleKeydown = (event) => {
-        if (event.key === 'Escape') {
-            event.preventDefault();
-            close();
-        }
-    };
-    document.addEventListener('keydown', handleKeydown);
-
-    document.body.appendChild(overlay);
-    document.body.classList.add('is-modal-open');
-    overlay.querySelector('.openrouter-key-modal__close')?.focus();
-}
-
-/**
- * Get current generation settings from the UI
- * @returns {Object} Generation options
- */
-function getGenerationSettings() {
     const modelSelect = document.getElementById('setting-model');
-    const numImagesSelect = document.getElementById('setting-num-images');
-    const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
-    const resolutionSelect = document.getElementById('setting-resolution');
-    const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
-    const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
-    const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
-    const flashheadVoiceSelect = document.getElementById('setting-flashhead-voice');
-    const flashheadStabilityInput = document.getElementById('setting-flashhead-stability');
-
-    const model = normalizeModelId(modelSelect?.value || DEFAULT_MODEL_ID);
-
-    const parsedXaiVideoLength = parseInt(xaiVideoLengthInput?.value || 10, 10);
-    const xaiVideoLength = Number.isFinite(parsedXaiVideoLength) ? parsedXaiVideoLength : 10;
-    const parsedFlashHeadStability = parseFloat(flashheadStabilityInput?.value || 0.5);
-    const flashheadStability = Number.isFinite(parsedFlashHeadStability)
-        ? Math.min(Math.max(parsedFlashHeadStability, 0), 1)
-        : 0.5;
-
-    const settings = {
-        model,
-        num_images: parseInt(numImagesSelect?.value || 2, 10),
-        // OpenRouter image generation (used for Gemini via `image_config` in the backend)
-        aspect_ratio: aspectRatioSelect?.value || '3:4',
-        resolution: resolutionSelect?.value || '1K',
-        xai_video_length: xaiVideoLength,
-        xai_video_quality: xaiVideoQualitySelect?.value || '720p',
-        generate_audio_switch: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
-        flashhead_voice: flashheadVoiceSelect?.value || 'Aria',
-        flashhead_stability: flashheadStability,
-    };
-
-    return settings;
+    const providerKey = getApiKey(modelSelect?.value || DEFAULT_MODEL_ID);
+    const config = API_KEY_EMPTY_STATE[providerKey] || API_KEY_EMPTY_STATE.openrouter;
+    text.textContent = config.text;
+    return config;
 }
 
-function syncVideoQualityOptions(model) {
-    const videoQualitySelect = document.getElementById('setting-xai-video-quality');
-    if (!(videoQualitySelect instanceof HTMLSelectElement)) {
-        return;
+function initEmptyStateKeyPrompt() {
+    const modelSelect = document.getElementById('setting-model');
+    const addKeyButton = document.getElementById('empty-state-add-key-btn');
+
+    updateEmptyStateKeyPrompt();
+
+    if (modelSelect) {
+        modelSelect.addEventListener('change', updateEmptyStateKeyPrompt);
     }
 
-    let preset = VIDEO_QUALITY_PRESETS.default;
-    if (
-        model === 'grok-imagine-video' ||
-        model === SEEDANCE_20_TEXT_TO_VIDEO_MODEL ||
-        model === SEEDANCE_20_IMAGE_TO_VIDEO_MODEL
-    ) {
-        preset = VIDEO_QUALITY_PRESETS.seedance20;
-    } else if (model === 'alibaba/happy-horse/reference-to-video') {
-        preset = VIDEO_QUALITY_PRESETS.highRes;
-    } else if (model === PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL) {
-        preset = VIDEO_QUALITY_PRESETS.pixverse;
+    if (addKeyButton) {
+        addKeyButton.addEventListener('click', () => {
+            const config = updateEmptyStateKeyPrompt();
+            if (config && showApiKeyPopupForCode(config.code)) return;
+
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsPanel = document.getElementById('settings-panel');
+            if (settingsBtn && settingsPanel) {
+                openSettings(settingsBtn, settingsPanel);
+            }
+        });
     }
-
-    const currentValue = videoQualitySelect.value;
-    videoQualitySelect.innerHTML = '';
-    preset.options.forEach((value) => {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = value;
-        videoQualitySelect.appendChild(option);
-    });
-
-    videoQualitySelect.value = preset.options.includes(currentValue) ? currentValue : preset.defaultValue;
 }
-
-function syncImageResolutionOptions(model) {
-    const resolutionSelect = document.getElementById('setting-resolution');
-    if (!(resolutionSelect instanceof HTMLSelectElement)) {
-        return;
-    }
-
-    let preset = IMAGE_RESOLUTION_PRESETS.gemini;
-    if (model === 'grok-imagine-image' || model === 'grok-imagine-image-quality') {
-        preset = IMAGE_RESOLUTION_PRESETS.xai;
-    } else if (typeof model === 'string' && model.startsWith('evolink/')) {
-        preset = IMAGE_RESOLUTION_PRESETS.evolink;
-    }
-
-    const currentValue = resolutionSelect.value;
-    resolutionSelect.innerHTML = '';
-    preset.options.forEach((value) => {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = value;
-        resolutionSelect.appendChild(option);
-    });
-    resolutionSelect.value = preset.options.includes(currentValue) ? currentValue : preset.defaultValue;
-}
-
 
 /**
  * Initialize the application
@@ -1156,10 +143,6 @@ async function init() {
     const galleryContainer = document.getElementById('gallery');
     const emptyState = document.getElementById('empty-state');
     const promptInput = document.getElementById('prompt-input');
-    const promptImageBtn = document.getElementById('prompt-image-btn');
-    const promptImageInput = document.getElementById('prompt-image-input');
-    const generateBtn = document.getElementById('generate-btn');
-    const cancelBtn = document.getElementById('cancel-btn');
     const enhanceBtn = document.getElementById('enhance-btn');
     const customEnhanceBtn = document.getElementById('custom-enhance-btn');
     const settingsBtn = document.getElementById('settings-btn');
@@ -1195,60 +178,16 @@ async function init() {
         });
     }
 
-    // Set up event listeners
-    if (generateBtn && promptInput) {
-        generateBtn.addEventListener('click', () => handleGenerate(promptInput, generateBtn));
-
-        // Handle Enter key (Shift+Enter for new line, Ctrl/Cmd+Enter also generates)
-        promptInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                e.preventDefault();
-                handleGenerate(promptInput, generateBtn);
-            }
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                handleGenerate(promptInput, generateBtn);
-            }
-            // Escape key to cancel generation
-            if (e.key === 'Escape' && isGenerating) {
-                e.preventDefault();
-                handleCancelGeneration();
-            }
-        });
-
-        // Auto-resize textarea
-        promptInput.addEventListener('input', () => autoResizeTextarea(promptInput));
-
-        // Paste-to-attach images (clipboard)
-        promptInput.addEventListener('paste', async (e) => {
-            const items = Array.from(e.clipboardData?.items || []);
-            const imageFiles = items
-                .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
-                .map((it) => it.getAsFile())
-                .filter(Boolean);
-            if (imageFiles.length > 0) {
-                e.preventDefault();
-                await addPromptImageFiles(imageFiles);
-            }
-        });
-    }
-
-    // Set up cancel button
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', handleCancelGeneration);
-    }
-
-    // Attach images from file picker
-    if (promptImageBtn && promptImageInput) {
-        promptImageBtn.addEventListener('click', () => {
-            promptImageInput.click();
-        });
-
-        promptImageInput.addEventListener('change', async (e) => {
-            const files = e.target?.files;
-            await addPromptImageFiles(files);
-        });
-    }
+    // Generation controller (generate, cancel, attachments)
+    initGenerationController({
+        showError,
+        shakeElement,
+        autoResizeTextarea,
+        getExtraImageUrls: () => [
+            ...(inputImageDataUri ? [inputImageDataUri] : []),
+            ...multiImageDataUris,
+        ],
+    });
 
     // Set up enhance button listener
     if (enhanceBtn && promptInput) {
@@ -1292,17 +231,21 @@ async function init() {
     }
 
     // Initialize settings UI interactions
+    initApiKeyPopupContext({
+        openSettingsPanel: () => {
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsPanel = document.getElementById('settings-panel');
+            if (settingsBtn && settingsPanel) {
+                openSettings(settingsBtn, settingsPanel);
+            }
+        },
+    });
     initSettingsUI();
-    initModelDropdown();
-    initNumImagesDropdown();
-    initFolderSelectorDropdown();
+    initModelPicker();
+    initEmptyStateKeyPrompt();
 
     // Spend tracker
-    updateSpendTrackerUI();
-    const spendTracker = document.getElementById('spend-tracker');
-    if (spendTracker) {
-        spendTracker.addEventListener('click', () => openSpendBreakdownModal());
-    }
+    initSpendTracker();
 
     // Listen for remix-image event from lightbox
     window.addEventListener('remix-image', handleRemixImage);
@@ -1384,11 +327,59 @@ async function handleClearAll() {
     const imageTotal = state.getImageCount();
     if (imageTotal === 0) return;
 
-    const confirmed = confirm(`Are you sure you want to delete all ${imageTotal} photos and videos? This cannot be undone.`);
+    const confirmed = await showClearAllConfirm(imageTotal);
     if (!confirmed) return;
 
     await state.clearAll();
     updateStorageIndicator();
+}
+
+function showClearAllConfirm(imageTotal) {
+    return new Promise((resolve) => {
+        const existing = document.getElementById('clear-all-confirm-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'clear-all-confirm-modal';
+        modal.className = 'confirm-modal confirm-modal--active';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'clear-all-confirm-title');
+        modal.innerHTML = `
+            <div class="confirm-modal__backdrop" data-confirm-cancel></div>
+            <div class="confirm-modal__card">
+                <h3 id="clear-all-confirm-title" class="confirm-modal__title">Clear all media?</h3>
+                <p class="confirm-modal__message">Delete all ${imageTotal} photos and videos from this browser. This cannot be undone.</p>
+                <div class="confirm-modal__actions">
+                    <button type="button" class="confirm-modal__button confirm-modal__button--cancel" data-confirm-cancel>Cancel</button>
+                    <button type="button" class="confirm-modal__button confirm-modal__button--confirm" data-confirm-delete>Delete all</button>
+                </div>
+            </div>
+        `;
+
+        const close = (confirmed) => {
+            document.removeEventListener('keydown', handleKeydown);
+            modal.remove();
+            document.body.classList.remove('is-modal-open');
+            resolve(confirmed);
+        };
+
+        const handleKeydown = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                close(false);
+            }
+        };
+
+        modal.querySelectorAll('[data-confirm-cancel]').forEach((element) => {
+            element.addEventListener('click', () => close(false));
+        });
+        modal.querySelector('[data-confirm-delete]')?.addEventListener('click', () => close(true));
+        document.addEventListener('keydown', handleKeydown);
+        document.body.appendChild(modal);
+        document.body.classList.add('is-modal-open');
+        modal.querySelector('[data-confirm-cancel]')?.focus();
+    });
 }
 
 async function handleDownloadAll(event) {
@@ -1402,307 +393,19 @@ async function handleDownloadAll(event) {
  */
 function initSettingsUI() {
     const modelSelect = document.getElementById('setting-model');
-    const openRouterKeyInput = document.getElementById('setting-openrouter-key');
-    const openRouterKeyShow = document.getElementById('setting-openrouter-key-show');
-    const openRouterSaveBtn = document.getElementById('setting-openrouter-save');
-    const openRouterTestBtn = document.getElementById('setting-openrouter-test');
-    const openRouterTestStatus = document.getElementById('setting-openrouter-test-status');
-    const xaiKeyInput = document.getElementById('setting-xai-key');
-    const xaiKeyShow = document.getElementById('setting-xai-key-show');
-    const xaiSaveBtn = document.getElementById('setting-xai-save');
-    const xaiTestBtn = document.getElementById('setting-xai-test');
-    const xaiSaveStatus = document.getElementById('setting-xai-save-status');
-    const falKeyInput = document.getElementById('setting-fal-key');
-    const falKeyShow = document.getElementById('setting-fal-key-show');
-    const falSaveBtn = document.getElementById('setting-fal-save');
-    const falTestBtn = document.getElementById('setting-fal-test');
-    const falSaveStatus = document.getElementById('setting-fal-save-status');
-    const evolinkKeyInput = document.getElementById('setting-evolink-key');
-    const evolinkKeyShow = document.getElementById('setting-evolink-key-show');
-    const evolinkSaveBtn = document.getElementById('setting-evolink-save');
-    const evolinkTestBtn = document.getElementById('setting-evolink-test');
-    const evolinkSaveStatus = document.getElementById('setting-evolink-save-status');
-    const appAccessTokenInput = document.getElementById('setting-app-access-token');
-    const appAccessTokenShow = document.getElementById('setting-app-access-token-show');
-    const appAccessTokenSaveBtn = document.getElementById('setting-app-access-token-save');
-    const appAccessTokenStatus = document.getElementById('setting-app-access-token-status');
 
-    // Toggle settings based on model selection
+    initApiKeySettings({ showSuccess, showError });
+
     if (modelSelect) {
         modelSelect.addEventListener('change', () => {
             updateSettingsForModel(modelSelect.value);
         });
-    }
-
-    // Load OpenRouter key into the settings input and persist changes to localStorage
-    if (openRouterKeyInput) {
-        try {
-            openRouterKeyInput.value = localStorage.getItem('openrouter_api_key') || '';
-        } catch {
-            openRouterKeyInput.value = '';
-        }
-
-        openRouterKeyInput.addEventListener('input', () => {
-            if (openRouterTestStatus) openRouterTestStatus.textContent = 'Unsaved';
-        });
-    }
-
-    if (openRouterKeyShow && openRouterKeyInput) {
-        openRouterKeyShow.addEventListener('change', () => {
-            openRouterKeyInput.type = openRouterKeyShow.checked ? 'text' : 'password';
-        });
-    }
-
-    // Load xAI key into the settings input and persist changes to localStorage
-    if (xaiKeyInput) {
-        try {
-            xaiKeyInput.value = localStorage.getItem('xai_api_key') || '';
-        } catch {
-            xaiKeyInput.value = '';
-        }
-
-        xaiKeyInput.addEventListener('input', () => {
-            if (xaiSaveStatus) xaiSaveStatus.textContent = 'Unsaved';
-        });
-    }
-
-    if (xaiKeyShow && xaiKeyInput) {
-        xaiKeyShow.addEventListener('change', () => {
-            xaiKeyInput.type = xaiKeyShow.checked ? 'text' : 'password';
-        });
-    }
-
-    if (xaiSaveBtn && xaiKeyInput) {
-        xaiSaveBtn.addEventListener('click', () => {
-            try {
-                localStorage.setItem('xai_api_key', xaiKeyInput.value.trim());
-                if (xaiSaveStatus) xaiSaveStatus.textContent = 'Saved';
-                showSuccess('xAI API key saved.');
-            } catch {
-                showError('Failed to save xAI API key (storage unavailable).');
-            }
-        });
-    }
-
-    if (xaiTestBtn) {
-        xaiTestBtn.addEventListener('click', async () => {
-            if (xaiTestBtn.disabled) return;
-
-            if (xaiSaveStatus) xaiSaveStatus.textContent = 'Testing...';
-            xaiTestBtn.disabled = true;
-
-            try {
-                if (xaiKeyInput) {
-                    localStorage.setItem('xai_api_key', xaiKeyInput.value.trim());
-                }
-                await testXaiKey();
-                if (xaiSaveStatus) xaiSaveStatus.textContent = 'Key works';
-                showSuccess('xAI API key is valid.');
-            } catch (error) {
-                if (xaiSaveStatus) xaiSaveStatus.textContent = '';
-                showError(error?.message || 'xAI API key test failed.');
-            } finally {
-                xaiTestBtn.disabled = false;
-            }
-        });
-    }
-
-    // Load Fal key into the settings input and persist changes to localStorage
-    if (falKeyInput) {
-        try {
-            falKeyInput.value = localStorage.getItem('fal_api_key') || '';
-        } catch {
-            falKeyInput.value = '';
-        }
-
-        falKeyInput.addEventListener('input', () => {
-            if (falSaveStatus) falSaveStatus.textContent = 'Unsaved';
-        });
-    }
-
-    if (falKeyShow && falKeyInput) {
-        falKeyShow.addEventListener('change', () => {
-            falKeyInput.type = falKeyShow.checked ? 'text' : 'password';
-        });
-    }
-
-    if (falSaveBtn && falKeyInput) {
-        falSaveBtn.addEventListener('click', () => {
-            try {
-                localStorage.setItem('fal_api_key', falKeyInput.value.trim());
-                if (falSaveStatus) falSaveStatus.textContent = 'Saved';
-                showSuccess('Fal API key saved.');
-            } catch {
-                showError('Failed to save Fal API key (storage unavailable).');
-            }
-        });
-    }
-
-    if (falTestBtn) {
-        falTestBtn.addEventListener('click', async () => {
-            if (falTestBtn.disabled) return;
-
-            if (falSaveStatus) falSaveStatus.textContent = 'Testing...';
-            falTestBtn.disabled = true;
-
-            try {
-                if (falKeyInput) {
-                    localStorage.setItem('fal_api_key', falKeyInput.value.trim());
-                }
-                await testFalKey();
-                if (falSaveStatus) falSaveStatus.textContent = 'Key works';
-                showSuccess('Fal API key is valid.');
-            } catch (error) {
-                if (falSaveStatus) falSaveStatus.textContent = '';
-                showError(error?.message || 'Fal API key test failed.');
-            } finally {
-                falTestBtn.disabled = false;
-            }
-        });
-    }
-
-    // Load Evolink key into the settings input and persist changes to localStorage
-    if (evolinkKeyInput) {
-        try {
-            evolinkKeyInput.value = localStorage.getItem('evolink_api_key') || '';
-        } catch {
-            evolinkKeyInput.value = '';
-        }
-
-        evolinkKeyInput.addEventListener('input', () => {
-            if (evolinkSaveStatus) evolinkSaveStatus.textContent = 'Unsaved';
-        });
-    }
-
-    if (evolinkKeyShow && evolinkKeyInput) {
-        evolinkKeyShow.addEventListener('change', () => {
-            evolinkKeyInput.type = evolinkKeyShow.checked ? 'text' : 'password';
-        });
-    }
-
-    if (evolinkSaveBtn && evolinkKeyInput) {
-        evolinkSaveBtn.addEventListener('click', () => {
-            try {
-                localStorage.setItem('evolink_api_key', evolinkKeyInput.value.trim());
-                if (evolinkSaveStatus) evolinkSaveStatus.textContent = 'Saved';
-                showSuccess('Evolink API key saved.');
-            } catch {
-                showError('Failed to save Evolink API key (storage unavailable).');
-            }
-        });
-    }
-
-    if (evolinkTestBtn) {
-        evolinkTestBtn.addEventListener('click', async () => {
-            if (evolinkTestBtn.disabled) return;
-
-            if (evolinkSaveStatus) evolinkSaveStatus.textContent = 'Testing...';
-            evolinkTestBtn.disabled = true;
-
-            try {
-                if (evolinkKeyInput) {
-                    localStorage.setItem('evolink_api_key', evolinkKeyInput.value.trim());
-                }
-                await testEvolinkKey();
-                if (evolinkSaveStatus) evolinkSaveStatus.textContent = 'Key works';
-                showSuccess('Evolink API key is valid.');
-            } catch (error) {
-                if (evolinkSaveStatus) evolinkSaveStatus.textContent = '';
-                if (error?.code === 'EVOLINK_API_KEY_REQUIRED') {
-                    showEvolinkApiKeyPopup(error?.help);
-                    return;
-                }
-                showError(error?.message || 'Evolink API key test failed.');
-            } finally {
-                evolinkTestBtn.disabled = false;
-            }
-        });
-    }
-
-    // Optional deployment-level token for access to protected server-side provider keys.
-    if (appAccessTokenInput) {
-        try {
-            appAccessTokenInput.value = localStorage.getItem('app_access_token') || '';
-        } catch {
-            appAccessTokenInput.value = '';
-        }
-
-        appAccessTokenInput.addEventListener('input', () => {
-            if (appAccessTokenStatus) appAccessTokenStatus.textContent = 'Unsaved';
-        });
-    }
-
-    if (appAccessTokenShow && appAccessTokenInput) {
-        appAccessTokenShow.addEventListener('change', () => {
-            appAccessTokenInput.type = appAccessTokenShow.checked ? 'text' : 'password';
-        });
-    }
-
-    if (appAccessTokenSaveBtn && appAccessTokenInput) {
-        appAccessTokenSaveBtn.addEventListener('click', () => {
-            try {
-                localStorage.setItem('app_access_token', appAccessTokenInput.value.trim());
-                if (appAccessTokenStatus) appAccessTokenStatus.textContent = 'Saved';
-                showSuccess('App access token saved.');
-            } catch {
-                showError('Failed to save app access token (storage unavailable).');
-            }
-        });
-    }
-
-    // Save API key button
-    if (openRouterSaveBtn && openRouterKeyInput) {
-        openRouterSaveBtn.addEventListener('click', () => {
-            try {
-                localStorage.setItem('openrouter_api_key', openRouterKeyInput.value.trim());
-                if (openRouterTestStatus) openRouterTestStatus.textContent = 'Saved';
-                showSuccess('API key saved.');
-            } catch {
-                showError('Failed to save API key (storage unavailable).');
-            }
-        });
-    }
-
-    // Test API key button
-    if (openRouterTestBtn) {
-        openRouterTestBtn.addEventListener('click', async () => {
-            if (openRouterTestBtn.disabled) return;
-
-            if (openRouterTestStatus) openRouterTestStatus.textContent = 'Testing...';
-            openRouterTestBtn.disabled = true;
-
-            try {
-                if (openRouterKeyInput) {
-                    localStorage.setItem('openrouter_api_key', openRouterKeyInput.value.trim());
-                }
-                await testOpenRouterKey();
-                if (openRouterTestStatus) openRouterTestStatus.textContent = 'Key works';
-                showSuccess('OpenRouter API key is valid.');
-            } catch (error) {
-                if (openRouterTestStatus) openRouterTestStatus.textContent = '';
-                if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
-                    showOpenRouterApiKeyPopup(error?.help);
-                    return;
-                }
-                showError(error?.message || 'API key test failed.');
-            } finally {
-                openRouterTestBtn.disabled = false;
-            }
-        });
-    }
-
-    // Apply initial visibility state for the currently selected model
-    if (modelSelect) {
         updateSettingsForModel(modelSelect.value);
     }
 
-    // Photo visibility mode
     const photoVisibilitySelect = document.getElementById('setting-photo-visibility');
     if (photoVisibilitySelect) {
-        // Load saved value
         photoVisibilitySelect.value = state.getPhotoVisibilityMode();
-
-        // Save on change
         photoVisibilitySelect.addEventListener('change', () => {
             state.setPhotoVisibilityMode(photoVisibilitySelect.value);
         });
@@ -1968,91 +671,6 @@ function removeMultiImagePreview(index, container) {
 }
 
 /**
- * Update visible settings based on selected model
- * @param {string} model - The selected model ID
- */
-function updateSettingsForModel(model) {
-    const resolutionGroup = document.getElementById('resolution-group');
-    const aspectRatioGroup = document.getElementById('aspect-ratio-group');
-    const xaiVideoLengthGroup = document.getElementById('xai-video-length-group');
-    const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
-    const generateAudioGroup = document.getElementById('generate-audio-group');
-    const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
-    const flashheadSettingsGroup = document.getElementById('flashhead-settings-group');
-    const falImageToVideoHintGroup = document.getElementById('fal-image-to-video-hint-group');
-
-    const isGemini = typeof model === 'string' && model.startsWith('google/gemini-');
-    const isSeedream = typeof model === 'string' && model.includes('seedream');
-    const isEvolinkSeedream = typeof model === 'string' && model.startsWith('evolink/doubao-seedream-4.5');
-    const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
-    const isPixverseC1 = model === PIXVERSE_C1_IMAGE_TO_VIDEO_MODEL;
-    const isFlashHead = model === FLASHHEAD_IMAGE_TO_VIDEO_MODEL;
-    const isSeedance20 = model === SEEDANCE_20_TEXT_TO_VIDEO_MODEL || model === SEEDANCE_20_IMAGE_TO_VIDEO_MODEL;
-    const isFalModel = typeof model === 'string' && (model.startsWith('fal-ai/') || isHappyHorse || isSeedance20);
-    const isXaiImage = model === 'grok-imagine-image' || model === 'grok-imagine-image-quality';
-    const isXaiVideo = model === 'grok-imagine-video';
-    const isFalVideo =
-        model === 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video' ||
-        model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
-        isSeedance20 ||
-        isHappyHorse;
-    const isFalImageToVideo =
-        model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
-        model === SEEDANCE_20_IMAGE_TO_VIDEO_MODEL ||
-        isPixverseC1 ||
-        isFlashHead ||
-        isHappyHorse;
-    const isXai = isXaiImage || isXaiVideo;
-    const isVideoModel = isXaiVideo || isFalVideo || isFlashHead;
-
-    syncImageResolutionOptions(model);
-    syncVideoQualityOptions(model);
-
-    // Show aspect ratio for Gemini, Seedream, Fal, Evolink, and xAI models
-    if (isGemini || isSeedream || isEvolinkSeedream || (isFalModel && !isFlashHead) || isXai) {
-        aspectRatioGroup?.classList.remove('settings-group--hidden');
-    } else {
-        aspectRatioGroup?.classList.add('settings-group--hidden');
-    }
-
-    // Resolution/image size is supported for Gemini, xAI, and Evolink image models.
-    if (isGemini || isXaiImage || isEvolinkSeedream) {
-        resolutionGroup?.classList.remove('settings-group--hidden');
-    } else {
-        resolutionGroup?.classList.add('settings-group--hidden');
-    }
-
-    if (isVideoModel && !isFlashHead) {
-        xaiVideoLengthGroup?.classList.remove('settings-group--hidden');
-        xaiVideoQualityGroup?.classList.remove('settings-group--hidden');
-    } else {
-        xaiVideoLengthGroup?.classList.add('settings-group--hidden');
-        xaiVideoQualityGroup?.classList.add('settings-group--hidden');
-    }
-
-    if (isPixverseC1) {
-        generateAudioGroup?.classList.remove('settings-group--hidden');
-        if (generateAudioSwitch instanceof HTMLInputElement) {
-            generateAudioSwitch.checked = true;
-        }
-    } else {
-        generateAudioGroup?.classList.add('settings-group--hidden');
-    }
-
-    if (isFlashHead) {
-        flashheadSettingsGroup?.classList.remove('settings-group--hidden');
-    } else {
-        flashheadSettingsGroup?.classList.add('settings-group--hidden');
-    }
-
-    if (isFalImageToVideo && !isFlashHead) {
-        falImageToVideoHintGroup?.classList.remove('settings-group--hidden');
-    } else {
-        falImageToVideoHintGroup?.classList.add('settings-group--hidden');
-    }
-}
-
-/**
  * Toggle settings panel
  */
 function toggleSettings(button, panel) {
@@ -2080,294 +698,6 @@ function closeSettings(button, panel) {
     button.classList.remove('input-bar__icon-btn--active');
 }
 
-/**
- * Handle image generation
- * @param {HTMLInputElement} input - Prompt input element
- * @param {HTMLButtonElement} button - Generate button element
- */
-async function handleGenerate(input, button) {
-    // Guard against rapid clicks - check flag BEFORE any async operations
-    if (isGenerating || button.disabled) return;
-    isGenerating = true;
-
-    const prompt = input.value.trim();
-
-    if (!prompt) {
-        isGenerating = false;
-        input.focus();
-        shakeElement(input);
-        return;
-    }
-
-    // Get generation settings
-    const settings = getGenerationSettings();
-    const numImages = settings.num_images;
-
-    // Create abort controller for cancellation
-    generationAbortController = new AbortController();
-
-    // Keep textarea enabled but disable generate button and show cancel button
-    setLoading(input, button, true);
-
-    // Capture folder selection NOW so the image lands where the user intended,
-    // even if they switch folders while it's still generating.
-    const selectedFolderInputAtStart = document.getElementById('selected-folder');
-    const generationFolderId = selectedFolderInputAtStart?.value || null;
-
-    const attachedImageUrls = getAttachedImageUrls();
-    const requestSettings = {
-        ...settings,
-        ...(attachedImageUrls.length > 0
-            ? { image_urls: attachedImageUrls }
-            : {}),
-    };
-
-    // Show placeholder cards for each image with unique IDs
-    const placeholderIds = [];
-    for (let i = 0; i < numImages; i++) {
-        const placeholderId = generateId();
-        placeholderIds.push(placeholderId);
-        showPlaceholder(placeholderId, generationFolderId);
-        placeholderMetadata.set(placeholderId, { prompt, settings: requestSettings, folderId: generationFolderId });
-    }
-
-    try {
-        // Cache the abort signal so we can safely check it even if
-        // generationAbortController is set to null by cancel/finally.
-        const abortSignal = generationAbortController.signal;
-
-        let response = await generateImage(prompt, requestSettings, abortSignal);
-
-        // Check if generation was cancelled
-        if (abortSignal.aborted) {
-            // Remove all placeholders on cancel
-            placeholderIds.forEach(id => removePlaceholder(id));
-            placeholderIds.forEach(id => placeholderMetadata.delete(id));
-            return;
-        }
-
-        // Handle video generation 202 (pending) — poll client-side
-        if (response.status === 'pending' && response.request_id) {
-            const VIDEO_POLL_INITIAL = 3000;
-            const VIDEO_POLL_MULTIPLIER = 1.5;
-            const VIDEO_POLL_MAX_INTERVAL = 15000;
-            const VIDEO_POLL_MAX_ELAPSED = 360000; // 6 min max
-            let pollCount = 0;
-            let pollDelay = VIDEO_POLL_INITIAL;
-            let elapsed = 0;
-
-            while (elapsed < VIDEO_POLL_MAX_ELAPSED) {
-                if (abortSignal.aborted) {
-                    placeholderIds.forEach(id => removePlaceholder(id));
-                    placeholderIds.forEach(id => placeholderMetadata.delete(id));
-                    return;
-                }
-
-                await new Promise(r => setTimeout(r, pollDelay));
-                elapsed += pollDelay;
-                pollDelay = Math.min(pollDelay * VIDEO_POLL_MULTIPLIER, VIDEO_POLL_MAX_INTERVAL);
-                pollCount++;
-
-                const poll = await pollVideoStatus(response.request_id, abortSignal, {
-                    provider: response.provider,
-                    model: response.model,
-                });
-
-                if (poll.status === 'completed' && poll.url) {
-                    response = {
-                        images: [{ url: poll.url, media_type: 'video', model: response.model }],
-                        meta: { model: response.model, estimated_cost: response.estimated_cost }
-                    };
-                    break;
-                }
-
-                if (poll.status === 'failed') {
-                    placeholderIds.forEach(id => {
-                        const metadata = placeholderMetadata.get(id);
-                        if (metadata) {
-                            showErrorCard(id, 'Video generation failed. Please try again.', metadata.prompt,
-                                () => retryGeneration(metadata.prompt, metadata.settings));
-                            placeholderMetadata.delete(id);
-                        }
-                    });
-                    return;
-                }
-                // status === 'pending' → continue polling
-            }
-
-            // If we exhausted all polls without completion
-            if (elapsed >= VIDEO_POLL_MAX_ELAPSED && !(response.images && response.images.length > 0)) {
-                placeholderIds.forEach(id => {
-                    const metadata = placeholderMetadata.get(id);
-                    if (metadata) {
-                        showErrorCard(id, 'Video generation timed out. Please try again.', metadata.prompt,
-                            () => retryGeneration(metadata.prompt, metadata.settings));
-                        placeholderMetadata.delete(id);
-                    }
-                });
-                return;
-            }
-        }
-
-        if (response.images && response.images.length > 0) {
-            recordSpend(response.meta, response.images.length);
-            // Create storable settings (exclude large data URIs to prevent localStorage overflow)
-            const storableSettings = { ...settings };
-            delete storableSettings.image_url;
-            delete storableSettings.image_urls;
-
-            // Use the folderId captured when the user pressed Generate, NOT the
-            // current selector value — they may have switched folders since.
-            const folderId = generationFolderId;
-
-            // Add each generated image to state with settings for remix
-            const saveResults = await Promise.all(response.images.map(async (image, index) => {
-                const mediaType = image.media_type || image.mediaType || 'image';
-
-                const result = await state.addImage({
-                    id: generateId(),
-                    url: image.url,
-                    prompt: prompt,
-                    createdAt: Date.now(),
-                    settings: storableSettings,
-                    folderId: folderId,
-                    mediaType,
-                    generation: {
-                        model: image.model || null,
-                        cost: image.cost || 0,
-                        provider: image.provider || null
-                    }
-                });
-
-                // Remove corresponding placeholder only after storage has accepted the item.
-                if (placeholderIds[index]) {
-                    removePlaceholder(placeholderIds[index]);
-                    placeholderMetadata.delete(placeholderIds[index]);
-                }
-
-                return result;
-            }));
-
-            if (saveResults.some((result) => result && result.persisted === false)) {
-                showError('Generated media is visible now, but could not be saved for reload. Download anything important.');
-            }
-
-            // Remove any remaining placeholders (if fewer images returned than requested)
-            placeholderIds.slice(response.images.length).forEach(id => {
-                removePlaceholder(id);
-                placeholderMetadata.delete(id);
-            });
-
-            // Clear input and reset height
-            input.value = '';
-            autoResizeTextarea(input);
-
-            // Clear prompt attachments after a successful generation
-            clearPromptAttachments();
-
-        } else {
-            // No images returned - show error cards for all placeholders
-            placeholderIds.forEach(id => {
-                const metadata = placeholderMetadata.get(id);
-                if (metadata) {
-                    showErrorCard(
-                        id,
-                        'No images were generated. Please try again.',
-                        metadata.prompt,
-                        () => retryGeneration(metadata.prompt, metadata.settings)
-                    );
-                    placeholderMetadata.delete(id);
-                }
-            });
-        }
-    } catch (error) {
-        console.error('Generation failed:', error);
-
-        // Check if it was a cancellation
-        if (error.name === 'AbortError') {
-            placeholderIds.forEach(id => {
-                removePlaceholder(id);
-                placeholderMetadata.delete(id);
-            });
-            return;
-        }
-
-        // Show error cards for all placeholders instead of removing them
-        placeholderIds.forEach(id => {
-            const metadata = placeholderMetadata.get(id);
-            if (metadata) {
-                showErrorCard(
-                    id,
-                    error.message || 'Failed to generate image. Please try again.',
-                    metadata.prompt,
-                    () => retryGeneration(metadata.prompt, metadata.settings)
-                );
-                placeholderMetadata.delete(id);
-            }
-        });
-
-        if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
-            showOpenRouterApiKeyPopup(error?.help);
-            return;
-        }
-        if (error?.code === 'XAI_API_KEY_REQUIRED') {
-            showError(error?.message || 'xAI API key required.');
-            return;
-        }
-        if (error?.code === 'FAL_API_KEY_REQUIRED') {
-            showFalApiKeyPopup(error?.help);
-            return;
-        }
-        if (error?.code === 'EVOLINK_API_KEY_REQUIRED') {
-            showEvolinkApiKeyPopup(error?.help);
-            return;
-        }
-        showError(error.message || 'Failed to generate image. Please try again.');
-    } finally {
-        isGenerating = false;
-        generationAbortController = null;
-        setLoading(input, button, false);
-    }
-}
-
-/**
- * Retry generation with saved prompt and settings
- * @param {string} prompt - Original prompt
- * @param {Object} settings - Original settings
- */
-async function retryGeneration(prompt, settings) {
-    const input = document.getElementById('prompt-input');
-    const button = document.getElementById('generate-btn');
-
-    if (input && button) {
-        input.value = prompt;
-        autoResizeTextarea(input);
-        await handleGenerate(input, button);
-    }
-}
-
-/**
- * Cancel ongoing generation
- */
-function handleCancelGeneration() {
-    if (generationAbortController) {
-        generationAbortController.abort();
-        generationAbortController = null;
-    }
-    isGenerating = false;
-
-    const input = document.getElementById('prompt-input');
-    const button = document.getElementById('generate-btn');
-    if (input && button) {
-        setLoading(input, button, false);
-    }
-}
-
-/**
- * Handle prompt enhancement
- * @param {HTMLInputElement} input - Prompt input element
- * @param {HTMLButtonElement} button - Enhance button element
- */
 async function handleEnhance(input, button) {
     const prompt = input.value.trim();
 
@@ -2395,8 +725,7 @@ async function handleEnhance(input, button) {
         input.focus();
     } catch (error) {
         console.error('Enhancement failed:', error);
-        if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
-            showOpenRouterApiKeyPopup(error?.help);
+        if (showApiKeyPopupForCode(error?.code, error?.help)) {
             return;
         }
         showError(error.message || 'Failed to enhance prompt. Please try again.');
@@ -2509,196 +838,6 @@ function setupCustomEnhanceModal(input, button) {
     });
 }
 
-/**
- * Show a popup explaining how to get an OpenRouter API key, and focus the Settings key input.
- * @param {{ message?: string, url?: string } | undefined} help
- */
-function showOpenRouterApiKeyPopup(help) {
-    const settingsBtn = document.getElementById('settings-btn');
-    const settingsPanel = document.getElementById('settings-panel');
-
-    if (settingsBtn && settingsPanel) {
-        openSettings(settingsBtn, settingsPanel);
-    }
-
-    const keyInput = document.getElementById('setting-openrouter-key');
-    if (keyInput) {
-        keyInput.focus();
-        keyInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-
-    const url = help?.url || 'https://openrouter.ai/keys';
-    const message =
-        help?.message ||
-        'You need an OpenRouter API key to use this app. Create one at openrouter.ai/keys, then paste it into Settings.';
-
-    // Create a lightweight modal overlay (only one instance).
-    const existing = document.getElementById('openrouter-key-modal');
-    if (existing) {
-        existing.querySelector('.openrouter-key-modal__message').textContent = message;
-        existing.querySelector('.openrouter-key-modal__link').href = url;
-        existing.classList.add('openrouter-key-modal--active');
-        return;
-    }
-
-    const overlay = document.createElement('div');
-    overlay.id = 'openrouter-key-modal';
-    overlay.className = 'openrouter-key-modal openrouter-key-modal--active';
-    overlay.innerHTML = `
-        <div class="openrouter-key-modal__backdrop" role="presentation"></div>
-        <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="OpenRouter API key required">
-            <div class="openrouter-key-modal__header">
-                <div class="openrouter-key-modal__title">OpenRouter API key required</div>
-                <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
-            </div>
-            <div class="openrouter-key-modal__body">
-                <p class="openrouter-key-modal__message"></p>
-                <div class="openrouter-key-modal__actions">
-                    <a class="openrouter-key-modal__link" target="_blank" rel="noopener noreferrer">Get API key</a>
-                    <button type="button" class="openrouter-key-modal__ok">I pasted it</button>
-                </div>
-                <p class="openrouter-key-modal__hint">Your key is stored locally in your browser and sent with each request.</p>
-            </div>
-        </div>
-    `;
-
-    overlay.querySelector('.openrouter-key-modal__message').textContent = message;
-    overlay.querySelector('.openrouter-key-modal__link').href = url;
-
-    const close = () => overlay.classList.remove('openrouter-key-modal--active');
-    overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
-    overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
-    overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
-
-    document.body.appendChild(overlay);
-}
-
-/**
- * Show a popup explaining how to get a Fal API key, and focus the Settings key input.
- * @param {{ message?: string, url?: string } | undefined} help
- */
-function showFalApiKeyPopup(help) {
-    const settingsBtn = document.getElementById('settings-btn');
-    const settingsPanel = document.getElementById('settings-panel');
-
-    if (settingsBtn && settingsPanel) {
-        openSettings(settingsBtn, settingsPanel);
-    }
-
-    const keyInput = document.getElementById('setting-fal-key');
-    if (keyInput) {
-        keyInput.focus();
-        keyInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-
-    const url = help?.url || 'https://fal.ai/dashboard/keys';
-    const message =
-        help?.message ||
-        'You need a Fal API key to use Fal Seedream models. Create one at fal.ai/dashboard/keys, then paste it into Settings.';
-
-    const existing = document.getElementById('fal-key-modal');
-    if (existing) {
-        existing.querySelector('.openrouter-key-modal__message').textContent = message;
-        existing.querySelector('.openrouter-key-modal__link').href = url;
-        existing.classList.add('openrouter-key-modal--active');
-        return;
-    }
-
-    const overlay = document.createElement('div');
-    overlay.id = 'fal-key-modal';
-    overlay.className = 'openrouter-key-modal openrouter-key-modal--active';
-    overlay.innerHTML = `
-        <div class="openrouter-key-modal__backdrop" role="presentation"></div>
-        <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="Fal API key required">
-            <div class="openrouter-key-modal__header">
-                <div class="openrouter-key-modal__title">Fal API key required</div>
-                <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
-            </div>
-            <div class="openrouter-key-modal__body">
-                <p class="openrouter-key-modal__message"></p>
-                <div class="openrouter-key-modal__actions">
-                    <a class="openrouter-key-modal__link" target="_blank" rel="noopener noreferrer">Get API key</a>
-                    <button type="button" class="openrouter-key-modal__ok">I pasted it</button>
-                </div>
-                <p class="openrouter-key-modal__hint">Your key is stored locally in your browser and sent with each request.</p>
-            </div>
-        </div>
-    `;
-
-    overlay.querySelector('.openrouter-key-modal__message').textContent = message;
-    overlay.querySelector('.openrouter-key-modal__link').href = url;
-
-    const close = () => overlay.classList.remove('openrouter-key-modal--active');
-    overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
-    overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
-    overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
-
-    document.body.appendChild(overlay);
-}
-
-/**
- * Show a popup explaining how to get an Evolink API key, and focus the Settings key input.
- * @param {{ message?: string, url?: string } | undefined} help
- */
-function showEvolinkApiKeyPopup(help) {
-    const settingsBtn = document.getElementById('settings-btn');
-    const settingsPanel = document.getElementById('settings-panel');
-
-    if (settingsBtn && settingsPanel) {
-        openSettings(settingsBtn, settingsPanel);
-    }
-
-    const keyInput = document.getElementById('setting-evolink-key');
-    if (keyInput) {
-        keyInput.focus();
-        keyInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-
-    const url = help?.url || 'https://evolink.ai/dashboard/keys';
-    const message =
-        help?.message ||
-        'You need an Evolink API key to use Evolink Seedream models. Create one at evolink.ai/dashboard/keys, then paste it into Settings.';
-
-    const existing = document.getElementById('evolink-key-modal');
-    if (existing) {
-        existing.querySelector('.openrouter-key-modal__message').textContent = message;
-        existing.querySelector('.openrouter-key-modal__link').href = url;
-        existing.classList.add('openrouter-key-modal--active');
-        return;
-    }
-
-    const overlay = document.createElement('div');
-    overlay.id = 'evolink-key-modal';
-    overlay.className = 'openrouter-key-modal openrouter-key-modal--active';
-    overlay.innerHTML = `
-        <div class="openrouter-key-modal__backdrop" role="presentation"></div>
-        <div class="openrouter-key-modal__card" role="dialog" aria-modal="true" aria-label="Evolink API key required">
-            <div class="openrouter-key-modal__header">
-                <div class="openrouter-key-modal__title">Evolink API key required</div>
-                <button type="button" class="openrouter-key-modal__close" aria-label="Close">✕</button>
-            </div>
-            <div class="openrouter-key-modal__body">
-                <p class="openrouter-key-modal__message"></p>
-                <div class="openrouter-key-modal__actions">
-                    <a class="openrouter-key-modal__link" target="_blank" rel="noopener noreferrer">Get API key</a>
-                    <button type="button" class="openrouter-key-modal__ok">I pasted it</button>
-                </div>
-                <p class="openrouter-key-modal__hint">Your key is stored locally in your browser and sent with each request.</p>
-            </div>
-        </div>
-    `;
-
-    overlay.querySelector('.openrouter-key-modal__message').textContent = message;
-    overlay.querySelector('.openrouter-key-modal__link').href = url;
-
-    const close = () => overlay.classList.remove('openrouter-key-modal--active');
-    overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
-    overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
-    overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
-
-    document.body.appendChild(overlay);
-}
-
 /** @type {number} - Cancellation token for surprise-me typing animation */
 let _surpriseTypingToken = 0;
 
@@ -2756,8 +895,8 @@ async function handleSurpriseMe(input) {
         typeNextChar();
     } catch (error) {
         console.error('Failed to get random prompt:', error);
-        if (error?.code === 'OPENROUTER_API_KEY_REQUIRED') {
-            showOpenRouterApiKeyPopup(error?.help);
+        if (showApiKeyPopupForCode(error?.code, error?.help)) {
+            // popup shown
         } else {
             showError(error.message || 'Failed to generate random prompt. Please try again.');
         }
@@ -2850,9 +989,9 @@ async function handleAnimateImage(event) {
     // 3. Switch model to seedance image-to-video and set qty to 1
     const modelSelect = document.getElementById('setting-model');
     if (modelSelect) {
-        modelSelect.value = SEEDANCE_20_IMAGE_TO_VIDEO_MODEL;
+        modelSelect.value = ANIMATE_MODEL_ID;
         syncModelDropdownUI();
-        updateSettingsForModel(SEEDANCE_20_IMAGE_TO_VIDEO_MODEL);
+        updateSettingsForModel(ANIMATE_MODEL_ID);
     }
     const numImagesSelect = document.getElementById('setting-num-images');
     if (numImagesSelect) {
@@ -2866,19 +1005,12 @@ async function handleAnimateImage(event) {
         const imageUrl = fullUrl || image.url;
         if (imageUrl) {
             // Clear existing attachments and add this image
-            promptImageDataUrls = [];
-            // Fetch the image and convert to data URL
+            setPromptAttachments([]);
             const resp = await fetch(imageUrl);
             const blob = await resp.blob();
-            const reader = new FileReader();
-            const dataUrl = await new Promise((resolve, reject) => {
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
+            const dataUrl = await compressImageForUpload(blob);
             if (typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
-                promptImageDataUrls.push(dataUrl);
-                renderPromptAttachments();
+                setPromptAttachments([dataUrl]);
             }
         }
     } catch (err) {
@@ -2892,63 +1024,6 @@ async function handleAnimateImage(event) {
     }
 }
 
-/**
- * Restore settings from saved image data
- * @param {Object} settings - Saved generation settings
- */
-function restoreSettings(settings) {
-    // Model selection (must be first to trigger UI updates)
-    const modelSelect = document.getElementById('setting-model');
-    if (modelSelect && settings.model) {
-        modelSelect.value = normalizeModelId(settings.model);
-        syncModelDropdownUI();
-        updateSettingsForModel(modelSelect.value);
-    }
-
-    // Aspect ratio (OpenRouter / Gemini image_config)
-    const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
-    if (aspectRatioSelect && settings.aspect_ratio) {
-        aspectRatioSelect.value = settings.aspect_ratio;
-    }
-
-    // Gemini image size (1K/2K/4K)
-    const resolutionSelect = document.getElementById('setting-resolution');
-    if (resolutionSelect && settings.resolution) {
-        resolutionSelect.value = settings.resolution;
-    }
-
-    const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
-    if (xaiVideoLengthInput && Number.isFinite(settings.xai_video_length)) {
-        xaiVideoLengthInput.value = settings.xai_video_length;
-    }
-
-    const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
-    if (xaiVideoQualitySelect && settings.xai_video_quality) {
-        xaiVideoQualitySelect.value = settings.xai_video_quality;
-    }
-
-    const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
-    if (generateAudioSwitch instanceof HTMLInputElement && typeof settings.generate_audio_switch === 'boolean') {
-        generateAudioSwitch.checked = settings.generate_audio_switch;
-    }
-
-    const flashheadVoiceSelect = document.getElementById('setting-flashhead-voice');
-    if (flashheadVoiceSelect && settings.flashhead_voice) {
-        flashheadVoiceSelect.value = settings.flashhead_voice;
-    }
-
-    const flashheadStabilityInput = document.getElementById('setting-flashhead-stability');
-    if (flashheadStabilityInput && Number.isFinite(settings.flashhead_stability)) {
-        flashheadStabilityInput.value = settings.flashhead_stability;
-    }
-
-    // Number of images
-    const numImagesSelect = document.getElementById('setting-num-images');
-    if (numImagesSelect && settings.num_images !== undefined) {
-        numImagesSelect.value = settings.num_images;
-        syncNumImagesDropdownUI();
-    }
-}
 
 /**
  * Set loading state for enhance button

@@ -1,59 +1,76 @@
 const {
     withMiddleware,
-    redactKey,
     resolveOpenRouterApiKey,
     resolveXaiApiKey,
     resolveFalApiKey,
     resolveEvolinkApiKey,
 } = require('./_middleware');
 const {
-    getFalImageCostPerImage,
-    isFalImageModel,
-    isFalVideoModel,
-    isFalEditModel,
-    getFalVideoModel,
-    normalizeFalVideoModel,
-} = require('./model-registry');
+    normalizeModelId,
+    resolveCapabilities,
+    getMaxInputImages,
+    getApiKey,
+} = require('./model-catalog');
+const {
+    normalizeInputImages,
+    validateRequiredInputImages,
+} = require('./generation-routing');
+const { handleEvolink } = require('./providers/evolink');
+const { handleFalImage } = require('./providers/fal-image');
+const { handleFalVideo } = require('./providers/fal-video');
+const { handleXai } = require('./providers/xai');
+const { handleOpenRouter } = require('./providers/openrouter');
 
-const formatFalError = (errorText, fallbackMessage) => {
-    if (/content_policy_violation|content checker/i.test(String(errorText || ''))) {
-        return {
-            code: 'FAL_CONTENT_POLICY_VIOLATION',
-            error: 'Fal content policy rejected this request',
-            details: 'Fal rejected the prompt or attached image before generation. Try a different prompt or source image.',
-        };
+const imageSizePresetToAspectRatio = (preset) => {
+    switch (preset) {
+        case 'portrait_4_3':
+            return '3:4';
+        case 'portrait_16_9':
+            return '9:16';
+        case 'landscape_4_3':
+            return '4:3';
+        case 'landscape_16_9':
+            return '16:9';
+        case 'square':
+        case 'square_hd':
+        default:
+            return '1:1';
     }
-
-    return {
-        error: fallbackMessage,
-        details: redactKey(errorText),
-    };
 };
 
-const formatEvolinkError = (errorText, fallbackMessage) => {
-    const parsed = (() => {
-        try {
-            return JSON.parse(String(errorText || ''));
-        } catch {
-            return null;
-        }
-    })();
-    const message = parsed?.error?.message || parsed?.message || String(errorText || '');
-    const code = parsed?.error?.code || parsed?.code || null;
-
-    if (/content_policy_violation|safety filters/i.test(message) || code === 'content_policy_violation') {
-        return {
-            code: 'EVOLINK_CONTENT_POLICY_VIOLATION',
-            error: 'Evolink content policy rejected this request',
-            details: 'Evolink rejected the prompt or attached image before generation. Try a different prompt or source image.',
-        };
-    }
-
-    return {
-        ...(code ? { code: String(code) } : {}),
-        error: fallbackMessage,
-        details: redactKey(message || errorText),
-    };
+const API_KEY_HELP = {
+    openrouter: {
+        code: 'OPENROUTER_API_KEY_REQUIRED',
+        error: 'OpenRouter API key required',
+        help: {
+            message: 'Open Settings → paste your OpenRouter API key. Create one at openrouter.ai/keys.',
+            url: 'https://openrouter.ai/keys',
+        },
+    },
+    xai: {
+        code: 'XAI_API_KEY_REQUIRED',
+        error: 'xAI API key required',
+        help: {
+            message: 'Open Settings → paste your xAI API key. Create one at console.x.ai.',
+            url: 'https://console.x.ai',
+        },
+    },
+    fal: {
+        code: 'FAL_API_KEY_REQUIRED',
+        error: 'Fal API key required',
+        help: {
+            message: 'Open Settings → paste your Fal API key. Create one at fal.ai/dashboard/keys.',
+            url: 'https://fal.ai/dashboard/keys',
+        },
+    },
+    evolink: {
+        code: 'EVOLINK_API_KEY_REQUIRED',
+        error: 'Evolink API key required',
+        help: {
+            message: 'Open Settings, paste your Evolink API key, then try again.',
+            url: 'https://evolink.ai/dashboard/keys',
+        },
+    },
 };
 
 module.exports = withMiddleware(async function handler(req, res) {
@@ -61,1368 +78,97 @@ module.exports = withMiddleware(async function handler(req, res) {
         prompt,
         model: requestedModel = 'black-forest-labs/flux.2-pro',
         num_images = 1,
-        // UI sends these; mapped per provider below.
         aspect_ratio,
-        image_size, // legacy "preset" from UI; used to derive aspect ratio if aspect_ratio isn't set
-        resolution, // Gemini image_config.image_size (1K/2K/4K); xAI image resolution (1k/2k)
+        image_size,
+        resolution,
         xai_video_length,
         xai_video_quality,
         generate_audio_switch,
         flashhead_voice,
         flashhead_stability,
-        image_urls = [], // optional image inputs (data URLs) for all models
+        image_urls = [],
     } = req.body;
 
-    const model = normalizeFalVideoModel(
-        requestedModel === 'grok-imagine-image-pro'
-            ? 'grok-imagine-image-quality'
-            : requestedModel
-    );
+    const model = normalizeModelId(requestedModel);
 
-    if (!prompt || typeof prompt !== 'string') {
+    const normalizedPrompt = typeof prompt === 'string' ? prompt.trim() : '';
+
+    if (!normalizedPrompt) {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    // Validate num_images
     const parsedNumImages = parseInt(num_images, 10);
     if (!Number.isInteger(parsedNumImages) || parsedNumImages < 1 || parsedNumImages > 4) {
         return res.status(400).json({ error: '`num_images` must be an integer between 1 and 4' });
     }
 
-    const isXaiImageModel = model === 'grok-imagine-image' || model === 'grok-imagine-image-quality';
-    const isXaiVideoModel = model === 'grok-imagine-video';
-    const isXaiModel = isXaiImageModel || isXaiVideoModel;
+    const modelCaps = resolveCapabilities(model);
+    const requiredApiKey = getApiKey(model);
 
-    const isFalModel = isFalImageModel(model);
-    const isFalVideoModelForRequest = isFalVideoModel(model);
-    const isFluxKleinEditModel = model === 'fal-ai/flux-2/klein/9b/edit/lora';
-    const isFalEditModelForRequest = isFalEditModel(model);
-    const isEvolinkSeedreamModel =
-        model === 'evolink/doubao-seedream-4.5' ||
-        model === 'evolink/doubao-seedream-4.5/edit';
+    const openRouterApiKey = resolveOpenRouterApiKey(req);
+    const xaiKey = resolveXaiApiKey(req);
+    const falKey = resolveFalApiKey(req);
+    const evolinkKey = resolveEvolinkApiKey(req);
 
-    const XAI_API_KEY = resolveXaiApiKey(req);
-    const FAL_KEY = resolveFalApiKey(req);
-    const EVOLINK_API_KEY = resolveEvolinkApiKey(req);
-
-    const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-    const OPENROUTER_API_KEY = resolveOpenRouterApiKey(req);
-
-    if (!isXaiModel && !isFalModel && !isFalVideoModelForRequest && !isEvolinkSeedreamModel && !OPENROUTER_API_KEY) {
-        return res.status(401).json({
-            code: 'OPENROUTER_API_KEY_REQUIRED',
-            error: 'OpenRouter API key required',
-            help: {
-                message: 'Open Settings → paste your OpenRouter API key. Create one at openrouter.ai/keys.',
-                url: 'https://openrouter.ai/keys'
-            }
-        });
-    }
-
-    if (isXaiModel && !XAI_API_KEY) {
-        return res.status(401).json({
-            code: 'XAI_API_KEY_REQUIRED',
-            error: 'xAI API key required',
-            help: {
-                message: 'Open Settings → paste your xAI API key. Create one at console.x.ai.',
-                url: 'https://console.x.ai'
-            }
-        });
-    }
-
-    if ((isFalModel || isFalVideoModelForRequest) && !FAL_KEY) {
-        return res.status(401).json({
-            code: 'FAL_API_KEY_REQUIRED',
-            error: 'Fal API key required',
-            help: {
-                message: 'Open Settings → paste your Fal API key. Create one at fal.ai/dashboard/keys.',
-                url: 'https://fal.ai/dashboard/keys'
-            }
-        });
-    }
-
-    if (isEvolinkSeedreamModel && !EVOLINK_API_KEY) {
-        return res.status(401).json({
-            code: 'EVOLINK_API_KEY_REQUIRED',
-            error: 'Evolink API key required',
-            help: {
-                message: 'Open Settings, paste your Evolink API key, then try again.',
-                url: 'https://evolink.ai/dashboard/keys'
-            }
-        });
-    }
-
-    const isGeminiModel = typeof model === 'string' && model.startsWith('google/gemini-');
-    const isSeedreamModel = typeof model === 'string' && model.includes('seedream');
-
-    const imageSizePresetToAspectRatio = (preset) => {
-        switch (preset) {
-            case 'portrait_4_3':
-                return '3:4';
-            case 'portrait_16_9':
-                return '9:16';
-            case 'landscape_4_3':
-                return '4:3';
-            case 'landscape_16_9':
-                return '16:9';
-            case 'square':
-            case 'square_hd':
-            default:
-                return '1:1';
-        }
+    const apiKeys = {
+        openrouter: openRouterApiKey,
+        xai: xaiKey,
+        fal: falKey,
+        evolink: evolinkKey,
     };
+
+    if (!apiKeys[requiredApiKey]) {
+        const help = API_KEY_HELP[requiredApiKey];
+        if (help) {
+            return res.status(401).json(help);
+        }
+    }
 
     const normalizedAspectRatio =
         typeof aspect_ratio === 'string' && aspect_ratio.trim() !== ''
             ? aspect_ratio.trim()
             : imageSizePresetToAspectRatio(image_size);
 
-    const maxInputImages =
-        isEvolinkSeedreamModel ? 14 :
-            isXaiImageModel ? 5 :
-            isFluxKleinEditModel ? 4 :
-            model === 'fal-ai/phota/edit' ? 10 :
-            model === 'alibaba/happy-horse/reference-to-video' ? 9 :
-                3;
-    const normalizedInputImages = Array.isArray(image_urls)
-        ? image_urls
-            .filter((u) => typeof u === 'string' && u.startsWith('data:image/'))
-            .slice(0, maxInputImages)
-        : [];
+    const maxInputImages = getMaxInputImages(model);
+    const normalizedInputImages = normalizeInputImages(image_urls, maxInputImages);
 
-    // ---------- Evolink Seedream 4.5 ----------
-    if (isEvolinkSeedreamModel) {
-        if (model.endsWith('/edit') && normalizedInputImages.length === 0) {
-            return res.status(400).json({
-                error: 'Edit models require at least one attached image. Please attach an image and try again.',
-            });
-        }
-
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-        const evolinkHeaders = {
-            Authorization: `Bearer ${EVOLINK_API_KEY}`,
-            'Content-Type': 'application/json',
-        };
-        const normalizeEvolinkSize = (ar) => {
-            const allowed = new Set(['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
-            return allowed.has(ar) ? ar : 'auto';
-        };
-        const extractEvolinkResults = (data) => {
-            const candidates = [
-                data?.results,
-                data?.data?.results,
-                data?.output,
-                data?.data?.output,
-                data?.images,
-                data?.data?.images,
-            ];
-            for (const value of candidates) {
-                if (Array.isArray(value)) {
-                    return value
-                        .map((item) => {
-                            if (typeof item === 'string') return item;
-                            return item?.url || item?.image_url || item?.file_url || null;
-                        })
-                        .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url));
-                }
-            }
-            return [];
-        };
-        const uploadEvolinkReferenceImage = async (dataUrl, index) => {
-            const uploadResponse = await fetch('https://files-api.evolink.ai/api/v1/files/upload/base64', {
-                method: 'POST',
-                headers: evolinkHeaders,
-                body: JSON.stringify({
-                    base64_data: dataUrl,
-                    file_name: `seedream-reference-${Date.now()}-${index + 1}.jpg`,
-                }),
-            });
-
-            if (!uploadResponse.ok) {
-                const errorText = await uploadResponse.text();
-                const formatted = formatEvolinkError(errorText, 'Failed to upload reference image to Evolink');
-                const error = new Error(formatted.details || formatted.error);
-                error.status = uploadResponse.status;
-                error.payload = formatted;
-                throw error;
-            }
-
-            const uploadData = await uploadResponse.json();
-            const fileUrl = uploadData?.data?.file_url || uploadData?.data?.download_url || uploadData?.file_url;
-            if (!fileUrl || typeof fileUrl !== 'string') {
-                const error = new Error('Evolink file upload did not return a usable image URL');
-                error.status = 502;
-                error.payload = { error: error.message };
-                throw error;
-            }
-            return fileUrl;
-        };
-
-        try {
-            const uploadedImageUrls = normalizedInputImages.length > 0
-                ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
-                : [];
-
-            const quality = resolution === '4K' ? '4K' : '2K';
-            const evolinkPayload = {
-                model: 'doubao-seedream-4.5',
-                prompt: prompt.trim(),
-                n: parsedNumImages,
-                size: normalizeEvolinkSize(normalizedAspectRatio),
-                quality,
-                prompt_priority: 'standard',
-                ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
-            };
-
-            const createResponse = await fetch('https://api.evolink.ai/v1/images/generations', {
-                method: 'POST',
-                headers: evolinkHeaders,
-                body: JSON.stringify(evolinkPayload),
-            });
-
-            if (!createResponse.ok) {
-                const errorText = await createResponse.text();
-                return res.status(createResponse.status).json({
-                    ...formatEvolinkError(errorText, 'Failed to start image generation via Evolink'),
-                });
-            }
-
-            const createData = await createResponse.json();
-            const taskId = createData?.id || createData?.task_id || createData?.data?.id;
-            if (!taskId) {
-                return res.status(502).json({ error: 'Evolink request did not return a task ID' });
-            }
-
-            for (let attempt = 0; attempt < 45; attempt++) {
-                if (attempt > 0) {
-                    await delay(2000);
-                }
-
-                const taskResponse = await fetch(`https://api.evolink.ai/v1/tasks/${encodeURIComponent(taskId)}`, {
-                    headers: {
-                        Authorization: `Bearer ${EVOLINK_API_KEY}`,
-                    },
-                });
-
-                if (!taskResponse.ok) {
-                    const errorText = await taskResponse.text();
-                    return res.status(taskResponse.status).json({
-                        ...formatEvolinkError(errorText, 'Failed to retrieve Evolink task status'),
-                    });
-                }
-
-                const taskData = await taskResponse.json();
-                const status = String(taskData?.status || taskData?.data?.status || '').toLowerCase();
-
-                if (status === 'completed') {
-                    const results = extractEvolinkResults(taskData).slice(0, parsedNumImages);
-                    if (results.length === 0) {
-                        return res.status(502).json({ error: 'Evolink completed without returning image URLs' });
-                    }
-
-                    const requestMeta = {
-                        model: 'doubao-seedream-4.5',
-                        provider_name: 'evolink',
-                        generation_id: taskId,
-                        created_at: taskData?.created || createData?.created || null,
-                        usage: 0,
-                        credits_reserved: createData?.usage?.credits_reserved || null,
-                        imageCount: results.length,
-                        usage_pending: false,
-                    };
-
-                    return res.status(200).json({
-                        images: results.map((url) => ({
-                            url,
-                            model,
-                            cost: 0,
-                            provider: 'evolink',
-                        })),
-                        meta: {
-                            total_usage: 0,
-                            requests: [requestMeta],
-                            usage_pending: false,
-                        },
-                    });
-                }
-
-                if (status === 'failed') {
-                    const taskError = taskData?.error || taskData?.data?.error;
-                    return res.status(502).json({
-                        ...formatEvolinkError(JSON.stringify(taskError || taskData), 'Evolink image generation failed'),
-                    });
-                }
-            }
-
-            return res.status(504).json({ error: 'Evolink image generation timed out. Please try again.' });
-        } catch (error) {
-            if (error?.payload) {
-                return res.status(error.status || 502).json(error.payload);
-            }
-            console.error('Evolink API error:', redactKey(error));
-            return res.status(500).json({ error: 'Internal server error' });
-        }
+    const inputError = validateRequiredInputImages(model, image_urls);
+    if (inputError) {
+        return res.status(inputError.status).json({ error: inputError.error });
     }
 
-    // ---------- Fal Seedream models ----------
-    if (isFalModel) {
-        // Edit models require at least one input image
-        if (isFalEditModelForRequest && normalizedInputImages.length === 0) {
-            return res.status(400).json({
-                error: 'Edit models require at least one attached image. Please attach an image and try again.',
-            });
-        }
-
-        // Nucleus uses aspect_ratio presets, not image_size (see fal-ai/nucleus-image)
-        const isNucleusImageModel = model === 'fal-ai/nucleus-image';
-        const normalizeNucleusAspectRatio = (ar) => {
-            const allowed = new Set(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']);
-            if (typeof ar === 'string' && allowed.has(ar.trim())) {
-                return ar.trim();
-            }
-            return '1:1';
-        };
-
-        // Map UI aspect ratio (e.g. "1:1", "4:3") to Fal image_size enum (or a
-        // custom { width, height } for ratios outside the enum).
-        const isErnieTurboModel = model === 'fal-ai/ernie-image/lora/turbo';
-        const isErnieImageModel =
-            model === 'fal-ai/ernie-image/lora' || isErnieTurboModel;
-        const isZImageModel = model === 'fal-ai/z-image/turbo/lora';
-        const isBitdanceModel = model === 'fal-ai/bitdance';
-        const isPhotaModel = model === 'fal-ai/phota';
-        const isPhotaEditModel = model === 'fal-ai/phota/edit';
-        const isQwenImageMaxT2IModel = model === 'fal-ai/qwen-image-max/text-to-image';
-        const isQwenImageMaxEditModel = model === 'fal-ai/qwen-image-max/edit';
-        const isQwenImageMaxModel = isQwenImageMaxT2IModel || isQwenImageMaxEditModel;
-        const usesPresetImageSize =
-            isErnieImageModel || isZImageModel || isBitdanceModel || isQwenImageMaxModel || isFluxKleinEditModel;
-        const aspectRatioToFalImageSize = (ar) => {
-            switch (ar) {
-                case '1:1':  return 'square_hd';
-                case '4:3':  return 'landscape_4_3';
-                case '3:4':  return 'portrait_4_3';
-                case '16:9': return 'landscape_16_9';
-                case '9:16': return 'portrait_16_9';
-                // Custom dimensions targeting ~1 Mpix in multiples of 64.
-                case '3:2':  return { width: 1216, height: 832 };
-                case '2:3':  return { width: 832,  height: 1216 };
-                case '21:9': return { width: 1568, height: 672 };
-                case '9:21': return { width: 672,  height: 1568 };
-                default:     return usesPresetImageSize ? 'landscape_4_3' : 'auto_2K';
-            }
-        };
-
-        let falImageSize;
-        if (!isNucleusImageModel && !isPhotaModel && !isPhotaEditModel) {
-            falImageSize = aspectRatioToFalImageSize(normalizedAspectRatio);
-        }
-
-        /** Approximate megapixels for the Fal image_size value — used for $/Mpix pricing. */
-        const estimateMegapixelsFromImageSize = (imageSize) => {
-            if (imageSize && typeof imageSize === 'object'
-                && Number.isFinite(imageSize.width) && Number.isFinite(imageSize.height)) {
-                return (imageSize.width * imageSize.height) / 1_000_000;
-            }
-            switch (imageSize) {
-                case 'square':
-                case 'square_hd':
-                    return 1.0;
-                case 'landscape_4_3':
-                case 'portrait_4_3':
-                    return 1.2;
-                case 'landscape_16_9':
-                case 'portrait_16_9':
-                    return 1.6;
-                default:
-                    return 1.0;
-            }
-        };
-
-        /** @type {Record<string, unknown>} */
-        let falPayload;
-        if (isNucleusImageModel) {
-            // https://fal.ai/models/fal-ai/nucleus-image/api
-            falPayload = {
-                prompt: prompt.trim(),
-                aspect_ratio: normalizeNucleusAspectRatio(normalizedAspectRatio),
-                num_images: parsedNumImages,
-                num_inference_steps: 50,
-                guidance_scale: 8,
-                enable_safety_checker: false,
-                output_format: 'png',
-            };
-        } else if (isErnieImageModel) {
-            // Turbo: 8 / 1 (turbo-optimized). Base lora: 50 / 5 per
-            // https://fal.ai/models/fal-ai/ernie-image/lora/turbo/api
-            falPayload = {
-                prompt: prompt.trim(),
-                image_size: falImageSize,
-                num_images: parsedNumImages,
-                num_inference_steps: isErnieTurboModel ? 8 : 50,
-                guidance_scale: isErnieTurboModel ? 1 : 5,
-                enable_safety_checker: false,
-                enable_prompt_expansion: isErnieTurboModel ? true : false,
-                output_format: isErnieTurboModel ? 'jpeg' : 'png',
-            };
-            if (isErnieTurboModel) {
-                falPayload.acceleration = 'regular';
-                falPayload.loras = [];
-            }
-        } else if (isZImageModel) {
-            // Z-Image Turbo (Tongyi-MAI 6B). Steps capped at 8; "regular" acceleration.
-            // https://fal.ai/models/fal-ai/z-image/turbo/lora/api
-            falPayload = {
-                prompt: prompt.trim(),
-                image_size: falImageSize,
-                num_images: parsedNumImages,
-                num_inference_steps: 8,
-                acceleration: 'regular',
-                output_format: 'png',
-                enable_safety_checker: false,
-                enable_prompt_expansion: false,
-            };
-        } else if (model === 'fal-ai/ovis-image') {
-            // Ovis Image is optimized for quick, high-quality text rendering.
-            // https://fal.ai/models/fal-ai/ovis-image/api
-            falPayload = {
-                prompt: prompt.trim(),
-                negative_prompt: '',
-                image_size: falImageSize,
-                num_inference_steps: 28,
-                guidance_scale: 5,
-                sync_mode: false,
-                num_images: parsedNumImages,
-                enable_safety_checker: false,
-                output_format: 'png',
-                acceleration: 'regular',
-            };
-        } else if (model === 'fal-ai/glm-image') {
-            // GLM Image supports image_size, prompt expansion, and strong text rendering.
-            // https://fal.ai/models/fal-ai/glm-image/api
-            falPayload = {
-                prompt: prompt.trim(),
-                image_size: falImageSize,
-                num_inference_steps: 30,
-                guidance_scale: 1.5,
-                num_images: parsedNumImages,
-                enable_safety_checker: false,
-                output_format: 'jpeg',
-                sync_mode: false,
-                enable_prompt_expansion: false,
-            };
-        } else if (model === 'fal-ai/nucleus-image') {
-            // Nucleus Image uses aspect_ratio presets instead of image_size.
-            // https://fal.ai/models/fal-ai/nucleus-image/api
-            const validNucleusAspectRatios = new Set(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']);
-            const nucleusAspectRatio = validNucleusAspectRatios.has(normalizedAspectRatio)
-                ? normalizedAspectRatio
-                : '1:1';
-
-            falPayload = {
-                prompt: prompt.trim(),
-                negative_prompt: '',
-                aspect_ratio: nucleusAspectRatio,
-                num_inference_steps: 50,
-                guidance_scale: 8,
-                num_images: Math.min(parsedNumImages, 2),
-                sync_mode: false,
-                enable_safety_checker: false,
-                output_format: 'png',
-            };
-        } else if (isBitdanceModel) {
-            // BitDance autoregressive image model — flat $0.01/image.
-            // https://fal.ai/models/fal-ai/bitdance/api
-            falPayload = {
-                prompt: prompt.trim(),
-                image_size: falImageSize,
-                num_images: parsedNumImages,
-                num_inference_steps: 25,
-                guidance_scale: 7.5,
-                output_format: 'png',
-                enable_safety_checker: false,
-            };
-        } else if (isFluxKleinEditModel) {
-            // FLUX.2 [klein] 9B LoRA edit model.
-            // https://fal.ai/models/fal-ai/flux-2/klein/9b/edit/lora/api
-            falPayload = {
-                prompt: prompt.trim(),
-                image_size: falImageSize,
-                num_images: parsedNumImages,
-                num_inference_steps: 4,
-                sync_mode: false,
-                enable_safety_checker: false,
-                output_format: 'png',
-                // The endpoint accepts a `loras` array, but the current UI does not
-                // collect user-specified LoRA weights yet, so send the schema-
-                // aligned empty default explicitly.
-                loras: [],
-            };
-        } else if (isPhotaModel || isPhotaEditModel) {
-            // Phota uses the Fal queue API and aspect_ratio/resolution fields.
-            // https://fal.ai/models/fal-ai/phota/api
-            const validPhotaAspectRatios = new Set(['auto', '1:1', '16:9', '4:3', '3:4', '9:16']);
-            const photaAspectRatio = validPhotaAspectRatios.has(normalizedAspectRatio)
-                ? normalizedAspectRatio
-                : 'auto';
-            const photaResolution = resolution === '4K' ? '4K' : '1K';
-            falImageSize = photaResolution;
-
-            falPayload = {
-                prompt: prompt.trim(),
-                num_images: parsedNumImages,
-                output_format: 'jpeg',
-                sync_mode: false,
-                resolution: photaResolution,
-                aspect_ratio: photaAspectRatio,
-            };
-        } else if (model === 'fal-ai/flux-pro/v1.1') {
-            // FLUX1.1 [pro] — $0.04/Mpix, safety_tolerance "6" (most permissive).
-            // https://fal.ai/models/fal-ai/flux-pro/v1.1/api
-            falPayload = {
-                prompt: prompt.trim(),
-                image_size: falImageSize,
-                num_images: parsedNumImages,
-                output_format: 'jpeg',
-                safety_tolerance: '6',
-            };
-        } else if (isQwenImageMaxModel) {
-            // Qwen-Image-Max (text-to-image and edit) — flat $0.075/image.
-            // 800-char prompt limit; built-in LLM prompt expansion.
-            // image_urls is appended below by the shared isFalEditModel block.
-            // https://fal.ai/models/fal-ai/qwen-image-max
-            falPayload = {
-                prompt: prompt.trim().slice(0, 800),
-                image_size: falImageSize,
-                num_images: parsedNumImages,
-                output_format: 'png',
-                enable_prompt_expansion: true,
-                enable_safety_checker: false,
-            };
-        } else {
-            falPayload = {
-                prompt: prompt.trim(),
-                image_size: falImageSize,
-                num_images: parsedNumImages,
-                enable_safety_checker: false,
-                enable_output_safety_checker: false,
-            };
-        }
-
-        if (isFalEditModelForRequest) {
-            falPayload.image_urls = normalizedInputImages;
-        }
-
-        try {
-            if (isPhotaModel) {
-                const submitResponse = await fetch(`https://queue.fal.run/${model}`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Key ${FAL_KEY}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(falPayload),
-                });
-
-                if (!submitResponse.ok) {
-                    const errorText = await submitResponse.text();
-                    return res.status(submitResponse.status).json({
-                        ...formatFalError(errorText, 'Failed to start image generation via Fal'),
-                    });
-                }
-
-                const submitData = await submitResponse.json();
-                const requestId = submitData?.request_id;
-                if (!requestId) {
-                    return res.status(502).json({ error: 'Fal Phota request did not return a request ID' });
-                }
-
-                const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-                const statusUrl = submitData?.status_url
-                    || `https://queue.fal.run/${model}/requests/${encodeURIComponent(requestId)}/status`;
-                const responseUrl = submitData?.response_url
-                    || `https://queue.fal.run/${model}/requests/${encodeURIComponent(requestId)}`;
-
-                for (let attempt = 0; attempt < 30; attempt++) {
-                    if (attempt > 0) {
-                        await delay(2000);
-                    }
-
-                    const statusResponse = await fetch(statusUrl, {
-                        headers: { Authorization: `Key ${FAL_KEY}` },
-                    });
-                    if (!statusResponse.ok) {
-                        const errorText = await statusResponse.text();
-                        return res.status(statusResponse.status).json({
-                            ...formatFalError(errorText, 'Failed to retrieve Fal image status'),
-                        });
-                    }
-
-                    const statusData = await statusResponse.json();
-                    const status = String(statusData?.status || '').toUpperCase();
-                    if (status === 'COMPLETED') {
-                        const resultResponse = await fetch(statusData?.response_url || responseUrl, {
-                            headers: { Authorization: `Key ${FAL_KEY}` },
-                        });
-                        if (!resultResponse.ok) {
-                            const errorText = await resultResponse.text();
-                            return res.status(resultResponse.status).json({
-                                ...formatFalError(errorText, 'Failed to retrieve Fal image result'),
-                            });
-                        }
-
-                        const data = await resultResponse.json();
-                        const falImages = Array.isArray(data?.images) ? data.images : [];
-                        if (falImages.length === 0) {
-                            return res.status(502).json({ error: 'No images returned from Fal' });
-                        }
-
-                        // Price attribution should follow the actual results we keep,
-                        // not just the requested count, because Fal can theoretically
-                        // return fewer images than requested.
-                        const limited = falImages.slice(0, parsedNumImages);
-                        const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize, {
-                            imageCount: limited.length,
-                            inputImageCount: normalizedInputImages.length,
-                        });
-                        const totalCost = costPerImage * limited.length;
-
-                        return res.status(200).json({
-                            images: limited.map((img) => ({
-                                url: img.url,
-                                model,
-                                cost: costPerImage,
-                                provider: 'fal',
-                            })),
-                            meta: {
-                                total_usage: totalCost,
-                                requests: [{
-                                    model,
-                                    provider_name: 'fal',
-                                    usage: totalCost,
-                                    imageCount: limited.length,
-                                }],
-                                usage_pending: false,
-                            },
-                        });
-                    }
-
-                    if (['FAILED', 'ERROR'].includes(status)) {
-                        return res.status(502).json({ error: 'Fal image generation failed' });
-                    }
-                }
-
-                return res.status(504).json({ error: 'Fal image generation timed out' });
-            }
-
-            // Use Fal sync endpoint for immediate results
-            const falUrl = `https://fal.run/${model}`;
-            const response = await fetch(falUrl, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Key ${FAL_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(falPayload),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                return res.status(response.status).json({
-                    ...formatFalError(errorText, 'Failed to generate image via Fal'),
-                });
-            }
-
-            const data = await response.json();
-            const falImages = Array.isArray(data?.images) ? data.images : [];
-
-            if (falImages.length === 0) {
-                return res.status(502).json({ error: 'No images returned from Fal' });
-            }
-
-            // Fal pricing: flat $0.04/image (Seedream/Wan/Nucleus);
-            //   Ernie: ~$0.015/Mpix; Z-Image Turbo: $0.0085/Mpix;
-            //   BitDance: flat $0.01/image; Qwen-Image-Max: flat $0.075/image.
-            // Price attribution should follow the actual results we keep, not just
-            // the requested count, because Fal can theoretically return fewer
-            // images than requested.
-            const limited = falImages.slice(0, parsedNumImages);
-            const costPerImage = getFalImageCostPerImage(model, falImageSize, estimateMegapixelsFromImageSize, {
-                imageCount: limited.length,
-                inputImageCount: normalizedInputImages.length,
-            });
-            const totalCost = costPerImage * limited.length;
-
-            return res.status(200).json({
-                images: limited.map((img) => ({
-                    url: img.url,
-                    model,
-                    cost: costPerImage,
-                    provider: 'fal',
-                })),
-                meta: {
-                    total_usage: totalCost,
-                    requests: [{
-                        model,
-                        provider_name: 'fal',
-                        usage: totalCost,
-                        imageCount: limited.length,
-                    }],
-                    usage_pending: false,
-                },
-            });
-        } catch (error) {
-            console.error('Fal API error:', redactKey(error));
-            return res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-
-    // ---------- Fal video models ----------
-    if (isFalVideoModelForRequest) {
-        const falVideoConfig = getFalVideoModel(model);
-        const isHappyHorse = model === 'alibaba/happy-horse/reference-to-video';
-        const isPixverseC1 = model === 'fal-ai/pixverse/c1/image-to-video';
-        const isFlashHead = model === 'fal-ai/flashhead';
-        // Reuse xai_video_length / xai_video_quality fields (shared video settings UI)
-        const parsedDuration = parseInt(xai_video_length, 10);
-        const isSeedance20 =
-            model === 'bytedance/seedance-2.0/text-to-video' ||
-            model === 'bytedance/seedance-2.0/image-to-video';
-        // PixVerse C1 allows 1-15 second clips, unlike the other Fal video models here.
-        let minFalDuration = 4;
-        let maxFalDuration = 12;
-        if (isPixverseC1) {
-            minFalDuration = 1;
-            maxFalDuration = 15;
-        } else if (isHappyHorse) {
-            minFalDuration = 3;
-            maxFalDuration = 15;
-        } else if (isSeedance20) {
-            maxFalDuration = 15;
-        }
-        const normalizedDuration =
-            Number.isFinite(parsedDuration) && parsedDuration >= minFalDuration && parsedDuration <= maxFalDuration
-                ? parsedDuration
-                : 5;
-        let validResolutions = ['480p', '720p', '1080p'];
-        if (isPixverseC1) {
-            validResolutions = ['360p', '540p', '720p', '1080p'];
-        } else if (isHappyHorse) {
-            validResolutions = ['720p', '1080p'];
-        } else if (isSeedance20) {
-            validResolutions = ['480p', '720p'];
-        }
-        const normalizedResolution =
-            typeof xai_video_quality === 'string' && validResolutions.includes(xai_video_quality)
-                ? xai_video_quality
-                : isHappyHorse ? '1080p' : '720p';
-        const normalizedGenerateAudio =
-            typeof generate_audio_switch === 'boolean' ? generate_audio_switch : isPixverseC1;
-
-        // Seedance supports: 21:9, 16:9, 4:3, 1:1, 3:4, 9:16, auto.
-        // Happy Horse supports: 16:9, 9:16, 1:1, 4:3, 3:4.
-        const validAspectRatios = isHappyHorse
-            ? ['16:9', '9:16', '1:1', '4:3', '3:4']
-            : ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16', 'auto'];
-        const falAspectRatio =
-            typeof aspect_ratio === 'string' && validAspectRatios.includes(aspect_ratio.trim())
-                ? aspect_ratio.trim()
-                : '16:9';
-
-        const isFalImageToVideo =
-            model === 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video' ||
-            model === 'bytedance/seedance-2.0/image-to-video' ||
-            falVideoConfig?.imageToVideo === true;
-
-        if (isFalImageToVideo && normalizedInputImages.length === 0) {
-            return res.status(400).json({
-                error: 'Image-to-video requires at least one attached image (start frame). Please attach an image and try again.',
-            });
-        }
-
-        const startImageUrl = normalizedInputImages[0];
-
-        const validFlashHeadVoices = new Set([
-            'Aria', 'Roger', 'Sarah', 'Laura', 'Charlie', 'George', 'Callum', 'River', 'Liam', 'Charlotte',
-            'Alice', 'Matilda', 'Will', 'Jessica', 'Eric', 'Chris', 'Brian', 'Daniel', 'Lily', 'Bill',
-        ]);
-        const normalizedFlashHeadVoice =
-            typeof flashhead_voice === 'string' && validFlashHeadVoices.has(flashhead_voice)
-                ? flashhead_voice
-                : 'Aria';
-        const parsedFlashHeadStability = Number.parseFloat(flashhead_stability);
-        const normalizedFlashHeadStability =
-            Number.isFinite(parsedFlashHeadStability)
-                ? Math.min(Math.max(parsedFlashHeadStability, 0), 1)
-                : 0.5;
-
-        const falVideoPayload = isFlashHead
-            ? {
-                image_url: startImageUrl,
-                text: prompt.trim(),
-                voice: normalizedFlashHeadVoice,
-                stability: normalizedFlashHeadStability,
-                enable_safety_checker: false,
-            }
-            : {
-                prompt: prompt.trim(),
-                resolution: normalizedResolution,
-                duration: isHappyHorse || isPixverseC1 ? normalizedDuration : String(normalizedDuration),
-            };
-
-        if (isPixverseC1) {
-            falVideoPayload.generate_audio_switch = normalizedGenerateAudio;
-        } else if (!isHappyHorse && !isFlashHead) {
-            falVideoPayload.generate_audio = true;
-        }
-
-        if (!isPixverseC1 && !isFlashHead) {
-            falVideoPayload.aspect_ratio = falAspectRatio;
-        }
-
-        if (!isFlashHead && (isPixverseC1 || !isSeedance20 || isHappyHorse)) {
-            falVideoPayload.enable_safety_checker = false;
-        }
-
-        if (isHappyHorse) {
-            falVideoPayload.image_urls = normalizedInputImages;
-        } else if (isPixverseC1) {
-            falVideoPayload.image_url = startImageUrl;
-        } else if (isFalImageToVideo && !isFlashHead) {
-            falVideoPayload.image_url = startImageUrl;
-            if (normalizedInputImages[1]) {
-                falVideoPayload.end_image_url = normalizedInputImages[1];
-            }
-        }
-
-        try {
-            // Use Fal queue endpoint for async video generation
-            const falQueueUrl = `https://queue.fal.run/${model}`;
-            const submitResponse = await fetch(falQueueUrl, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Key ${FAL_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(falVideoPayload),
-            });
-
-            if (!submitResponse.ok) {
-                const errorText = await submitResponse.text();
-                return res.status(submitResponse.status).json({
-                    ...formatFalError(errorText, 'Failed to start video generation via Fal'),
-                });
-            }
-
-            const submitData = await submitResponse.json();
-            const requestId = submitData?.request_id;
-
-            if (!requestId) {
-                return res.status(502).json({ error: 'Fal video request did not return a request ID' });
-            }
-
-            let videoCost = 0.10;
-            if (isFlashHead) {
-                videoCost = falVideoConfig?.price || 0;
-            } else if (isHappyHorse || isSeedance20) {
-                videoCost = normalizedDuration * (falVideoConfig?.pricePerSecond?.[normalizedResolution] || 0);
-            } else if (isPixverseC1) {
-                const pixverseRateTable = falVideoConfig?.pricePerSecond?.[normalizedGenerateAudio ? 'withAudio' : 'noAudio'];
-                const pixverseRate = pixverseRateTable?.[normalizedResolution] || 0;
-                videoCost = normalizedDuration * pixverseRate;
-            }
-
-            // Return immediately — client will poll /api/video-status
-            return res.status(202).json({
-                status: 'pending',
-                request_id: requestId,
-                model,
-                provider: 'fal',
-                estimated_cost: videoCost,
-            });
-        } catch (error) {
-            console.error('Fal video API error:', redactKey(error));
-            return res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-
-    if (isXaiModel) {
-        const xaiPrompt = prompt.trim();
-        const xaiHeaders = {
-            Authorization: `Bearer ${XAI_API_KEY}`,
-            'Content-Type': 'application/json',
-        };
-
-        const extractXaiImageUrls = (payload) => {
-            const images = [];
-            const dataArray = Array.isArray(payload?.data) ? payload.data : null;
-            const candidates = dataArray || (Array.isArray(payload?.images) ? payload.images : []);
-
-            if (Array.isArray(candidates)) {
-                candidates.forEach((item) => {
-                    const base64 = item?.b64_json || item?.b64 || item?.image_base64 || null;
-                    const url = item?.url || item?.image_url || item?.imageUrl || null;
-                    if (base64) {
-                        images.push(`data:image/png;base64,${base64}`);
-                    } else if (url) {
-                        images.push(url);
-                    }
-                });
-            }
-
-            const singleBase64 = payload?.b64_json || payload?.image;
-            if (singleBase64 && images.length === 0) {
-                images.push(`data:image/png;base64,${singleBase64}`);
-            }
-
-            const singleUrl = payload?.url || payload?.image_url || payload?.imageUrl;
-            if (singleUrl && images.length === 0) {
-                images.push(singleUrl);
-            }
-
-            return images;
-        };
-
-        try {
-            if (isXaiImageModel) {
-                const normalizedXaiAspectRatio =
-                    typeof aspect_ratio === 'string' && aspect_ratio.trim() !== ''
-                        ? aspect_ratio.trim()
-                        : null;
-
-                const normalizedXaiResolution =
-                    typeof resolution === 'string' && ['1K', '2K'].includes(resolution)
-                        ? resolution.toLowerCase()
-                        : null;
-
-                // xAI image API supports generation and JSON edit endpoints. It does
-                // not use OpenAI's multipart edit shape.
-                const xaiPayload = {
-                    model,
-                    prompt: xaiPrompt,
-                    response_format: 'b64_json',
-                    n: parsedNumImages,
-                    ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
-                    ...(normalizedXaiResolution ? { resolution: normalizedXaiResolution } : {}),
-                };
-
-                let xaiEndpoint = 'https://api.x.ai/v1/images/generations';
-                if (normalizedInputImages.length > 0) {
-                    xaiEndpoint = 'https://api.x.ai/v1/images/edits';
-                    if (normalizedInputImages.length === 1) {
-                        xaiPayload.image = {
-                            type: 'image_url',
-                            url: normalizedInputImages[0],
-                        };
-                    } else {
-                        xaiPayload.images = normalizedInputImages.map((url) => ({
-                            type: 'image_url',
-                            url,
-                        }));
-                    }
-                }
-
-                const response = await fetch(xaiEndpoint, {
-                    method: 'POST',
-                    headers: xaiHeaders,
-                    body: JSON.stringify(xaiPayload),
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    return res.status(response.status).json({
-                        error: 'Failed to generate image',
-                        details: redactKey(errorText),
-                    });
-                }
-
-                const data = await response.json();
-                const images = extractXaiImageUrls(data);
-
-                if (images.length === 0) {
-                    return res.status(502).json({ error: 'No images returned from xAI' });
-                }
-
-                // Calculate cost per image based on model
-                const hasInputImage = normalizedInputImages.length > 0;
-                const inputImageCost = hasInputImage ? 0.002 : 0;
-                const perImageOutputCost = model === 'grok-imagine-image-quality' ? 0.07 : 0.02;
-                const actualCount = Math.min(images.length, parsedNumImages);
-                const totalCost = (perImageOutputCost * actualCount) + inputImageCost;
-
-                return res.status(200).json({
-                    images: images.slice(0, parsedNumImages).map((url) => ({
-                        url,
-                        model,
-                        cost: perImageOutputCost,
-                        provider: 'xai',
-                    })),
-                    meta: {
-                        total_usage: totalCost,
-                        requests: [],
-                        usage_pending: false,
-                    },
-                });
-            }
-
-            if (isXaiVideoModel) {
-                const parsedDuration = parseInt(xai_video_length, 10);
-                const normalizedDuration =
-                    Number.isFinite(parsedDuration) && parsedDuration >= 1 && parsedDuration <= 15
-                        ? parsedDuration
-                        : 5;
-                const normalizedResolution =
-                    typeof xai_video_quality === 'string' && ['720p', '480p'].includes(xai_video_quality)
-                        ? xai_video_quality
-                        : '720p';
-                const normalizedXaiAspectRatio =
-                    typeof aspect_ratio === 'string' && aspect_ratio.trim() !== ''
-                        ? aspect_ratio.trim()
-                        : null;
-
-                const startPayload = {
-                    model,
-                    prompt: xaiPrompt,
-                    duration: normalizedDuration,
-                    resolution: normalizedResolution,
-                    ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
-                };
-
-                // Pass first input image for image-to-video generation
-                if (normalizedInputImages.length > 0) {
-                    startPayload.image_url = normalizedInputImages[0];
-                }
-
-                const startResponse = await fetch('https://api.x.ai/v1/videos/generations', {
-                    method: 'POST',
-                    headers: xaiHeaders,
-                    body: JSON.stringify(startPayload),
-                });
-
-                if (!startResponse.ok) {
-                    const errorText = await startResponse.text();
-                    return res.status(startResponse.status).json({
-                        error: 'Failed to start video generation',
-                        details: redactKey(errorText),
-                    });
-                }
-
-                const startData = await startResponse.json();
-                const requestId = startData?.request_id || startData?.requestId || startData?.id;
-
-                if (!requestId) {
-                    return res.status(502).json({ error: 'xAI video request did not return a request ID' });
-                }
-
-                // Calculate estimated video cost
-                const hasInputImage = normalizedInputImages.length > 0;
-                const inputImageCost = hasInputImage ? 0.002 : 0;
-                const outputVideoCost = normalizedDuration * 0.05;
-                const videoCost = outputVideoCost + inputImageCost;
-
-                // Return immediately with the request ID — the client will poll /api/video-status
-                return res.status(202).json({
-                    status: 'pending',
-                    request_id: requestId,
-                    model,
-                    estimated_cost: videoCost,
-                });
-            }
-        } catch (error) {
-            console.error('xAI API error:', redactKey(error));
-            return res.status(500).json({ error: 'Internal server error' });
-        }
-    }
-
-    const buildPayload = (options = {}) => {
-        const { includeAspectRatio = true } = options;
-
-        /** @type {any} */
-        const userContent =
-            normalizedInputImages.length > 0
-                ? [
-                    { type: 'text', text: prompt.trim() },
-                    ...normalizedInputImages.map((url) => ({
-                        type: 'image_url',
-                        image_url: { url },
-                    })),
-                ]
-                : prompt.trim();
-
-        /** @type {any} */
-        const payload = {
-            model,
-            messages: [
-                {
-                    role: 'user',
-                    content: userContent,
-                },
-            ],
-            // Gemini models can return both image + text; pure image models (Seedream, Flux, etc.)
-            // only support the 'image' modality — requesting 'text' causes endpoint lookup failures.
-            modalities: isGeminiModel ? ['image', 'text'] : ['image'],
-            stream: false,
-        };
-
-        if (isGeminiModel) {
-            payload.image_config = {
-                aspect_ratio: normalizedAspectRatio,
-            };
-
-            if (typeof resolution === 'string' && ['1K', '2K', '4K'].includes(resolution)) {
-                payload.image_config.image_size = resolution;
-            }
-        } else if (isSeedreamModel && includeAspectRatio) {
-            // Seedream may support aspect_ratio - include it with fallback retry if it fails
-            payload.image_config = {
-                aspect_ratio: normalizedAspectRatio,
-            };
-        }
-
-        return payload;
+    const ctx = {
+        req,
+        res,
+        model,
+        modelCaps,
+        prompt: normalizedPrompt,
+        parsedNumImages,
+        normalizedAspectRatio,
+        resolution,
+        normalizedInputImages,
+        xai_video_length,
+        xai_video_quality,
+        generate_audio_switch,
+        flashhead_voice,
+        flashhead_stability,
+        openRouterApiKey,
+        xaiKey,
+        falKey,
+        evolinkKey,
     };
 
-    const extractImageUrls = (openRouterJson) => {
-        const message = openRouterJson?.choices?.[0]?.message;
-        const images = message?.images;
-        if (!Array.isArray(images)) return [];
-        return images
-            .map((img) => img?.image_url?.url || img?.imageUrl?.url)
-            .filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
-    };
-
-    const extractUsageNumber = (openRouterJson) => {
-        // OpenRouter returns cost in usage.total_cost (in USD)
-        if (typeof openRouterJson?.usage?.total_cost === 'number') return openRouterJson.usage.total_cost;
-        // Fallback: some responses may have usage as a direct number
-        if (typeof openRouterJson?.usage === 'number') return openRouterJson.usage;
-        return 0;
-    };
-
-    const fetchGenerationCost = async (generationId, retries = 2) => {
-        if (!generationId) return { cost: 0, pending: false };
-
-        for (let attempt = 0; attempt < retries; attempt++) {
-            try {
-                const response = await fetch(`https://openrouter.ai/api/v1/generation?id=${generationId}`, {
-                    headers: {
-                        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-                    },
-                });
-
-                if (!response.ok) {
-                    let errorBody = '';
-                    try {
-                        errorBody = await response.text();
-                    } catch {
-                        errorBody = '';
-                    }
-                    console.error(`Generation cost fetch failed (attempt ${attempt + 1}):`, {
-                        generationId,
-                        status: response.status,
-                        body: redactKey(errorBody),
-                    });
-                    if (attempt < retries - 1) {
-                        await new Promise((resolve) => setTimeout(resolve, 200));
-                        continue;
-                    }
-                    return { cost: 0, pending: true };
-                }
-
-                const stats = await response.json();
-
-                // OpenRouter returns cost in the `usage` field (in USD) - check both wrapped and unwrapped
-                const data = stats?.data || stats;
-                const cost = data?.usage ?? data?.total_cost ?? data?.cost ?? 0;
-
-                if (typeof cost === 'number' && cost > 0) {
-                    return { cost, pending: false };
-                }
-
-                // If cost is still 0, might need to wait for calculation
-                if (attempt < retries - 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 200));
-                    continue;
-                }
-
-                const parsed = typeof cost === 'number' ? cost : parseFloat(cost || 0);
-                return { cost: Number.isFinite(parsed) ? parsed : 0, pending: false };
-            } catch (e) {
-                console.error(`Error fetching generation cost (attempt ${attempt + 1}):`, {
-                    generationId,
-                    error: redactKey(e),
-                });
-                if (attempt < retries - 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 200));
-                    continue;
-                }
-                return { cost: 0, pending: true };
-            }
-        }
-        return { cost: 0, pending: true };
-    };
-
-    const extractUsageMeta = (openRouterJson) => {
-        return {
-            model: openRouterJson?.model || model,
-            provider_name: openRouterJson?.provider_name || openRouterJson?.provider || null,
-            generation_id: openRouterJson?.generation_id || openRouterJson?.id || null,
-            created_at: openRouterJson?.created_at || null,
-            usage: extractUsageNumber(openRouterJson),
-            usage_pending: false,
-        };
-    };
-
-    const requestSingle = async (options = {}) => {
-        const { includeAspectRatio = true } = options;
-
-        const response = await fetch(OPENROUTER_URL, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': req.headers.referer || 'http://localhost',
-                'X-Title': 'AI Image Generator',
-            },
-            body: JSON.stringify(buildPayload({ includeAspectRatio })),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            return { ok: false, status: response.status, errorText };
-        }
-
-        const data = await response.json();
-        return { ok: true, data };
-    };
-
-    // Wrapper that retries seedream requests without aspect_ratio on failure
-    const requestSingleWithFallback = async () => {
-        const result = await requestSingle({ includeAspectRatio: true });
-
-        // If seedream fails and we included aspect_ratio, retry without it
-        if (!result.ok && isSeedreamModel) {
-            console.log('Seedream request failed with aspect_ratio, retrying without it...');
-            return requestSingle({ includeAspectRatio: false });
-        }
-
-        return result;
-    };
-
-    try {
-        /** @type {Array<{url: string, model: string, cost: number, provider: string|null, metaIndex: number}>} */
-        const imageResults = [];
-        /** @type {Array<{model: string, provider_name: (string|null), generation_id: (string|number|null), created_at: (string|null), usage: number, imageCount: number}>} */
-        const usageRequests = [];
-
-        // First call: some models may return multiple images in one response.
-        const first = await requestSingleWithFallback();
-        if (!first.ok) {
-            console.error('OpenRouter API error:', redactKey(first.errorText));
-            return res.status(first.status).json({
-                error: 'Failed to generate image',
-                details: redactKey(first.errorText),
-            });
-        }
-
-        const firstUrls = extractImageUrls(first.data);
-        const firstMeta = extractUsageMeta(first.data);
-        firstMeta.imageCount = firstUrls.length;
-        usageRequests.push(firstMeta);
-
-        // Store images with reference to their meta index for cost assignment later
-        firstUrls.forEach((url) => {
-            imageResults.push({
-                url,
-                model: firstMeta.model,
-                cost: 0, // Will be filled in after parallel cost fetch
-                provider: firstMeta.provider_name,
-                metaIndex: 0
-            });
-        });
-
-        // Fallback: if the provider only returns 1 image, make remaining requests in parallel.
-        const remaining = parsedNumImages - imageResults.length;
-        if (remaining > 0) {
-            const parallelResults = await Promise.all(
-                Array(remaining).fill().map(() => requestSingleWithFallback())
-            );
-
-            for (const next of parallelResults) {
-                if (!next.ok) {
-                    console.error('OpenRouter API error:', redactKey(next.errorText));
-                    continue;
-                }
-
-                const nextUrls = extractImageUrls(next.data);
-                const nextMeta = extractUsageMeta(next.data);
-                nextMeta.imageCount = nextUrls.length;
-                const metaIndex = usageRequests.length;
-                usageRequests.push(nextMeta);
-
-                nextUrls.forEach((url) => {
-                    imageResults.push({
-                        url,
-                        model: nextMeta.model,
-                        cost: 0,
-                        provider: nextMeta.provider_name,
-                        metaIndex
-                    });
-                });
-            }
-        }
-
-        // Trim to requested count
-        const limited = imageResults.slice(0, parsedNumImages);
-        if (limited.length === 0) {
-            return res.status(502).json({
-                error: 'No images returned from OpenRouter',
-            });
-        }
-
-        // Fetch all costs in parallel (non-blocking for image delivery)
-        // Small initial delay to allow OpenRouter to calculate costs
-        await new Promise((resolve) => setTimeout(resolve, 150));
-
-        const costPromises = usageRequests.map(async (meta) => {
-            if (meta.generation_id) {
-                const initialUsage = meta.usage;
-                const { cost, pending } = await fetchGenerationCost(meta.generation_id);
-                if (cost > 0) {
-                    meta.usage = cost;
-                } else if (pending && (!Number.isFinite(initialUsage) || initialUsage <= 0)) {
-                    meta.usage_pending = true;
-                }
-            }
-            return meta.usage;
-        });
-
-        await Promise.all(costPromises);
-
-        // Calculate total usage and assign pro-rated costs to images
-        let totalUsage = 0;
-        for (const meta of usageRequests) {
-            totalUsage += meta.usage;
-        }
-
-        // Assign pro-rated costs to each image
-        for (const img of limited) {
-            const meta = usageRequests[img.metaIndex];
-            img.cost = meta.imageCount > 0 ? meta.usage / meta.imageCount : 0;
-            delete img.metaIndex; // Clean up internal property
-        }
-
-        return res.status(200).json({
-            images: limited,
-            meta: {
-                total_usage: totalUsage,
-                requests: usageRequests,
-                usage_pending: usageRequests.some((meta) => meta.usage_pending),
-            },
-        });
-    } catch (error) {
-        console.error('Server error:', redactKey(error));
-        return res.status(500).json({ error: 'Internal server error' });
+    switch (modelCaps.backend) {
+        case 'evolink':
+            return handleEvolink(ctx);
+        case 'fal-image':
+            return handleFalImage(ctx);
+        case 'fal-video':
+            return handleFalVideo(ctx);
+        case 'xai':
+            return handleXai(ctx);
+        case 'openrouter':
+        default:
+            return handleOpenRouter(ctx);
     }
 });

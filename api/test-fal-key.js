@@ -15,18 +15,13 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     try {
-        // Lightweight validation: call a cheap text-to-image model with a minimal request.
-        // Using the queue submit endpoint so we can quickly check auth without waiting for a result.
-        const response = await fetch('https://queue.fal.run/fal-ai/bytedance/seedream/v5/lite/text-to-image', {
-            method: 'POST',
+        // Lightweight validation: list one model through the platform API.
+        // This checks auth without submitting a billable generation job.
+        const response = await fetch('https://api.fal.ai/v1/models?limit=1', {
+            method: 'GET',
             headers: {
                 Authorization: `Key ${FAL_KEY}`,
-                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                prompt: 'test',
-                num_images: 1,
-            }),
         });
 
         if (!response.ok) {
@@ -39,19 +34,8 @@ module.exports = withMiddleware(async function handler(req, res) {
                     details: redactKey(errorText)
                 });
             }
-            // Other errors (e.g. 422) may still mean the key is valid but request was bad
-            // A queue submission returning anything other than auth errors means the key works
+            // Other platform errors still prove the key was accepted by auth.
             return res.status(200).json({ ok: true });
-        }
-
-        // If we got a request_id back, the key is valid. Cancel the queued request if possible.
-        const data = await response.json().catch(() => ({}));
-        if (data.request_id) {
-            // Best-effort cancel to avoid wasting compute
-            fetch(`https://queue.fal.run/fal-ai/bytedance/seedream/v5/lite/text-to-image/requests/${data.request_id}/cancel`, {
-                method: 'PUT',
-                headers: { Authorization: `Key ${FAL_KEY}` },
-            }).catch(() => { });
         }
 
         return res.status(200).json({ ok: true });

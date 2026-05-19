@@ -1,0 +1,391 @@
+{
+  "defaultModelId": "fal-ai/z-image/turbo/lora",
+  "defaults": {
+    "animateModelId": "bytedance/seedance-2.0/image-to-video"
+  },
+  "legacyRedirects": {
+    "grok-imagine-image-pro": "grok-imagine-image-quality",
+    "fal-ai/bytedance/seedance-2.0/text-to-video": "bytedance/seedance-2.0/text-to-video",
+    "fal-ai/bytedance/seedance-2.0/image-to-video": "bytedance/seedance-2.0/image-to-video"
+  },
+  "capabilityProfiles": {
+    "openrouter-image": {
+      "apiKey": "openrouter",
+      "backend": "openrouter",
+      "ui": {},
+      "input": { "maxImages": 3, "required": false }
+    },
+    "openrouter-seedream": {
+      "apiKey": "openrouter",
+      "backend": "openrouter",
+      "ui": { "aspectRatio": true },
+      "input": { "maxImages": 3, "required": false },
+      "openrouter": { "seedream": true, "aspectRatioFallback": true }
+    },
+    "openrouter-gemini": {
+      "apiKey": "openrouter",
+      "backend": "openrouter",
+      "ui": {
+        "aspectRatio": true,
+        "resolution": { "options": ["1K", "2K", "4K"], "default": "1K" }
+      },
+      "input": { "maxImages": 3, "required": false },
+      "openrouter": { "gemini": true }
+    },
+    "xai-image": {
+      "apiKey": "xai",
+      "backend": "xai",
+      "ui": {
+        "aspectRatio": true,
+        "resolution": { "options": ["1K", "2K"], "default": "1K" }
+      },
+      "input": { "maxImages": 5, "required": false }
+    },
+    "xai-video": {
+      "apiKey": "xai",
+      "backend": "xai",
+      "ui": {
+        "videoLength": { "min": 1, "max": 15, "default": 10 },
+        "videoQuality": { "options": ["480p", "720p"], "default": "720p" }
+      },
+      "input": { "maxImages": 3, "required": false },
+      "async": true
+    },
+    "fal-image": {
+      "apiKey": "fal",
+      "backend": "fal-image",
+      "ui": { "aspectRatio": true },
+      "input": { "maxImages": 3, "required": false },
+      "falImage": { "variant": "seedream-default", "usesPresetImageSize": false }
+    },
+    "fal-edit": {
+      "apiKey": "fal",
+      "backend": "fal-image",
+      "ui": { "aspectRatio": true },
+      "input": { "maxImages": 3, "required": true },
+      "falImage": { "variant": "seedream-default", "usesPresetImageSize": false }
+    },
+    "evolink-image": {
+      "apiKey": "evolink",
+      "backend": "evolink",
+      "ui": {
+        "aspectRatio": true,
+        "resolution": { "options": ["2K", "4K"], "default": "2K" }
+      },
+      "input": { "maxImages": 14, "required": false }
+    },
+    "evolink-edit": {
+      "apiKey": "evolink",
+      "backend": "evolink",
+      "ui": {
+        "aspectRatio": true,
+        "resolution": { "options": ["2K", "4K"], "default": "2K" }
+      },
+      "input": { "maxImages": 14, "required": true }
+    },
+    "fal-video-seedance15-t2v": {
+      "apiKey": "fal",
+      "backend": "fal-video",
+      "ui": {
+        "aspectRatio": true,
+        "videoLength": { "min": 4, "max": 12, "default": 5 },
+        "videoQuality": { "options": ["480p", "720p", "1080p"], "default": "720p" }
+      },
+      "input": { "maxImages": 3, "required": false },
+      "async": true,
+      "falVideo": {
+        "variant": "seedance15",
+        "imageToVideo": false,
+        "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "auto"],
+        "defaultAspectRatio": "16:9"
+      },
+      "pricing": {
+        "pricePerSecond": { "480p": 0.0241, "720p": 0.0518, "1080p": 0.1166 }
+      }
+    },
+    "fal-video-seedance15-i2v": {
+      "apiKey": "fal",
+      "backend": "fal-video",
+      "ui": {
+        "aspectRatio": true,
+        "videoLength": { "min": 4, "max": 12, "default": 5 },
+        "videoQuality": { "options": ["480p", "720p", "1080p"], "default": "720p" },
+        "imageToVideoHint": true
+      },
+      "input": { "maxImages": 3, "required": true },
+      "async": true,
+      "falVideo": {
+        "variant": "seedance15",
+        "imageToVideo": true,
+        "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "auto"],
+        "defaultAspectRatio": "16:9"
+      },
+      "pricing": {
+        "pricePerSecond": { "480p": 0.0241, "720p": 0.0518, "1080p": 0.1166 }
+      }
+    },
+    "fal-video-seedance20-t2v": {
+      "apiKey": "fal",
+      "backend": "fal-video",
+      "ui": {
+        "aspectRatio": true,
+        "videoLength": { "min": 4, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["480p", "720p"], "default": "720p" }
+      },
+      "input": { "maxImages": 3, "required": false },
+      "async": true,
+      "falVideo": {
+        "variant": "seedance20",
+        "imageToVideo": false,
+        "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "auto"],
+        "defaultAspectRatio": "16:9"
+      },
+      "pricing": {
+        "seedance20": true,
+        "pricePerSecond": { "480p": 0.1406, "720p": 0.3034 }
+      }
+    },
+    "fal-video-seedance20-i2v": {
+      "apiKey": "fal",
+      "backend": "fal-video",
+      "ui": {
+        "aspectRatio": true,
+        "videoLength": { "min": 4, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["480p", "720p"], "default": "720p" },
+        "imageToVideoHint": true
+      },
+      "input": { "maxImages": 3, "required": true },
+      "async": true,
+      "falVideo": {
+        "variant": "seedance20",
+        "imageToVideo": true,
+        "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "auto"],
+        "defaultAspectRatio": "16:9"
+      },
+      "pricing": {
+        "seedance20": true,
+        "imageToVideo": true,
+        "pricePerSecond": { "480p": 0.1406, "720p": 0.3024 }
+      }
+    },
+    "fal-video-pixverse": {
+      "apiKey": "fal",
+      "backend": "fal-video",
+      "ui": {
+        "videoLength": { "min": 1, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["360p", "540p", "720p", "1080p"], "default": "720p" },
+        "generateAudio": true,
+        "imageToVideoHint": true
+      },
+      "input": { "maxImages": 1, "required": true },
+      "async": true,
+      "falVideo": {
+        "variant": "pixverse",
+        "imageToVideo": true,
+        "supportsGenerateAudio": true,
+        "defaultGenerateAudio": true
+      },
+      "pricing": {
+        "imageToVideo": true,
+        "pixverseC1": true,
+        "pricePerSecond": {
+          "noAudio": { "360p": 0.03, "540p": 0.04, "720p": 0.05, "1080p": 0.095 },
+          "withAudio": { "360p": 0.04, "540p": 0.05, "720p": 0.065, "1080p": 0.12 }
+        }
+      }
+    },
+    "fal-video-happyhorse": {
+      "apiKey": "fal",
+      "backend": "fal-video",
+      "ui": {
+        "aspectRatio": true,
+        "videoLength": { "min": 3, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["720p", "1080p"], "default": "1080p" },
+        "imageToVideoHint": true
+      },
+      "input": { "maxImages": 9, "required": true },
+      "async": true,
+      "falVideo": {
+        "variant": "happyHorse",
+        "imageToVideo": true,
+        "usesMultipleImages": true,
+        "aspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+        "defaultAspectRatio": "16:9"
+      },
+      "pricing": {
+        "imageToVideo": true,
+        "happyHorse": true,
+        "pricePerSecond": { "720p": 0.14, "1080p": 0.28 }
+      }
+    },
+    "fal-video-flashhead": {
+      "apiKey": "fal",
+      "backend": "fal-video",
+      "ui": { "flashhead": true, "imageToVideoHint": true },
+      "input": { "maxImages": 3, "required": true },
+      "async": true,
+      "falVideo": {
+        "variant": "flashhead",
+        "imageToVideo": true,
+        "flashhead": true
+      },
+      "pricing": {
+        "imageToVideo": true,
+        "flashhead": true,
+        "price": 0.015
+      }
+    }
+  },
+  "falImageVariants": {
+    "_docs": "Fal image payload variant registry. Models set falImage.variant; static fields live in payloadDefaults.",
+    "seedream-default": {
+      "notes": "Generic sync Fal image endpoints (seedream, wan, etc.)",
+      "payloadDefaults": {
+        "enable_safety_checker": false,
+        "enable_output_safety_checker": false
+      }
+    },
+    "z-image": {
+      "notes": "Z-Image Turbo — preset image_size, 8 steps",
+      "payloadDefaults": {
+        "num_inference_steps": 8,
+        "acceleration": "regular",
+        "output_format": "png",
+        "enable_safety_checker": false,
+        "enable_prompt_expansion": false
+      }
+    },
+    "nucleus": {
+      "notes": "Uses aspect_ratio instead of image_size",
+      "payloadDefaults": {
+        "negative_prompt": "",
+        "num_inference_steps": 50,
+        "guidance_scale": 8,
+        "sync_mode": false,
+        "enable_safety_checker": false,
+        "output_format": "png"
+      }
+    },
+    "phota": {
+      "notes": "Queue polling (asyncQueue on model); aspect_ratio + resolution",
+      "payloadDefaults": {
+        "output_format": "jpeg",
+        "sync_mode": false
+      }
+    },
+    "ernie-turbo": {
+      "payloadDefaults": {
+        "num_inference_steps": 8,
+        "guidance_scale": 1,
+        "enable_safety_checker": false,
+        "enable_prompt_expansion": true,
+        "output_format": "jpeg",
+        "acceleration": "regular",
+        "loras": []
+      }
+    },
+    "ernie": {
+      "payloadDefaults": {
+        "num_inference_steps": 50,
+        "guidance_scale": 5,
+        "enable_safety_checker": false,
+        "enable_prompt_expansion": false,
+        "output_format": "png"
+      }
+    },
+    "ovis": {
+      "payloadDefaults": {
+        "negative_prompt": "",
+        "num_inference_steps": 28,
+        "guidance_scale": 5,
+        "sync_mode": false,
+        "enable_safety_checker": false,
+        "output_format": "png",
+        "acceleration": "regular"
+      }
+    },
+    "glm": {
+      "payloadDefaults": {
+        "num_inference_steps": 30,
+        "guidance_scale": 1.5,
+        "enable_safety_checker": false,
+        "output_format": "jpeg",
+        "sync_mode": false,
+        "enable_prompt_expansion": false
+      }
+    },
+    "bitdance": {
+      "payloadDefaults": {
+        "num_inference_steps": 25,
+        "guidance_scale": 7.5,
+        "output_format": "png",
+        "enable_safety_checker": false
+      }
+    },
+    "flux-klein-edit": {
+      "payloadDefaults": {
+        "num_inference_steps": 4,
+        "sync_mode": false,
+        "enable_safety_checker": false,
+        "output_format": "png",
+        "loras": []
+      }
+    },
+    "flux-pro": {
+      "payloadDefaults": {
+        "output_format": "jpeg",
+        "safety_tolerance": "6"
+      }
+    },
+    "qwen-max": {
+      "payloadDefaults": {
+        "output_format": "png",
+        "enable_prompt_expansion": true,
+        "enable_safety_checker": false
+      }
+    }
+  },
+  "models": [
+    { "id": "bytedance-seed/seedream-4.5", "name": "Seedream 4.5", "provider": "Bytedance", "type": "image", "tier": "quality", "via": "OpenRouter", "profile": "openrouter-seedream" },
+    { "id": "evolink/doubao-seedream-4.5", "name": "Seedream 4.5", "provider": "Bytedance", "type": "image", "tier": "quality", "via": "Evolink", "profile": "evolink-image" },
+    { "id": "evolink/doubao-seedream-4.5/edit", "name": "Seedream 4.5 Edit", "provider": "Bytedance", "type": "edit", "tier": "quality", "via": "Evolink", "profile": "evolink-edit" },
+    { "id": "fal-ai/bytedance/seedream/v4.5/text-to-image", "name": "Seedream 4.5", "provider": "Bytedance", "type": "image", "tier": "quality", "via": "fal", "profile": "fal-image", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
+    { "id": "fal-ai/bytedance/seedream/v4.5/edit", "name": "Seedream 4.5 Edit", "provider": "Bytedance", "type": "edit", "tier": "quality", "via": "fal", "profile": "fal-edit", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
+    { "id": "fal-ai/bytedance/seedream/v5/lite/text-to-image", "name": "Seedream 5 Lite", "provider": "Bytedance", "type": "image", "tier": "fast", "via": "fal", "profile": "fal-image", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
+    { "id": "fal-ai/bytedance/seedream/v5/lite/edit", "name": "Seedream 5 Lite Edit", "provider": "Bytedance", "type": "edit", "tier": "fast", "via": "fal", "profile": "fal-edit", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
+    { "id": "fal-ai/flux-pro/v1.1", "name": "Flux 1.1 Pro", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "via": "fal", "profile": "fal-image", "falImage": { "variant": "flux-pro" }, "pricing": { "price": { "type": "mpix", "amount": 0.04 } } },
+    { "id": "black-forest-labs/flux.2-pro", "name": "Flux 2 Pro", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
+    { "id": "black-forest-labs/flux.2-max", "name": "Flux 2 Max", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
+    { "id": "black-forest-labs/flux.2-flex", "name": "Flux 2 Flex", "provider": "Black Forest Labs", "type": "image", "tier": "balanced", "profile": "openrouter-image" },
+    { "id": "fal-ai/flux-2/klein/9b/edit/lora", "name": "Flux 2 Klein 9B LoRA", "provider": "Black Forest Labs", "type": "edit", "tier": "balanced", "via": "fal", "profile": "fal-edit", "falImage": { "variant": "flux-klein-edit", "usesPresetImageSize": true }, "capabilities": { "input": { "maxImages": 4 } }, "pricing": { "price": { "type": "mpix", "amount": 0.015 }, "inputPrice": { "type": "mpix", "amount": 0.015, "megapixels": 1 } } },
+    { "id": "google/gemini-3-pro-image-preview", "name": "Gemini 3 Pro Image", "provider": "Google", "type": "image", "tier": "quality", "profile": "openrouter-gemini" },
+    { "id": "google/gemini-2.5-flash-image", "name": "Gemini 2.5 Flash Image", "provider": "Google", "type": "image", "tier": "fast", "profile": "openrouter-gemini" },
+    { "id": "openai/gpt-5-image", "name": "GPT-5 Image", "provider": "OpenAI", "type": "image", "tier": "quality", "profile": "openrouter-image" },
+    { "id": "openai/gpt-5-image-mini", "name": "GPT-5 Image Mini", "provider": "OpenAI", "type": "image", "tier": "fast", "profile": "openrouter-image" },
+    { "id": "grok-imagine-image-quality", "name": "Grok Image Quality", "provider": "xAI", "type": "image", "tier": "quality", "profile": "xai-image", "pricing": { "perImageOutput": 0.07, "inputImageCost": 0.002 } },
+    { "id": "grok-imagine-image", "name": "Grok Image", "provider": "xAI", "type": "image", "tier": "balanced", "profile": "xai-image", "pricing": { "perImageOutput": 0.02, "inputImageCost": 0.002 } },
+    { "id": "grok-imagine-video", "name": "Grok Video", "provider": "xAI", "type": "text-to-video", "tier": "quality", "profile": "xai-video", "pricing": { "perSecondOutput": 0.05, "inputImageCost": 0.002 } },
+    { "id": "bytedance/seedance-2.0/text-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "text-to-video", "tier": "quality", "via": "fal", "profile": "fal-video-seedance20-t2v" },
+    { "id": "bytedance/seedance-2.0/image-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "image-to-video", "tier": "quality", "via": "fal", "profile": "fal-video-seedance20-i2v" },
+    { "id": "fal-ai/bytedance/seedance/v1.5/pro/text-to-video", "name": "Seedance 1.5 Pro", "provider": "Bytedance", "type": "text-to-video", "tier": "quality", "via": "fal", "profile": "fal-video-seedance15-t2v", "pricing": {} },
+    { "id": "fal-ai/bytedance/seedance/v1.5/pro/image-to-video", "name": "Seedance 1.5 Pro", "provider": "Bytedance", "type": "image-to-video", "tier": "quality", "via": "fal", "profile": "fal-video-seedance15-i2v", "pricing": { "imageToVideo": true } },
+    { "id": "fal-ai/pixverse/c1/image-to-video", "name": "PixVerse C1", "provider": "PixVerse", "type": "image-to-video", "tier": "quality", "via": "fal", "profile": "fal-video-pixverse" },
+    { "id": "alibaba/happy-horse/reference-to-video", "name": "Happy Horse", "provider": "Alibaba", "type": "image-to-video", "tier": "quality", "via": "fal", "profile": "fal-video-happyhorse" },
+    { "id": "fal-ai/flashhead", "name": "FlashHead", "provider": "fal.ai", "type": "image-to-video", "tier": "fast", "via": "fal", "profile": "fal-video-flashhead" },
+    { "id": "fal-ai/wan/v2.7/pro/text-to-image", "name": "Wan 2.7 Pro", "provider": "Wan", "type": "image", "tier": "quality", "via": "fal", "profile": "fal-image", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
+    { "id": "fal-ai/wan/v2.7/text-to-image", "name": "Wan 2.7", "provider": "Wan", "type": "image", "tier": "balanced", "via": "fal", "profile": "fal-image", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
+    { "id": "fal-ai/wan/v2.7/pro/edit", "name": "Wan 2.7 Pro Edit", "provider": "Wan", "type": "edit", "tier": "quality", "via": "fal", "profile": "fal-edit", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
+    { "id": "fal-ai/wan/v2.7/edit", "name": "Wan 2.7 Edit", "provider": "Wan", "type": "edit", "tier": "balanced", "via": "fal", "profile": "fal-edit", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
+    { "id": "fal-ai/qwen-image-max/text-to-image", "name": "Qwen-Image Max", "provider": "Qwen", "type": "image", "tier": "quality", "via": "fal", "profile": "fal-image", "falImage": { "variant": "qwen-max", "usesPresetImageSize": true }, "pricing": { "price": { "type": "flat", "amount": 0.075 } } },
+    { "id": "fal-ai/qwen-image-max/edit", "name": "Qwen-Image Max Edit", "provider": "Qwen", "type": "edit", "tier": "quality", "via": "fal", "profile": "fal-edit", "falImage": { "variant": "qwen-max", "usesPresetImageSize": true }, "pricing": { "price": { "type": "flat", "amount": 0.075 } } },
+    { "id": "fal-ai/bitdance", "name": "BitDance", "provider": "BitDance", "type": "image", "tier": "balanced", "via": "fal", "profile": "fal-image", "falImage": { "variant": "bitdance", "usesPresetImageSize": true }, "pricing": { "price": { "type": "flat", "amount": 0.01 } } },
+    { "id": "fal-ai/z-image/turbo/lora", "name": "Z-Image Turbo", "provider": "Tongyi", "type": "image", "tier": "fast", "via": "fal", "profile": "fal-image", "falImage": { "variant": "z-image", "usesPresetImageSize": true }, "pricing": { "price": { "type": "mpix", "amount": 0.0085 } } },
+    { "id": "fal-ai/phota", "name": "Phota", "provider": "fal.ai", "type": "image", "tier": "quality", "via": "fal", "profile": "fal-image", "falImage": { "variant": "phota", "asyncQueue": true }, "pricing": {} },
+    { "id": "fal-ai/phota/edit", "name": "Phota Edit", "provider": "fal.ai", "type": "edit", "tier": "quality", "via": "fal", "profile": "fal-edit", "falImage": { "variant": "phota" }, "capabilities": { "input": { "maxImages": 10 } }, "pricing": { "price": { "type": "resolution", "oneK": 0.09, "fourK": 0.18 } } },
+    { "id": "fal-ai/nucleus-image", "name": "Nucleus", "provider": "Nucleus", "type": "image", "tier": "balanced", "via": "fal", "profile": "fal-image", "falImage": { "variant": "nucleus" }, "pricing": { "price": { "type": "mpix", "amount": 0.01 } } },
+    { "id": "fal-ai/glm-image", "name": "GLM Image", "provider": "Zhipu AI", "type": "image", "tier": "quality", "via": "fal", "profile": "fal-image", "falImage": { "variant": "glm" }, "pricing": { "price": { "type": "mpix", "amount": 0.05 } } },
+    { "id": "fal-ai/ovis-image", "name": "Ovis Image", "provider": "Ovis", "type": "image", "tier": "fast", "via": "fal", "profile": "fal-image", "falImage": { "variant": "ovis" }, "pricing": { "price": { "type": "mpix", "amount": 0.012 } } },
+    { "id": "fal-ai/ernie-image/lora", "name": "Ernie LoRA", "provider": "Baidu", "type": "image", "tier": "balanced", "via": "fal", "profile": "fal-image", "falImage": { "variant": "ernie", "usesPresetImageSize": true }, "pricing": { "price": { "type": "mpix", "amount": 0.015 } } },
+    { "id": "fal-ai/ernie-image/lora/turbo", "name": "Ernie Image Turbo", "provider": "Baidu", "type": "image", "tier": "fast", "via": "fal", "profile": "fal-image", "falImage": { "variant": "ernie-turbo", "usesPresetImageSize": true }, "pricing": { "price": { "type": "mpix", "amount": 0.015 } } }
+  ]
+}

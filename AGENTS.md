@@ -80,5 +80,42 @@ const btn = createElement('button', { className: 'btn', onClick: handler }, 'Cli
 ## Important Notes
 
 - **localStorage key**: `ai-image-generator-images` - clear this to reset gallery
-- **No test framework** - manual testing via browser DevTools
-- API key passed via `X-OpenRouter-Api-Key` header from client
+- **Tests**: `npm test` (`node --test tests/**/*.test.js`) — catalog, routing, Fal payloads, UI capabilities
+- API keys passed via client headers (`X-OpenRouter-Api-Key`, `X-Fal-Api-Key`, etc.) — see `js/settings-keys.js`
+
+## Learned User Preferences
+
+- When adding models, only add new entries; do not remove existing models or change default shortcuts or behavior unless explicitly requested.
+- Before adding a model, review how similar models are registered in the catalog and provider modules rather than inventing a new pattern.
+- For new Fal image and video models, disable safety checkers in the API payload (`enable_safety_checker: false`, and `enable_output_safety_checker: false` when the schema supports it).
+- When the user says "safety off" for a Fal model, match that model's API schema (some endpoints only expose `enable_safety_checker`, not `enable_output_safety_checker`).
+- Do not change lightbox shortcuts, default model selection, or other UX defaults while adding models unless the user asks.
+- Do not split files or refactor solely to hit arbitrary line-count targets; only extract or refactor when it clearly improves maintainability.
+
+## Learned Workspace Facts
+
+- `shared/model-catalog.json` is the single source of truth for model metadata, capability profiles, pricing, UI flags, and legacy ID redirects.
+- Frontend resolves capabilities via `js/model-capabilities.js`; backend via `api/model-catalog.js` (CommonJS mirror of the same logic).
+- `js/models.js` builds the model picker from the catalog; new models appear in the UI when added to the catalog only.
+- `api/generate.js` routes requests to provider modules under `api/providers/` (openrouter, xai, fal-image, fal-video, evolink, format-errors).
+- `api/model-catalog.js` derives Fal pricing helpers (`getFalImageCostPerImage`, `getFalVideoModel`) from the catalog.
+- Run tests with `npm test` (`node --test tests/**/*.test.js`); catalog routing is covered by `tests/model-catalog.test.js`.
+- API key UI for OpenRouter, xAI, Fal, and Evolink lives in `js/settings-keys.js` (`API_KEY_FIELDS` config table).
+- Multiple provider API keys are used (not only OpenRouter); keys are sent from the client via headers and resolved in `api/_middleware.js`.
+- Fal model-specific payload shapes belong in catalog capability profiles (`falImage` / `falVideo` variants) or `api/providers/`, not scattered model ID checks in `generate.js`.
+- `.hintrc` extends `development` and ignores intentional compat warnings for `meta[name=theme-color]` and `video[playsinline]`.
+- `tests/catalog-integrity.test.js` enforces catalog completeness (model counts, legacy redirects, fal variants, edit-model input requirements).
+
+## Adding a model
+
+**Full guide:** [docs/adding-a-model.md](docs/adding-a-model.md)
+
+Quick checklist:
+
+1. Copy the closest existing model in `shared/model-catalog.json`; add to `models` (new `capabilityProfiles` entry only if nothing fits).
+2. Fal image with new API shape → add `falImageVariants.payloadDefaults` + `falImage.variant`; extend `buildFalImagePayload` in `api/providers/fal-image.js` if needed.
+3. Fal video with new payload family → new `falVideo.variant` profile + branch in `api/providers/fal-video.js`.
+4. Run `npm test`.
+5. Manual: picker, settings panels, one successful generation with the correct API key.
+
+Do not remove models, change `defaultModelId`, or alter UX defaults unless explicitly requested.
