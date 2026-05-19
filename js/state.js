@@ -39,6 +39,11 @@ const PHOTO_VISIBILITY_KEY = 'photo_visibility_mode';
 const createFallbackId = () =>
     `${FALLBACK_ID_PREFIX}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
+const isHostedImageUrl = (url) => {
+    if (typeof url !== 'string') return false;
+    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/');
+};
+
 const setLocalStorageItem = (key, value) => {
     try {
         localStorage.setItem(key, value);
@@ -387,8 +392,7 @@ class State {
 
         const mediaType = imageData.mediaType === 'video' ? 'video' : 'image';
         const isDataImage = typeof imageData.url === 'string' && imageData.url.startsWith('data:image/');
-        const isHostedImage = !isDataImage && mediaType !== 'video' && typeof imageData.url === 'string' &&
-            (imageData.url.startsWith('http://') || imageData.url.startsWith('https://'));
+        const isHostedImage = !isDataImage && mediaType !== 'video' && isHostedImageUrl(imageData.url);
         const isVideo = mediaType === 'video';
 
         if (this.useFallback) {

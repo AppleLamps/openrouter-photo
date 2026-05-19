@@ -1,7 +1,7 @@
 const { afterEach, describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const handler = require('../api/image-proxy');
-const { isAllowedImageProxyUrl } = handler;
+const { isAllowedImageProxyUrl, MAX_IMAGE_PROXY_BYTES } = handler;
 
 const originalFetch = global.fetch;
 
@@ -64,7 +64,9 @@ describe('image proxy allowlist', () => {
                 status: 200,
                 headers: {
                     get(name) {
-                        return name.toLowerCase() === 'content-type' ? 'image/jpeg' : null;
+                        if (name.toLowerCase() === 'content-type') return 'image/jpeg';
+                        if (name.toLowerCase() === 'content-length') return String(Buffer.byteLength('jpeg-bytes'));
+                        return null;
                     },
                 },
                 arrayBuffer: async () => Buffer.from('jpeg-bytes'),
@@ -78,5 +80,50 @@ describe('image proxy allowlist', () => {
         assert.equal(res.headers['content-type'], 'image/jpeg');
         assert.equal(Buffer.isBuffer(res.body), true);
         assert.equal(res.body.toString(), 'jpeg-bytes');
+    });
+
+    it('rejects images above 20 MB from content-length', async () => {
+        const imageUrl = 'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream/large.jpeg';
+        let bodyRead = false;
+        global.fetch = async () => ({
+            ok: true,
+            status: 200,
+            headers: {
+                get(name) {
+                    if (name.toLowerCase() === 'content-type') return 'image/jpeg';
+                    if (name.toLowerCase() === 'content-length') return String(MAX_IMAGE_PROXY_BYTES + 1);
+                    return null;
+                },
+            },
+            arrayBuffer: async () => {
+                bodyRead = true;
+                return Buffer.alloc(1);
+            },
+        });
+
+        const res = makeRes();
+        await handler(makeReq(imageUrl), res);
+
+        assert.equal(res.statusCode, 413);
+        assert.equal(bodyRead, false);
+    });
+
+    it('rejects images above 20 MB after download when content-length is missing', async () => {
+        const imageUrl = 'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream/large-no-length.jpeg';
+        global.fetch = async () => ({
+            ok: true,
+            status: 200,
+            headers: {
+                get(name) {
+                    return name.toLowerCase() === 'content-type' ? 'image/jpeg' : null;
+                },
+            },
+            arrayBuffer: async () => Buffer.alloc(MAX_IMAGE_PROXY_BYTES + 1),
+        });
+
+        const res = makeRes();
+        await handler(makeReq(imageUrl), res);
+
+        assert.equal(res.statusCode, 413);
     });
 });

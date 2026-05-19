@@ -53,4 +53,11 @@ describe('frontend hardening', () => {
         assert.match(app, /getAttachedImageUrls,/);
         assert.match(app, /enhancePrompt\(prompt, getAttachedImageUrls\(\)/);
     });
+
+    it('persists same-origin proxied generated images as hosted images', () => {
+        const state = read('js/state.js');
+        assert.match(state, /const isHostedImageUrl = \(url\) =>/);
+        assert.match(state, /url\.startsWith\('\/'\)/);
+        assert.match(state, /isHostedImageUrl\(imageData\.url\)/);
+    });
 });
