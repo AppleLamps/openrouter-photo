@@ -51,6 +51,10 @@ export function resolveCapabilities(modelId) {
         merged.falImage = deepMerge(merged.falImage || {}, entry.falImage);
     }
 
+    if (entry.evolink) {
+        merged.evolink = deepMerge(merged.evolink || {}, entry.evolink);
+    }
+
     if (entry.pricing) {
         merged.pricing = { ...(profile.pricing || {}), ...entry.pricing };
     } else if (profile.pricing) {

@@ -50,6 +50,10 @@ function resolveCapabilities(modelId) {
         merged.falImage = deepMerge(merged.falImage || {}, entry.falImage);
     }
 
+    if (entry.evolink) {
+        merged.evolink = deepMerge(merged.evolink || {}, entry.evolink);
+    }
+
     if (entry.pricing) {
         merged.pricing = { ...(profile.pricing || {}), ...entry.pricing };
     } else if (profile.pricing) {
@@ -105,6 +109,18 @@ function getFalVideoConfig(modelId) {
     return {
         ...(caps.falVideo || {}),
         pricing: caps.pricing || entry?.pricing || {},
+    };
+}
+
+function getEvolinkConfig(modelId) {
+    const caps = resolveCapabilities(modelId);
+    if (caps.backend !== 'evolink') return null;
+    const evolink = caps.evolink || { variant: 'seedream', apiModel: 'doubao-seedream-4.5' };
+    const qualityOptions = caps.ui?.resolution?.options || ['2K', '4K'];
+    return {
+        variant: evolink.variant || 'seedream',
+        apiModel: evolink.apiModel || 'doubao-seedream-4.5',
+        qualityOptions,
     };
 }
 
@@ -235,6 +251,7 @@ module.exports = {
     isEvolinkModel,
     isKnownFalVideoModelId,
     getFalVideoConfig,
+    getEvolinkConfig,
     getFalImageConfig,
     getOpenRouterConfig,
     getModelPricing,

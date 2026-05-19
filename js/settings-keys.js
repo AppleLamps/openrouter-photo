@@ -94,7 +94,7 @@ const API_KEY_FIELDS = [
             title: 'Evolink API key required',
             defaultUrl: 'https://evolink.ai/dashboard/keys',
             defaultMessage:
-                'You need an Evolink API key to use Evolink Seedream models. Create one at evolink.ai/dashboard/keys, then paste it into Settings.',
+                'You need an Evolink API key to use Evolink models (Seedream, Z Image Turbo). Create one at evolink.ai/dashboard/keys, then paste it into Settings.',
         },
     },
 ];

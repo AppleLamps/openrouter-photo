@@ -9,6 +9,7 @@ const {
     requiresInputImage,
     getFalImageConfig,
     getFalVideoConfig,
+    getEvolinkConfig,
     getOpenRouterConfig,
     getModelPricing,
     isFalImageModel,
@@ -83,6 +84,35 @@ describe('model catalog — backend routing', () => {
         assert.equal(getApiKey('evolink/doubao-seedream-4.5/edit'), 'evolink');
         assert.ok(requiresInputImage('evolink/doubao-seedream-4.5/edit'));
         assert.equal(getMaxInputImages('evolink/doubao-seedream-4.5'), 14);
+        assert.equal(getBackend('evolink/z-image-turbo'), 'evolink');
+        assert.equal(getApiKey('evolink/z-image-turbo'), 'evolink');
+        assert.equal(requiresInputImage('evolink/z-image-turbo'), false);
+        assert.equal(getMaxInputImages('evolink/z-image-turbo'), 0);
+        assert.equal(getBackend('evolink/doubao-seedream-5.0-lite'), 'evolink');
+        assert.equal(getBackend('evolink/doubao-seedream-5.0-lite/edit'), 'evolink');
+        assert.ok(requiresInputImage('evolink/doubao-seedream-5.0-lite/edit'));
+        assert.equal(requiresInputImage('evolink/doubao-seedream-5.0-lite'), false);
+    });
+});
+
+describe('model catalog — evolink config', () => {
+    it('assigns seedream api model from profile', () => {
+        const cfg = getEvolinkConfig('evolink/doubao-seedream-4.5');
+        assert.equal(cfg.variant, 'seedream');
+        assert.equal(cfg.apiModel, 'doubao-seedream-4.5');
+    });
+
+    it('assigns z-image-turbo api model from profile', () => {
+        const cfg = getEvolinkConfig('evolink/z-image-turbo');
+        assert.equal(cfg.variant, 'z-image-turbo');
+        assert.equal(cfg.apiModel, 'z-image-turbo');
+    });
+
+    it('assigns seedream 5 lite api model and 3K quality options', () => {
+        const cfg = getEvolinkConfig('evolink/doubao-seedream-5.0-lite');
+        assert.equal(cfg.variant, 'seedream');
+        assert.equal(cfg.apiModel, 'doubao-seedream-5.0-lite');
+        assert.deepEqual(cfg.qualityOptions, ['2K', '3K']);
     });
 });
 

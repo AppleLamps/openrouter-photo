@@ -103,6 +103,7 @@ const btn = createElement('button', { className: 'btn', onClick: handler }, 'Cli
 - API key UI for OpenRouter, xAI, Fal, and Evolink lives in `js/settings-keys.js` (`API_KEY_FIELDS` config table).
 - Multiple provider API keys are used (not only OpenRouter); keys are sent from the client via headers and resolved in `api/_middleware.js`.
 - Fal model-specific payload shapes belong in catalog capability profiles (`falImage` / `falVideo` variants) or `api/providers/`, not scattered model ID checks in `generate.js`.
+- Evolink model-specific payload shapes use `evolink.variant` / `evolink.apiModel` on capability profiles (or per-model overrides) and branches in `api/providers/evolink.js` (`getEvolinkConfig()`).
 - `.hintrc` extends `development` and ignores intentional compat warnings for `meta[name=theme-color]` and `video[playsinline]`.
 - `tests/catalog-integrity.test.js` enforces catalog completeness (model counts, legacy redirects, fal variants, edit-model input requirements).
 
@@ -115,7 +116,8 @@ Quick checklist:
 1. Copy the closest existing model in `shared/model-catalog.json`; add to `models` (new `capabilityProfiles` entry only if nothing fits).
 2. Fal image with new API shape → add `falImageVariants.payloadDefaults` + `falImage.variant`; extend `buildFalImagePayload` in `api/providers/fal-image.js` if needed.
 3. Fal video with new payload family → new `falVideo.variant` profile + branch in `api/providers/fal-video.js`.
-4. Run `npm test`.
-5. Manual: picker, settings panels, one successful generation with the correct API key.
+4. Evolink with new payload family → new `evolink-*` profile (or model `evolink` override) + branch in `api/providers/evolink.js`.
+5. Run `npm test`.
+6. Manual: picker, settings panels, one successful generation with the correct API key.
 
 Do not remove models, change `defaultModelId`, or alter UX defaults unless explicitly requested.

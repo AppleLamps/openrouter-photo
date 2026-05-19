@@ -34,8 +34,10 @@ New model
     ├─ xAI (Grok image / video)
     │     └─ Catalog only → reuse xai-image or xai-video profile + pricing
     │
-    ├─ Evolink (Seedream)
-    │     └─ Catalog only → reuse evolink-image or evolink-edit profile
+    ├─ Evolink
+    │     ├─ Seedream 4.5 / 5 Lite (T2I or edit)? → catalog only → reuse evolink-image or evolink-edit
+    │     │     (override `evolink.apiModel` and `ui.resolution` on the model entry when quality tiers differ)
+    │     └─ New API family (e.g. Z Image Turbo)? → new profile + branch in api/providers/evolink.js
     │
     ├─ Fal text-to-image or edit
     │     ├─ Same payload as an existing variant? → catalog only (set falImage.variant)
@@ -122,7 +124,8 @@ Profiles define **backend**, **API key**, **UI controls**, and **input rules**.
 | `xai-video` | xai | Grok video (async) |
 | `fal-image` | fal-image | Fal T2I (default `seedream-default` variant) |
 | `fal-edit` | fal-edit | Fal edit models |
-| `evolink-image` / `evolink-edit` | evolink | Evolink Seedream |
+| `evolink-image` / `evolink-edit` | evolink | Evolink Seedream (4.5 default; override `apiModel` / resolution per model) |
+| `evolink-z-image` | evolink | Evolink Z Image Turbo (aspect ratio only, async) |
 | `fal-video-seedance15-t2v` / `-i2v` | fal-video | Seedance 1.5 |
 | `fal-video-seedance20-t2v` / `-i2v` | fal-video | Seedance 2.0 |
 | `fal-video-pixverse` | fal-video | PixVerse C1 I2V |
@@ -149,6 +152,45 @@ Copy an existing entry and change `id`, `name`, and `profile` if needed:
 ```
 
 Gemini models use `"profile": "openrouter-gemini"` for aspect ratio + 1K/2K/4K resolution.
+
+### 1b. Evolink Seedream — same family, different API model (catalog only)
+
+Seedream 5 Lite reuses the Seedream profiles but overrides the API model and resolution options:
+
+```json
+{
+  "id": "evolink/doubao-seedream-5.0-lite",
+  "name": "Seedream 5 Lite",
+  "provider": "Bytedance",
+  "type": "image",
+  "tier": "fast",
+  "via": "Evolink",
+  "profile": "evolink-image",
+  "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-lite" },
+  "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "2K" } } }
+}
+```
+
+Use `"profile": "evolink-edit"` and the same overrides for an edit entry. The provider maps `ui.resolution.options` to Evolink `quality` (`2K`/`4K` for 4.5, `2K`/`3K` for 5 Lite).
+
+### 1c. Evolink Z Image Turbo (catalog + provider variant)
+
+Z Image Turbo uses a dedicated profile and async task polling (no batch `n`, no resolution control):
+
+```json
+{
+  "id": "evolink/z-image-turbo",
+  "name": "Z Image Turbo",
+  "provider": "Tongyi",
+  "type": "image",
+  "tier": "fast",
+  "via": "Evolink",
+  "profile": "evolink-z-image",
+  "pricing": { "price": { "type": "flat", "amount": 0.026 } }
+}
+```
+
+If the new Evolink endpoint needs different payload fields or aspect-ratio handling, add a branch in `api/providers/evolink.js` keyed by `evolink.variant` from `getEvolinkConfig()`.
 
 ### 2. Fal image — existing variant (catalog only)
 
@@ -323,6 +365,7 @@ npm test
 | `tests/catalog-integrity.test.js` | Duplicate ids, orphan variants, payload build for every Fal image model |
 | `tests/model-catalog.test.js` | Routing, redirects, Fal config resolution |
 | `tests/fal-payload.test.js` | Payload shape per Fal image variant |
+| `tests/evolink-payload.test.js` | Evolink Seedream and Z Image Turbo payload shape |
 | `tests/generate-routing.test.js` | Input image validation, provider resolution |
 | `tests/ui-capabilities.test.js` | Settings panel flags per profile |
 
@@ -355,6 +398,7 @@ Use `npx vercel dev` when testing API routes with serverless behavior.
 | Most models | `shared/model-catalog.json` only |
 | New Fal image variant | + `api/providers/fal-image.js`, `tests/fal-payload.test.js` |
 | New Fal video family | + `api/providers/fal-video.js`, pricing in catalog |
+| New Evolink API family | + `api/providers/evolink.js`, `tests/evolink-payload.test.js` |
 | Legacy alias | `legacyRedirects` in catalog |
 | New provider entirely | New file under `api/providers/`, route in `api/generate.js`, mirror in `api/model-catalog.js` |
 

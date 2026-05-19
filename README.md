@@ -1,6 +1,6 @@
 # AI Image & Video Generator
 
-A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports **41 models** across OpenRouter, xAI, Fal, and Evolink.
+A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports **44 models** across OpenRouter, xAI, Fal, and Evolink.
 
 ![No Build Tools](https://img.shields.io/badge/Build-None%20Required-green)
 ![Vercel Ready](https://img.shields.io/badge/Deploy-Vercel-black)
@@ -12,7 +12,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 ### Image & Video Generation
 
-- **Multi-Model Support** — 41 catalog-driven models (25 image, 8 edit, 8 video)
+- **Multi-Model Support** — 44 catalog-driven models (27 image, 9 edit, 8 video)
 - **Batch Generation** — Create 1–4 images per request (video models produce 1)
 - **Configurable Output** — Aspect ratio, resolution, video length/quality, and model-specific options from the catalog
 - **Video Generation** — Text-to-video and image-to-video via xAI Grok, Fal Seedance, PixVerse, FlashHead, and more
@@ -67,9 +67,9 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 | **xAI** | Grok Image, Grok Image Quality, Grok Video | Image, Video | xAI |
 | **fal.ai** | Phota, FlashHead, Z-Image Turbo, Wan 2.7, Qwen-Image Max, and more | Image, Edit, Video | Fal |
 | **Other Fal hosts** | Nucleus, Ovis, GLM Image, BitDance, Ernie, PixVerse C1, Happy Horse | Image, Video | Fal |
-| **Evolink** | Seedream 4.5 (T2I + Edit) | Image, Edit | Evolink |
+| **Evolink** | Seedream 4.5 & 5 Lite (T2I + Edit), Z Image Turbo | Image, Edit | Evolink |
 
-**Totals:** 41 models — 8 OpenRouter, 21 Fal image, 7 Fal video, 3 xAI, 2 Evolink (some Seedream variants appear under multiple providers).
+**Totals:** 44 models — 8 OpenRouter, 21 Fal image, 7 Fal video, 3 xAI, 5 Evolink (some Seedream variants appear under multiple providers).
 
 ---
 
@@ -120,6 +120,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 │   ├── model-catalog.test.js
 │   ├── generate-routing.test.js
 │   ├── fal-payload.test.js
+│   ├── evolink-payload.test.js
 │   └── ui-capabilities.test.js
 ├── css/                      # base, layout, components, gallery
 ├── index.html
@@ -138,7 +139,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
   - [OpenRouter](https://openrouter.ai/keys) — FLUX, Gemini, GPT-5, Seedream (OR)
   - [Fal](https://fal.ai/dashboard/keys) — Seedream, Seedance, Wan, Phota, and other Fal-hosted models
   - [xAI](https://console.x.ai) — Grok image and video models
-  - [Evolink](https://evolink.ai/dashboard/keys) — Seedream 4.5 via Evolink
+  - [Evolink](https://evolink.ai/dashboard/keys) — Seedream 4.5/5 Lite and Z Image Turbo
 
 ### Local Development
 
@@ -245,7 +246,7 @@ npx vercel --prod
 | **OpenRouter API Key** | Key for OpenRouter-backed models | Text input with show/hide toggle |
 | **xAI API Key** | Key for Grok image/video models | Text input with show/hide toggle |
 | **Fal API Key** | Key for Fal-hosted image and video models | Text input with show/hide toggle |
-| **Evolink API Key** | Key for Evolink Seedream models | Text input with show/hide toggle |
+| **Evolink API Key** | Key for Evolink-hosted models (Seedream, Z Image Turbo) | Text input with show/hide toggle |
 | **Aspect Ratio** | Output dimensions (where supported) | 1:1, 4:3, 3:4, 16:9, 9:16, 3:2, 2:3, 21:9, 9:21 |
 | **Resolution** | Output resolution (Gemini, Phota, etc.) | 1K, 2K, 4K (model-dependent) |
 | **Video Length** | Duration for video models | Model-dependent (e.g. 4–12 s Seedance, 1–15 s xAI) |
@@ -288,7 +289,7 @@ Available settings depend on the selected model — the UI reads capability flag
 - OpenRouter — FLUX, Gemini, GPT-5, Seedream (OR)
 - Fal — Seedream, Seedance, Wan, Phota, and other Fal models
 - xAI — Grok image and video models
-- Evolink — Evolink Seedream models
+- Evolink — Seedream 4.5/5 Lite and Z Image Turbo
 - Ensure the key is saved (click Save)
 
 ### Images not generating

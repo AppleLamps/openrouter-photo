@@ -25,6 +25,8 @@ describe('generate routing — provider resolution', () => {
         assert.equal(resolveProviderHandler('fal-ai/z-image/turbo/lora'), 'fal-image');
         assert.equal(resolveProviderHandler('fal-ai/pixverse/c1/image-to-video'), 'fal-video');
         assert.equal(resolveProviderHandler('evolink/doubao-seedream-4.5/edit'), 'evolink');
+        assert.equal(resolveProviderHandler('evolink/z-image-turbo'), 'evolink');
+        assert.equal(resolveProviderHandler('evolink/doubao-seedream-5.0-lite/edit'), 'evolink');
     });
 
     it('normalizes legacy ids before routing', () => {

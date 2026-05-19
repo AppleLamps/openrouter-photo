@@ -72,7 +72,8 @@
         "aspectRatio": true,
         "resolution": { "options": ["2K", "4K"], "default": "2K" }
       },
-      "input": { "maxImages": 14, "required": false }
+      "input": { "maxImages": 14, "required": false },
+      "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-4.5" }
     },
     "evolink-edit": {
       "apiKey": "evolink",
@@ -81,7 +82,15 @@
         "aspectRatio": true,
         "resolution": { "options": ["2K", "4K"], "default": "2K" }
       },
-      "input": { "maxImages": 14, "required": true }
+      "input": { "maxImages": 14, "required": true },
+      "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-4.5" }
+    },
+    "evolink-z-image": {
+      "apiKey": "evolink",
+      "backend": "evolink",
+      "ui": { "aspectRatio": true },
+      "input": { "maxImages": 0, "required": false },
+      "evolink": { "variant": "z-image-turbo", "apiModel": "z-image-turbo" }
     },
     "fal-video-seedance15-t2v": {
       "apiKey": "fal",
@@ -349,6 +358,9 @@
     { "id": "bytedance-seed/seedream-4.5", "name": "Seedream 4.5", "provider": "Bytedance", "type": "image", "tier": "quality", "via": "OpenRouter", "profile": "openrouter-seedream" },
     { "id": "evolink/doubao-seedream-4.5", "name": "Seedream 4.5", "provider": "Bytedance", "type": "image", "tier": "quality", "via": "Evolink", "profile": "evolink-image" },
     { "id": "evolink/doubao-seedream-4.5/edit", "name": "Seedream 4.5 Edit", "provider": "Bytedance", "type": "edit", "tier": "quality", "via": "Evolink", "profile": "evolink-edit" },
+    { "id": "evolink/doubao-seedream-5.0-lite", "name": "Seedream 5 Lite", "provider": "Bytedance", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-image", "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-lite" }, "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "2K" } } } },
+    { "id": "evolink/doubao-seedream-5.0-lite/edit", "name": "Seedream 5 Lite Edit", "provider": "Bytedance", "type": "edit", "tier": "fast", "via": "Evolink", "profile": "evolink-edit", "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-lite" }, "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "2K" } } } },
+    { "id": "evolink/z-image-turbo", "name": "Z Image Turbo", "provider": "Tongyi", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-z-image", "pricing": { "price": { "type": "flat", "amount": 0.026 } } },
     { "id": "fal-ai/bytedance/seedream/v4.5/text-to-image", "name": "Seedream 4.5", "provider": "Bytedance", "type": "image", "tier": "quality", "via": "fal", "profile": "fal-image", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
     { "id": "fal-ai/bytedance/seedream/v4.5/edit", "name": "Seedream 4.5 Edit", "provider": "Bytedance", "type": "edit", "tier": "quality", "via": "fal", "profile": "fal-edit", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
     { "id": "fal-ai/bytedance/seedream/v5/lite/text-to-image", "name": "Seedream 5 Lite", "provider": "Bytedance", "type": "image", "tier": "fast", "via": "fal", "profile": "fal-image", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },

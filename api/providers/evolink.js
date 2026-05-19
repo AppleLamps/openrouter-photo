@@ -1,7 +1,85 @@
 const { redactKey } = require('../_middleware');
+const { getEvolinkConfig } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
 
-const EVOLINK_ASPECT_RATIOS = new Set(['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
+const EVOLINK_SEEDREAM_ASPECT_RATIOS = new Set(['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
+const Z_IMAGE_TURBO_ASPECT_RATIOS = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '1:2', '2:1']);
+const Z_IMAGE_ASPECT_FALLBACK = {
+    '21:9': '16:9',
+    '9:21': '9:16',
+    '4:5': '3:4',
+    '5:4': '4:3',
+    auto: '1:1',
+};
+
+function normalizeZImageAspectRatio(ratio) {
+    if (Z_IMAGE_TURBO_ASPECT_RATIOS.has(ratio)) return ratio;
+    return Z_IMAGE_ASPECT_FALLBACK[ratio] || '1:1';
+}
+
+function extractEvolinkResults(data) {
+    const candidates = [
+        data?.results,
+        data?.data?.results,
+        data?.output,
+        data?.data?.output,
+        data?.images,
+        data?.data?.images,
+    ];
+    for (const value of candidates) {
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => {
+                    if (typeof item === 'string') return item;
+                    return item?.url || item?.image_url || item?.file_url || null;
+                })
+                .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url));
+        }
+    }
+    return [];
+}
+
+function normalizeSeedreamQuality(resolution, qualityOptions) {
+    const options = Array.isArray(qualityOptions) && qualityOptions.length > 0
+        ? qualityOptions
+        : ['2K', '4K'];
+    if (options.includes(resolution)) return resolution;
+    return options.includes('2K') ? '2K' : options[0];
+}
+
+function buildSeedreamPayload({
+    apiModel,
+    prompt,
+    parsedNumImages,
+    normalizedAspectRatio,
+    resolution,
+    uploadedImageUrls,
+    qualityOptions,
+}) {
+    const quality = normalizeSeedreamQuality(resolution, qualityOptions);
+    const normalizedSize = EVOLINK_SEEDREAM_ASPECT_RATIOS.has(normalizedAspectRatio)
+        ? normalizedAspectRatio
+        : 'auto';
+
+    return {
+        model: apiModel,
+        prompt: prompt.trim(),
+        n: parsedNumImages,
+        size: normalizedSize,
+        quality,
+        prompt_priority: 'standard',
+        ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
+    };
+}
+
+function buildZImageTurboPayload({ apiModel, prompt, normalizedAspectRatio }) {
+    return {
+        model: apiModel,
+        prompt: prompt.trim(),
+        size: normalizeZImageAspectRatio(normalizedAspectRatio),
+        nsfw_check: false,
+    };
+}
 
 async function handleEvolink(ctx) {
     const {
@@ -15,32 +93,15 @@ async function handleEvolink(ctx) {
         evolinkKey,
     } = ctx;
 
+    const evolinkConfig = getEvolinkConfig(model);
+    if (!evolinkConfig) {
+        return res.status(500).json({ error: 'Evolink model configuration is missing' });
+    }
+
     const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const evolinkHeaders = {
         Authorization: `Bearer ${evolinkKey}`,
         'Content-Type': 'application/json',
-    };
-
-    const extractEvolinkResults = (data) => {
-        const candidates = [
-            data?.results,
-            data?.data?.results,
-            data?.output,
-            data?.data?.output,
-            data?.images,
-            data?.data?.images,
-        ];
-        for (const value of candidates) {
-            if (Array.isArray(value)) {
-                return value
-                    .map((item) => {
-                        if (typeof item === 'string') return item;
-                        return item?.url || item?.image_url || item?.file_url || null;
-                    })
-                    .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url));
-            }
-        }
-        return [];
     };
 
     const uploadEvolinkReferenceImage = async (dataUrl, index) => {
@@ -73,45 +134,7 @@ async function handleEvolink(ctx) {
         return fileUrl;
     };
 
-    try {
-        const uploadedImageUrls = normalizedInputImages.length > 0
-            ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
-            : [];
-
-        const quality = resolution === '4K' ? '4K' : '2K';
-        const normalizedSize = EVOLINK_ASPECT_RATIOS.has(normalizedAspectRatio)
-            ? normalizedAspectRatio
-            : 'auto';
-
-        const evolinkPayload = {
-            model: 'doubao-seedream-4.5',
-            prompt: prompt.trim(),
-            n: parsedNumImages,
-            size: normalizedSize,
-            quality,
-            prompt_priority: 'standard',
-            ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
-        };
-
-        const createResponse = await fetch('https://api.evolink.ai/v1/images/generations', {
-            method: 'POST',
-            headers: evolinkHeaders,
-            body: JSON.stringify(evolinkPayload),
-        });
-
-        if (!createResponse.ok) {
-            const errorText = await createResponse.text();
-            return res.status(createResponse.status).json({
-                ...formatEvolinkError(errorText, 'Failed to start image generation via Evolink'),
-            });
-        }
-
-        const createData = await createResponse.json();
-        const taskId = createData?.id || createData?.task_id || createData?.data?.id;
-        if (!taskId) {
-            return res.status(502).json({ error: 'Evolink request did not return a task ID' });
-        }
-
+    const pollEvolinkTask = async (taskId) => {
         for (let attempt = 0; attempt < 45; attempt++) {
             if (attempt > 0) await delay(2000);
 
@@ -121,55 +144,179 @@ async function handleEvolink(ctx) {
 
             if (!taskResponse.ok) {
                 const errorText = await taskResponse.text();
-                return res.status(taskResponse.status).json({
-                    ...formatEvolinkError(errorText, 'Failed to retrieve Evolink task status'),
-                });
+                return {
+                    error: {
+                        status: taskResponse.status,
+                        payload: formatEvolinkError(errorText, 'Failed to retrieve Evolink task status'),
+                    },
+                };
             }
 
             const taskData = await taskResponse.json();
             const status = String(taskData?.status || taskData?.data?.status || '').toLowerCase();
 
             if (status === 'completed') {
-                const results = extractEvolinkResults(taskData).slice(0, parsedNumImages);
+                const results = extractEvolinkResults(taskData);
                 if (results.length === 0) {
-                    return res.status(502).json({ error: 'Evolink completed without returning image URLs' });
+                    return {
+                        error: {
+                            status: 502,
+                            payload: { error: 'Evolink completed without returning image URLs' },
+                        },
+                    };
                 }
-
-                const requestMeta = {
-                    model: 'doubao-seedream-4.5',
-                    provider_name: 'evolink',
-                    generation_id: taskId,
-                    created_at: taskData?.created || createData?.created || null,
-                    usage: 0,
-                    credits_reserved: createData?.usage?.credits_reserved || null,
-                    imageCount: results.length,
-                    usage_pending: false,
+                return {
+                    results,
+                    taskData,
                 };
-
-                return res.status(200).json({
-                    images: results.map((url) => ({
-                        url,
-                        model,
-                        cost: 0,
-                        provider: 'evolink',
-                    })),
-                    meta: {
-                        total_usage: 0,
-                        requests: [requestMeta],
-                        usage_pending: false,
-                    },
-                });
             }
 
             if (status === 'failed') {
                 const taskError = taskData?.error || taskData?.data?.error;
-                return res.status(502).json({
-                    ...formatEvolinkError(JSON.stringify(taskError || taskData), 'Evolink image generation failed'),
-                });
+                return {
+                    error: {
+                        status: 502,
+                        payload: formatEvolinkError(JSON.stringify(taskError || taskData), 'Evolink image generation failed'),
+                    },
+                };
             }
         }
 
-        return res.status(504).json({ error: 'Evolink image generation timed out. Please try again.' });
+        return {
+            error: {
+                status: 504,
+                payload: { error: 'Evolink image generation timed out. Please try again.' },
+            },
+        };
+    };
+
+    const createAndPollTask = async (payload) => {
+        const createResponse = await fetch('https://api.evolink.ai/v1/images/generations', {
+            method: 'POST',
+            headers: evolinkHeaders,
+            body: JSON.stringify(payload),
+        });
+
+        if (!createResponse.ok) {
+            const errorText = await createResponse.text();
+            return {
+                error: {
+                    status: createResponse.status,
+                    payload: formatEvolinkError(errorText, 'Failed to start image generation via Evolink'),
+                },
+            };
+        }
+
+        const createData = await createResponse.json();
+        const taskId = createData?.id || createData?.task_id || createData?.data?.id;
+        if (!taskId) {
+            return {
+                error: {
+                    status: 502,
+                    payload: { error: 'Evolink request did not return a task ID' },
+                },
+            };
+        }
+
+        const pollResult = await pollEvolinkTask(taskId);
+        if (pollResult.error) return pollResult;
+
+        return {
+            results: pollResult.results,
+            createData,
+            taskData: pollResult.taskData,
+            taskId,
+        };
+    };
+
+    try {
+        const { variant, apiModel, qualityOptions } = evolinkConfig;
+        const uploadedImageUrls = normalizedInputImages.length > 0
+            ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
+            : [];
+
+        if (variant === 'z-image-turbo') {
+            const allResults = [];
+            const requestMeta = [];
+
+            for (let index = 0; index < parsedNumImages; index++) {
+                const payload = buildZImageTurboPayload({
+                    apiModel,
+                    prompt,
+                    normalizedAspectRatio,
+                });
+                const taskResult = await createAndPollTask(payload);
+                if (taskResult.error) {
+                    return res.status(taskResult.error.status).json(taskResult.error.payload);
+                }
+
+                allResults.push(...taskResult.results.slice(0, 1));
+                requestMeta.push({
+                    model,
+                    provider_name: 'evolink',
+                    generation_id: taskResult.taskId,
+                    created_at: taskResult.taskData?.created || taskResult.createData?.created || null,
+                    usage: taskResult.createData?.usage?.credits_reserved || 0,
+                    credits_reserved: taskResult.createData?.usage?.credits_reserved || null,
+                    imageCount: 1,
+                    usage_pending: false,
+                });
+            }
+
+            return res.status(200).json({
+                images: allResults.map((url) => ({
+                    url,
+                    model,
+                    cost: 0,
+                    provider: 'evolink',
+                })),
+                meta: {
+                    total_usage: requestMeta.reduce((sum, req) => sum + (req.usage || 0), 0),
+                    requests: requestMeta,
+                    usage_pending: false,
+                },
+            });
+        }
+
+        const payload = buildSeedreamPayload({
+            apiModel,
+            prompt,
+            parsedNumImages,
+            normalizedAspectRatio,
+            resolution,
+            uploadedImageUrls,
+            qualityOptions,
+        });
+        const taskResult = await createAndPollTask(payload);
+        if (taskResult.error) {
+            return res.status(taskResult.error.status).json(taskResult.error.payload);
+        }
+
+        const results = taskResult.results.slice(0, parsedNumImages);
+        const requestMeta = {
+            model,
+            provider_name: 'evolink',
+            generation_id: taskResult.taskId,
+            created_at: taskResult.taskData?.created || taskResult.createData?.created || null,
+            usage: 0,
+            credits_reserved: taskResult.createData?.usage?.credits_reserved || null,
+            imageCount: results.length,
+            usage_pending: false,
+        };
+
+        return res.status(200).json({
+            images: results.map((url) => ({
+                url,
+                model,
+                cost: 0,
+                provider: 'evolink',
+            })),
+            meta: {
+                total_usage: 0,
+                requests: [requestMeta],
+                usage_pending: false,
+            },
+        });
     } catch (error) {
         if (error?.payload) {
             return res.status(error.status || 502).json(error.payload);
@@ -179,4 +326,10 @@ async function handleEvolink(ctx) {
     }
 }
 
-module.exports = { handleEvolink };
+module.exports = {
+    handleEvolink,
+    buildSeedreamPayload,
+    buildZImageTurboPayload,
+    normalizeZImageAspectRatio,
+    normalizeSeedreamQuality,
+};

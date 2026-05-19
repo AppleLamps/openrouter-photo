@@ -25,7 +25,7 @@ const MODEL_IDS = catalog.models.map((m) => m.id);
 describe('catalog integrity — structure', () => {
     it('has unique model ids', () => {
         assert.equal(new Set(MODEL_IDS).size, MODEL_IDS.length);
-        assert.equal(MODEL_IDS.length, 41);
+        assert.equal(MODEL_IDS.length, 44);
     });
 
     it('every model references a valid profile', () => {
@@ -62,7 +62,7 @@ describe('catalog integrity — routing', () => {
     it('backend counts match catalog', () => {
         const byBackend = listModelsByBackend();
         assert.equal(byBackend.openrouter.length, 8);
-        assert.equal(byBackend.evolink.length, 2);
+        assert.equal(byBackend.evolink.length, 5);
         assert.equal(byBackend['fal-image'].length, 21);
         assert.equal(byBackend.xai.length, 3);
         assert.equal(byBackend['fal-video'].length, 7);
@@ -70,7 +70,7 @@ describe('catalog integrity — routing', () => {
 
     it('all edit models require input images', () => {
         const edits = catalog.models.filter((m) => m.type === 'edit');
-        assert.equal(edits.length, 8);
+        assert.equal(edits.length, 9);
         for (const m of edits) {
             assert.equal(requiresInputImage(m.id), true, m.id);
         }
@@ -154,8 +154,8 @@ describe('catalog integrity — model types', () => {
             counts[m.type] = (counts[m.type] || 0) + 1;
         }
         assert.deepEqual(counts, {
-            image: 25,
-            edit: 8,
+            image: 27,
+            edit: 9,
             'text-to-video': 3,
             'image-to-video': 5,
         });

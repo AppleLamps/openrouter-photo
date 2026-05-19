@@ -49,4 +49,19 @@ describe('UI capabilities', () => {
         assert.equal(ui.videoLength, null);
         assert.equal(ui.generateAudio, false);
     });
+
+    it('evolink z-image-turbo exposes aspect ratio without resolution', () => {
+        const ui = getUiCapabilities('evolink/z-image-turbo');
+        assert.equal(ui.aspectRatio, true);
+        assert.equal(ui.resolution, null);
+        assert.equal(ui.videoLength, null);
+        assert.equal(ui.generateAudio, false);
+    });
+
+    it('evolink seedream 5 lite exposes 2K and 3K resolution', () => {
+        const ui = getUiCapabilities('evolink/doubao-seedream-5.0-lite');
+        assert.equal(ui.aspectRatio, true);
+        assert.deepEqual(ui.resolution?.options, ['2K', '3K']);
+        assert.equal(ui.resolution?.default, '2K');
+    });
 });
