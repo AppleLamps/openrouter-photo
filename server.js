@@ -6,6 +6,7 @@ const enhanceHandler = require('./api/enhance');
 const testKeyHandler = require('./api/test-key');
 const testXaiKeyHandler = require('./api/test-xai-key');
 const testFalKeyHandler = require('./api/test-fal-key');
+const testEvolinkKeyHandler = require('./api/test-evolink-key');
 const randomPromptHandler = require('./api/random-prompt');
 const videoStatusHandler = require('./api/video-status');
 
@@ -41,7 +42,7 @@ app.use('/api', (req, res, next) => {
         }
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-App-Access-Token');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-Evolink-Api-Key, X-App-Access-Token');
     if (cors.blocked) {
         return res.status(403).json({ error: 'Origin not allowed' });
     }
@@ -78,6 +79,10 @@ app.post('/api/test-xai-key', (req, res) => {
 
 app.post('/api/test-fal-key', (req, res) => {
     return testFalKeyHandler(req, res);
+});
+
+app.post('/api/test-evolink-key', (req, res) => {
+    return testEvolinkKeyHandler(req, res);
 });
 
 app.post('/api/random-prompt', (req, res) => {

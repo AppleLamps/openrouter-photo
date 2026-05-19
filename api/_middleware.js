@@ -144,6 +144,13 @@ function resolveFalApiKey(req) {
     ], 'FAL_KEY');
 }
 
+function resolveEvolinkApiKey(req) {
+    return resolveProviderApiKey(req, [
+        'x-evolink-api-key',
+        'x-evolink-api_key',
+    ], 'EVOLINK_API_KEY');
+}
+
 /**
  * Redact OpenRouter API keys from text to prevent leaking secrets in logs/responses.
  * @param {string} text
@@ -156,6 +163,7 @@ const redactKey = (text) => {
     return str
         .replace(/sk-or-v1-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]')
         .replace(/xai-[a-zA-Z0-9.\-_]+/g, '[REDACTED_API_KEY]')
+        .replace(/Bearer\s+[a-zA-Z0-9._:\-]{16,}/gi, 'Bearer [REDACTED_API_KEY]')
         .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]+/gi, '[REDACTED_API_KEY]')
         .replace(/fal[_-][a-zA-Z0-9.\-_]{20,}/g, '[REDACTED_API_KEY]')
         .replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, '[REDACTED_IMAGE_DATA]');
@@ -172,7 +180,7 @@ const redactKey = (text) => {
  */
 function withMiddleware(handler, options = {}) {
     const {
-        allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-App-Access-Token',
+        allowHeaders = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-Evolink-Api-Key, X-App-Access-Token',
         skipBodyParse = false,
         rateLimit = {},
         methods = ['POST'],
@@ -237,4 +245,4 @@ function withMiddleware(handler, options = {}) {
     };
 }
 
-module.exports = { withMiddleware, redactKey, resolveOpenRouterApiKey, resolveXaiApiKey, resolveFalApiKey };
+module.exports = { withMiddleware, redactKey, resolveOpenRouterApiKey, resolveXaiApiKey, resolveFalApiKey, resolveEvolinkApiKey };

@@ -34,6 +34,8 @@
     <link rel="preconnect" href="https://api.x.ai">
     <link rel="preconnect" href="https://fal.run">
     <link rel="dns-prefetch" href="https://queue.fal.run">
+    <link rel="preconnect" href="https://api.evolink.ai">
+    <link rel="dns-prefetch" href="https://files-api.evolink.ai">
 
     <!-- Critical CSS: inlined above-the-fold styles to eliminate render-blocking round trips -->
     <style>
@@ -469,6 +471,31 @@
                     </p>
                 </div>
 
+                <!-- Evolink API Key -->
+                <div class="settings-group">
+                    <label class="settings-label" for="setting-evolink-key">Evolink API Key</label>
+                    <div class="settings-inline">
+                        <input type="password" id="setting-evolink-key" class="settings-input settings-inline__input"
+                            placeholder="Paste your Evolink key (stored locally in your browser)">
+                        <button type="button" id="setting-evolink-save"
+                            class="settings-btn settings-btn--inline settings-btn--sm">
+                            Save
+                        </button>
+                        <button type="button" id="setting-evolink-test"
+                            class="settings-btn settings-btn--inline settings-btn--sm">
+                            Test
+                        </button>
+                    </div>
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="setting-evolink-key-show">
+                        <span>Show API key</span>
+                    </label>
+                    <span id="setting-evolink-save-status" class="settings-hint"></span>
+                    <p class="settings-hint">
+                        Stored in <code>localStorage</code> and sent to <code>/api</code> when using Evolink models.
+                    </p>
+                </div>
+
                 <!-- App Access Token -->
                 <div class="settings-group">
                     <label class="settings-label" for="setting-app-access-token">App Access Token</label>
@@ -513,7 +540,7 @@
                         <option value="21:9">21:9 (Ultrawide)</option>
                         <option value="9:21">9:21</option>
                     </select>
-                    <p class="settings-hint">Applied for Gemini, Seedream, Fal, and xAI models.</p>
+                    <p class="settings-hint">Applied for Gemini, Seedream, Fal, Evolink, and xAI models.</p>
                 </div>
 
                 <!-- Resolution / image size -->
@@ -524,7 +551,7 @@
                         <option value="2K">2K</option>
                         <option value="4K">4K</option>
                     </select>
-                    <p class="settings-hint">Applied for Gemini and xAI image-generation models.</p>
+                    <p class="settings-hint">Applied for Gemini, xAI, and Evolink Seedream image-generation models.</p>
                 </div>
 
 
