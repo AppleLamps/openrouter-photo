@@ -192,4 +192,95 @@ describe('evolink payload builders', () => {
         assert.ok(res.body.images.every((image) => image.url.startsWith('/api/image-proxy?url=')));
         assert.equal(res.body.meta.requests.length, 2);
     });
+
+    it('runs Seedream 5 Lite through the documented async task contract', async () => {
+        const createBodies = [];
+        const uploadedUrls = [
+            'https://files-api.evolink.ai/files/ref-a.png',
+            'https://files-api.evolink.ai/files/ref-b.png',
+        ];
+        const resultUrl = 'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream5/out.jpeg';
+        const polledTaskUrls = [];
+        let uploadCount = 0;
+
+        global.fetch = async (url, options = {}) => {
+            if (url === 'https://files-api.evolink.ai/api/v1/files/upload/base64') {
+                const body = JSON.parse(options.body);
+                assert.match(body.base64_data, /^data:image\//);
+                return {
+                    ok: true,
+                    json: async () => ({
+                        data: { file_url: uploadedUrls[uploadCount++] },
+                    }),
+                };
+            }
+
+            if (url === 'https://api.evolink.ai/v1/images/generations') {
+                createBodies.push(JSON.parse(options.body));
+                return {
+                    ok: true,
+                    json: async () => ({
+                        id: 'task-unified-1757165031-seedream5lite',
+                        model: 'doubao-seedream-5.0-lite',
+                        object: 'image.generation.task',
+                        progress: 0,
+                        status: 'pending',
+                        type: 'image',
+                        usage: { credits_reserved: 1.8 },
+                    }),
+                };
+            }
+
+            if (String(url).startsWith('https://api.evolink.ai/v1/tasks/')) {
+                polledTaskUrls.push(String(url));
+                return {
+                    ok: true,
+                    json: async () => ({
+                        id: 'task-unified-1757165031-seedream5lite',
+                        model: 'doubao-seedream-5.0-lite',
+                        object: 'image.generation.task',
+                        progress: 100,
+                        results: [resultUrl],
+                        status: 'completed',
+                        type: 'image',
+                    }),
+                };
+            }
+
+            throw new Error(`Unexpected fetch: ${url}`);
+        };
+
+        const res = makeRes();
+        await handleEvolink({
+            res,
+            model: 'evolink/doubao-seedream-5.0-lite',
+            prompt: 'make the sky cinematic',
+            parsedNumImages: 1,
+            normalizedAspectRatio: '4:5',
+            resolution: '3K',
+            normalizedInputImages: [
+                'data:image/png;base64,aaa',
+                'data:image/webp;base64,bbb',
+            ],
+            evolinkKey: 'evolink-test-key',
+        });
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(uploadCount, 2);
+        assert.deepEqual(createBodies, [{
+            model: 'doubao-seedream-5.0-lite',
+            prompt: 'make the sky cinematic',
+            n: 1,
+            size: '4:5',
+            quality: '3K',
+            prompt_priority: 'standard',
+            image_urls: uploadedUrls,
+        }]);
+        assert.deepEqual(polledTaskUrls, [
+            'https://api.evolink.ai/v1/tasks/task-unified-1757165031-seedream5lite',
+        ]);
+        assert.equal(res.body.images.length, 1);
+        assert.equal(res.body.images[0].source_url, resultUrl);
+        assert.equal(res.body.meta.requests[0].generation_id, 'task-unified-1757165031-seedream5lite');
+    });
 });
