@@ -3,7 +3,12 @@
  * Capabilities and routing: see model-capabilities.js and shared/model-catalog.json.
  */
 
-import { CATALOG_MODELS, DEFAULT_MODEL_ID, LEGACY_MODEL_REDIRECTS } from './model-capabilities.js';
+import {
+    CATALOG_MODELS,
+    DEFAULT_MODEL_ID,
+    LEGACY_MODEL_REDIRECTS,
+    isVisibleInPicker,
+} from './model-capabilities.js';
 
 export {
     findModel as findModelById,
@@ -19,20 +24,28 @@ export {
     getFalVideoConfig,
     getOpenRouterConfig,
     getModelPricing,
+    isVisibleInPicker,
     ANIMATE_MODEL_ID,
     DEFAULT_MODEL_ID,
     LEGACY_MODEL_REDIRECTS,
 } from './model-capabilities.js';
 
-/** @type {import('./model-capabilities.js').CATALOG_MODELS} */
-export const MODELS = CATALOG_MODELS.map(({ id, name, provider, type, tier, via }) => ({
-    id,
-    name,
-    provider,
-    type,
-    tier,
-    ...(via ? { via } : {}),
-}));
+function toPickerModel({ id, name, provider, type, tier, via }) {
+    return {
+        id,
+        name,
+        provider,
+        type,
+        tier,
+        ...(via ? { via } : {}),
+    };
+}
+
+/** All catalog models (including picker-hidden entries). */
+export const MODELS = CATALOG_MODELS.map(toPickerModel);
+
+/** Models shown in the model picker. */
+export const PICKER_MODELS = CATALOG_MODELS.filter((m) => isVisibleInPicker(m.id)).map(toPickerModel);
 
 /** Tab → set of model types it includes. */
 export const CAPABILITY_TABS = [

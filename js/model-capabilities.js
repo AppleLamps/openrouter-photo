@@ -5,7 +5,9 @@
 
 import catalog from '../shared/model-catalog.json' with { type: 'json' };
 
-const { capabilityProfiles, models, legacyRedirects, defaultModelId, defaults } = catalog;
+const { capabilityProfiles, models, legacyRedirects, defaultModelId, defaults, picker: pickerConfig } = catalog;
+
+const PICKER_HIDDEN_API_KEYS = new Set(pickerConfig?.hiddenApiKeys || []);
 
 function deepMerge(base, override) {
     if (!override) return base ? { ...base } : {};
@@ -68,6 +70,15 @@ export function resolveCapabilities(modelId) {
 
 export function getApiKey(modelId) {
     return resolveCapabilities(modelId).apiKey;
+}
+
+/** Whether the model should appear in the model picker (catalog entries remain for routing). */
+export function isVisibleInPicker(modelId) {
+    const entry = findModel(normalizeModelId(modelId));
+    if (!entry) return false;
+    if (entry.pickerHidden === true) return false;
+    if (entry.pickerVisible === true) return true;
+    return !PICKER_HIDDEN_API_KEYS.has(getApiKey(entry.id));
 }
 
 export function getBackend(modelId) {

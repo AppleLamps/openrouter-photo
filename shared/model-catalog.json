@@ -3,6 +3,9 @@
   "defaults": {
     "animateModelId": "bytedance/seedance-2.0/image-to-video"
   },
+  "picker": {
+    "hiddenApiKeys": ["fal"]
+  },
   "legacyRedirects": {
     "grok-imagine-image-pro": "grok-imagine-image-quality",
     "fal-ai/bytedance/seedance-2.0/text-to-video": "bytedance/seedance-2.0/text-to-video",

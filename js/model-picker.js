@@ -5,7 +5,7 @@
 import { state } from './state.js';
 import { showCreateFolderModal } from './sidebar.js';
 import {
-    MODELS,
+    PICKER_MODELS,
     CAPABILITY_TABS,
     TYPE_PILL_LABEL,
     TIER_LABEL,
