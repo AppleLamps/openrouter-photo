@@ -6,7 +6,8 @@
   "legacyRedirects": {
     "grok-imagine-image-pro": "grok-imagine-image-quality",
     "fal-ai/bytedance/seedance-2.0/text-to-video": "bytedance/seedance-2.0/text-to-video",
-    "fal-ai/bytedance/seedance-2.0/image-to-video": "bytedance/seedance-2.0/image-to-video"
+    "fal-ai/bytedance/seedance-2.0/image-to-video": "bytedance/seedance-2.0/image-to-video",
+    "evolink/doubao-seedream-5.0-lite/edit": "evolink/doubao-seedream-5.0-lite"
   },
   "capabilityProfiles": {
     "openrouter-image": {
@@ -359,7 +360,6 @@
     { "id": "evolink/doubao-seedream-4.5", "name": "Seedream 4.5", "provider": "Bytedance", "type": "image", "tier": "quality", "via": "Evolink", "profile": "evolink-image", "pricing": { "price": { "type": "flat", "amount": 0.035569230769 } } },
     { "id": "evolink/doubao-seedream-4.5/edit", "name": "Seedream 4.5 Edit", "provider": "Bytedance", "type": "edit", "tier": "quality", "via": "Evolink", "profile": "evolink-edit", "pricing": { "price": { "type": "flat", "amount": 0.035569230769 } } },
     { "id": "evolink/doubao-seedream-5.0-lite", "name": "Seedream 5 Lite", "provider": "Bytedance", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-image", "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-lite" }, "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "2K" } } } },
-    { "id": "evolink/doubao-seedream-5.0-lite/edit", "name": "Seedream 5 Lite Edit", "provider": "Bytedance", "type": "edit", "tier": "fast", "via": "Evolink", "profile": "evolink-edit", "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-lite" }, "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "2K" } } } },
     { "id": "evolink/z-image-turbo", "name": "Z Image Turbo", "provider": "Tongyi", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-z-image", "pricing": { "price": { "type": "flat", "amount": 0.004 } } },
     { "id": "fal-ai/bytedance/seedream/v4.5/text-to-image", "name": "Seedream 4.5", "provider": "Bytedance", "type": "image", "tier": "quality", "via": "fal", "profile": "fal-image", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },
     { "id": "fal-ai/bytedance/seedream/v4.5/edit", "name": "Seedream 4.5 Edit", "provider": "Bytedance", "type": "edit", "tier": "quality", "via": "fal", "profile": "fal-edit", "pricing": { "price": { "type": "flat", "amount": 0.04 } } },

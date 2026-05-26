@@ -89,9 +89,9 @@ describe('model catalog — backend routing', () => {
         assert.equal(requiresInputImage('evolink/z-image-turbo'), false);
         assert.equal(getMaxInputImages('evolink/z-image-turbo'), 0);
         assert.equal(getBackend('evolink/doubao-seedream-5.0-lite'), 'evolink');
-        assert.equal(getBackend('evolink/doubao-seedream-5.0-lite/edit'), 'evolink');
-        assert.ok(requiresInputImage('evolink/doubao-seedream-5.0-lite/edit'));
+        assert.equal(normalizeModelId('evolink/doubao-seedream-5.0-lite/edit'), 'evolink/doubao-seedream-5.0-lite');
         assert.equal(requiresInputImage('evolink/doubao-seedream-5.0-lite'), false);
+        assert.equal(getMaxInputImages('evolink/doubao-seedream-5.0-lite'), 14);
     });
 });
 
