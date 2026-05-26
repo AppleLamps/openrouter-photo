@@ -75,6 +75,34 @@ describe('evolink payload builders', () => {
         });
     });
 
+    it('builds seedream 5 lite image-to-image payload with reference urls', () => {
+        const payload = buildSeedreamPayload({
+            apiModel: 'doubao-seedream-5.0-lite',
+            prompt: 'make the sky more dramatic',
+            parsedNumImages: 1,
+            normalizedAspectRatio: 'auto',
+            resolution: '2K',
+            uploadedImageUrls: [
+                'https://example.com/ref-a.png',
+                'https://example.com/ref-b.png',
+            ],
+            qualityOptions: ['2K', '3K'],
+        });
+
+        assert.deepEqual(payload, {
+            model: 'doubao-seedream-5.0-lite',
+            prompt: 'make the sky more dramatic',
+            n: 1,
+            size: 'auto',
+            quality: '2K',
+            prompt_priority: 'standard',
+            image_urls: [
+                'https://example.com/ref-a.png',
+                'https://example.com/ref-b.png',
+            ],
+        });
+    });
+
     it('falls back to 2K when resolution is unsupported for seedream quality', () => {
         assert.equal(normalizeSeedreamQuality('4K', ['2K', '3K']), '2K');
         assert.equal(normalizeSeedreamQuality('3K', ['2K', '3K']), '3K');

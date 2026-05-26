@@ -65,3 +65,19 @@ describe('UI capabilities', () => {
         assert.equal(ui.resolution?.default, '2K');
     });
 });
+
+describe('picker visibility', () => {
+    it('hides fal api-key models from the picker while keeping them in the catalog', async () => {
+        const { isVisibleInPicker } = await import('../js/model-capabilities.js');
+        const catalog = require('../shared/model-catalog.json');
+
+        const falModels = catalog.models.filter((m) => m.via === 'fal');
+        assert.ok(falModels.length > 0);
+        for (const m of falModels) {
+            assert.equal(isVisibleInPicker(m.id), false, m.id);
+        }
+
+        assert.equal(isVisibleInPicker('evolink/doubao-seedream-5.0-lite'), true);
+        assert.equal(isVisibleInPicker('black-forest-labs/flux.2-pro'), true);
+    });
+});

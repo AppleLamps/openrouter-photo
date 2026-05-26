@@ -61,6 +61,18 @@ describe('generate routing — input image validation', () => {
         assert.equal(requiresInputImage('fal-ai/z-image/turbo/lora'), false);
     });
 
+    it('allows evolink seedream 5 lite text-to-image and image-to-image without requiring edit tab', () => {
+        assert.equal(validateRequiredInputImages('evolink/doubao-seedream-5.0-lite', []), null);
+        assert.equal(
+            validateRequiredInputImages('evolink/doubao-seedream-5.0-lite', [SAMPLE_IMAGE]),
+            null
+        );
+        assert.equal(
+            validateRequiredInputImages('evolink/doubao-seedream-5.0-lite/edit', [SAMPLE_IMAGE]),
+            null
+        );
+    });
+
     it('normalizeInputImages filters non-data URLs and respects max', () => {
         const urls = normalizeInputImages([
             SAMPLE_IMAGE,
