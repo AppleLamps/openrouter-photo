@@ -258,7 +258,7 @@ function createModelPicker() {
 
     const renderList = () => {
         listEl.innerHTML = '';
-        const filtered = MODELS.filter(matches);
+        const filtered = PICKER_MODELS.filter(matches);
 
         if (filtered.length === 0) {
             const empty = document.createElement('div');

@@ -80,4 +80,10 @@ describe('frontend hardening', () => {
         const components = read('css/components.css');
         assert.match(components, /\.input-bar__actions-center\s*\{[^}]*flex: 0 0 100%;[^}]*width: 100%;/s);
     });
+
+    it('renders the model picker from picker-visible catalog models', () => {
+        const picker = read('js/model-picker.js');
+        assert.match(picker, /PICKER_MODELS\.filter\(matches\)/);
+        assert.doesNotMatch(picker, /const filtered = MODELS\.filter\(matches\);/);
+    });
 });
