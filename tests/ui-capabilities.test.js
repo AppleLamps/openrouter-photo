@@ -63,6 +63,12 @@ describe('UI capabilities', () => {
         assert.equal(ui.aspectRatio, true);
         assert.deepEqual(ui.resolution?.options, ['2K', '3K']);
         assert.equal(ui.resolution?.default, '2K');
+        assert.equal(ui.webSearch, true);
+    });
+
+    it('does not expose web search for other evolink models', () => {
+        assert.equal(getUiCapabilities('evolink/doubao-seedream-4.5').webSearch, false);
+        assert.equal(getUiCapabilities('evolink/z-image-turbo').webSearch, false);
     });
 });
 

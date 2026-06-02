@@ -536,6 +536,8 @@ export function updateSettingsForModel(model) {
     const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
     const generateAudioGroup = document.getElementById('generate-audio-group');
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
+    const webSearchGroup = document.getElementById('web-search-group');
+    const webSearchSwitch = document.getElementById('setting-web-search-switch');
     const flashheadSettingsGroup = document.getElementById('flashhead-settings-group');
     const falImageToVideoHintGroup = document.getElementById('fal-image-to-video-hint-group');
 
@@ -549,11 +551,15 @@ export function updateSettingsForModel(model) {
     xaiVideoLengthGroup?.classList.toggle('settings-group--hidden', !ui.videoLength);
     xaiVideoQualityGroup?.classList.toggle('settings-group--hidden', !ui.videoQuality);
     generateAudioGroup?.classList.toggle('settings-group--hidden', !ui.generateAudio);
+    webSearchGroup?.classList.toggle('settings-group--hidden', !ui.webSearch);
     flashheadSettingsGroup?.classList.toggle('settings-group--hidden', !ui.flashhead);
     falImageToVideoHintGroup?.classList.toggle('settings-group--hidden', !ui.imageToVideoHint);
 
     if (ui.generateAudio && generateAudioSwitch instanceof HTMLInputElement) {
         generateAudioSwitch.checked = true;
+    }
+    if (ui.webSearch && webSearchSwitch instanceof HTMLInputElement) {
+        webSearchSwitch.checked = true;
     }
 }
 

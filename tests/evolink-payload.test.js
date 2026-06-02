@@ -75,6 +75,38 @@ describe('evolink payload builders', () => {
         });
     });
 
+    it('adds web search tools for seedream 5 lite when enabled', () => {
+        const payload = buildSeedreamPayload({
+            apiModel: 'doubao-seedream-5.0-lite',
+            prompt: 'latest Paris fashion week trends',
+            parsedNumImages: 1,
+            normalizedAspectRatio: '3:4',
+            resolution: '2K',
+            uploadedImageUrls: [],
+            qualityOptions: ['2K', '3K'],
+            enableWebSearch: true,
+        });
+
+        assert.deepEqual(payload.model_params, {
+            tools: [{ type: 'web_search' }],
+        });
+    });
+
+    it('does not add web search tools when seedream 5 lite web search is disabled', () => {
+        const payload = buildSeedreamPayload({
+            apiModel: 'doubao-seedream-5.0-lite',
+            prompt: 'a studio product photo',
+            parsedNumImages: 1,
+            normalizedAspectRatio: '1:1',
+            resolution: '2K',
+            uploadedImageUrls: [],
+            qualityOptions: ['2K', '3K'],
+            enableWebSearch: false,
+        });
+
+        assert.equal(payload.model_params, undefined);
+    });
+
     it('builds seedream 5 lite image-to-image payload with reference urls', () => {
         const payload = buildSeedreamPayload({
             apiModel: 'doubao-seedream-5.0-lite',
@@ -262,6 +294,7 @@ describe('evolink payload builders', () => {
                 'data:image/png;base64,aaa',
                 'data:image/webp;base64,bbb',
             ],
+            enable_web_search: true,
             evolinkKey: 'evolink-test-key',
         });
 
@@ -275,6 +308,9 @@ describe('evolink payload builders', () => {
             quality: '3K',
             prompt_priority: 'standard',
             image_urls: uploadedUrls,
+            model_params: {
+                tools: [{ type: 'web_search' }],
+            },
         }]);
         assert.deepEqual(polledTaskUrls, [
             'https://api.evolink.ai/v1/tasks/task-unified-1757165031-seedream5lite',

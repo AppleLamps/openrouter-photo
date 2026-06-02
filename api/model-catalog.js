@@ -156,6 +156,7 @@ function getUiCapabilities(modelId) {
         videoLength: ui.videoLength || null,
         videoQuality: ui.videoQuality || null,
         generateAudio: Boolean(ui.generateAudio),
+        webSearch: Boolean(ui.webSearch),
         flashhead: Boolean(ui.flashhead),
         imageToVideoHint: Boolean(ui.imageToVideoHint),
     };

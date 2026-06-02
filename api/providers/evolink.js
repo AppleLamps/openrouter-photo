@@ -78,11 +78,13 @@ function buildSeedreamPayload({
     resolution,
     uploadedImageUrls,
     qualityOptions,
+    enableWebSearch = false,
 }) {
     const quality = normalizeSeedreamQuality(resolution, qualityOptions);
     const normalizedSize = EVOLINK_SEEDREAM_ASPECT_RATIOS.has(normalizedAspectRatio)
         ? normalizedAspectRatio
         : 'auto';
+    const supportsWebSearch = apiModel === 'doubao-seedream-5.0-lite';
 
     return {
         model: apiModel,
@@ -92,6 +94,11 @@ function buildSeedreamPayload({
         quality,
         prompt_priority: 'standard',
         ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
+        ...(supportsWebSearch && enableWebSearch ? {
+            model_params: {
+                tools: [{ type: 'web_search' }],
+            },
+        } : {}),
     };
 }
 
@@ -113,6 +120,7 @@ async function handleEvolink(ctx) {
         normalizedAspectRatio,
         resolution,
         normalizedInputImages,
+        enable_web_search,
         evolinkKey,
     } = ctx;
 
@@ -311,6 +319,7 @@ async function handleEvolink(ctx) {
                 resolution,
                 uploadedImageUrls,
                 qualityOptions,
+                enableWebSearch: enable_web_search === true,
             });
             const taskResult = await createAndPollTask(payload);
             if (taskResult.error) {
