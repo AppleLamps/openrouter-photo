@@ -62,7 +62,7 @@ describe('UI capabilities', () => {
         const ui = getUiCapabilities('evolink/doubao-seedream-5.0-lite');
         assert.equal(ui.aspectRatio, true);
         assert.deepEqual(ui.resolution?.options, ['2K', '3K']);
-        assert.equal(ui.resolution?.default, '2K');
+        assert.equal(ui.resolution?.default, '3K');
         assert.equal(ui.webSearch, true);
     });
 
