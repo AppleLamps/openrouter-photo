@@ -7,29 +7,28 @@ const {
     getBackend,
     getMaxInputImages,
     requiresInputImage,
-    getFalImageConfig,
-    getFalVideoConfig,
     getEvolinkConfig,
     getOpenRouterConfig,
     getModelPricing,
-    isFalImageModel,
-    isFalVideoModel,
-    isFalEditModel,
-    isKnownFalVideoModelId,
-    listFalVideoModelIds,
+    isXaiModel,
+    isEvolinkModel,
+    isEvolinkVideoModel,
     DEFAULT_MODEL_ID,
 } = require('../api/model-catalog');
-const { buildFalImagePayload } = require('../api/providers/fal-image');
 
 describe('model catalog — identity & redirects', () => {
     it('normalizes legacy grok pro alias', () => {
         assert.equal(normalizeModelId('grok-imagine-image-pro'), 'grok-imagine-image-quality');
     });
 
-    it('normalizes legacy seedance 2.0 fal paths', () => {
+    it('redirects legacy seedance 2.0 paths to the evolink video model', () => {
         assert.equal(
             normalizeModelId('fal-ai/bytedance/seedance-2.0/image-to-video'),
-            'bytedance/seedance-2.0/image-to-video'
+            'evolink/seedance-2.0/image-to-video'
+        );
+        assert.equal(
+            normalizeModelId('bytedance/seedance-2.0/image-to-video'),
+            'evolink/seedance-2.0/image-to-video'
         );
     });
 
@@ -56,42 +55,32 @@ describe('model catalog — backend routing', () => {
         assert.equal(cfg.aspectRatioFallback, true);
     });
 
-    it('routes fal image models', () => {
-        assert.equal(getBackend('fal-ai/z-image/turbo/lora'), 'fal-image');
-        assert.equal(getApiKey('fal-ai/z-image/turbo/lora'), 'fal');
-        assert.ok(isFalImageModel('fal-ai/z-image/turbo/lora'));
-    });
-
-    it('routes fal edit models', () => {
-        assert.ok(isFalEditModel('fal-ai/phota/edit'));
-        assert.ok(requiresInputImage('fal-ai/phota/edit'));
-        assert.equal(getMaxInputImages('fal-ai/phota/edit'), 10);
-    });
-
-    it('routes fal video models', () => {
-        assert.equal(getBackend('fal-ai/pixverse/c1/image-to-video'), 'fal-video');
-        assert.ok(isFalVideoModel('fal-ai/pixverse/c1/image-to-video'));
-        assert.ok(isKnownFalVideoModelId('fal-ai/pixverse/c1/image-to-video'));
-    });
-
     it('routes xai models', () => {
         assert.equal(getBackend('grok-imagine-image'), 'xai');
         assert.equal(getApiKey('grok-imagine-image'), 'xai');
+        assert.ok(isXaiModel('grok-imagine-image'));
     });
 
-    it('routes evolink models', () => {
+    it('routes evolink image models', () => {
         assert.equal(getBackend('evolink/doubao-seedream-4.5/edit'), 'evolink');
         assert.equal(getApiKey('evolink/doubao-seedream-4.5/edit'), 'evolink');
+        assert.ok(isEvolinkModel('evolink/doubao-seedream-4.5/edit'));
         assert.ok(requiresInputImage('evolink/doubao-seedream-4.5/edit'));
         assert.equal(getMaxInputImages('evolink/doubao-seedream-4.5'), 14);
         assert.equal(getBackend('evolink/z-image-turbo'), 'evolink');
-        assert.equal(getApiKey('evolink/z-image-turbo'), 'evolink');
         assert.equal(requiresInputImage('evolink/z-image-turbo'), false);
         assert.equal(getMaxInputImages('evolink/z-image-turbo'), 0);
-        assert.equal(getBackend('evolink/doubao-seedream-5.0-lite'), 'evolink');
         assert.equal(normalizeModelId('evolink/doubao-seedream-5.0-lite/edit'), 'evolink/doubao-seedream-5.0-lite');
         assert.equal(requiresInputImage('evolink/doubao-seedream-5.0-lite'), false);
-        assert.equal(getMaxInputImages('evolink/doubao-seedream-5.0-lite'), 14);
+    });
+
+    it('routes the evolink seedance video model', () => {
+        const id = 'evolink/seedance-2.0/image-to-video';
+        assert.equal(getBackend(id), 'evolink-video');
+        assert.equal(getApiKey(id), 'evolink');
+        assert.ok(isEvolinkVideoModel(id));
+        assert.ok(requiresInputImage(id));
+        assert.equal(getMaxInputImages(id), 2);
     });
 });
 
@@ -114,74 +103,13 @@ describe('model catalog — evolink config', () => {
         assert.equal(cfg.apiModel, 'doubao-seedream-5.0-lite');
         assert.deepEqual(cfg.qualityOptions, ['2K', '3K']);
     });
-});
 
-describe('model catalog — fal image variants', () => {
-    it('assigns z-image variant from catalog', () => {
-        const cfg = getFalImageConfig('fal-ai/z-image/turbo/lora');
-        assert.equal(cfg.variant, 'z-image');
-        assert.equal(cfg.usesPresetImageSize, true);
-        assert.equal(cfg.payloadDefaults.num_inference_steps, 8);
-        assert.equal(cfg.payloadDefaults.enable_safety_checker, false);
-    });
-
-    it('assigns phota async queue flag', () => {
-        const cfg = getFalImageConfig('fal-ai/phota');
-        assert.equal(cfg.variant, 'phota');
-        assert.equal(cfg.asyncQueue, true);
-    });
-
-    it('builds z-image payload shape', () => {
-        const falImageConfig = getFalImageConfig('fal-ai/z-image/turbo/lora');
-        const payload = buildFalImagePayload({
-            model: 'fal-ai/z-image/turbo/lora',
-            prompt: 'test prompt',
-            parsedNumImages: 2,
-            normalizedAspectRatio: '16:9',
-            resolution: '1K',
-            falImageConfig,
-            falImageSize: 'landscape_16_9',
-        });
-        assert.equal(payload.num_inference_steps, 8);
-        assert.equal(payload.image_size, 'landscape_16_9');
-        assert.equal(payload.num_images, 2);
-    });
-
-    it('builds nucleus payload without image_size', () => {
-        const falImageConfig = getFalImageConfig('fal-ai/nucleus-image');
-        const payload = buildFalImagePayload({
-            model: 'fal-ai/nucleus-image',
-            prompt: 'test',
-            parsedNumImages: 1,
-            normalizedAspectRatio: '3:4',
-            resolution: '1K',
-            falImageConfig,
-            falImageSize: undefined,
-        });
-        assert.equal(payload.aspect_ratio, '3:4');
-        assert.equal(payload.num_images, 1);
-    });
-});
-
-describe('model catalog — fal video config', () => {
-    it('pixverse has audio and i2v flags', () => {
-        const cfg = getFalVideoConfig('fal-ai/pixverse/c1/image-to-video');
-        assert.equal(cfg.variant, 'pixverse');
-        assert.equal(cfg.imageToVideo, true);
-        assert.ok(cfg.pricing?.pixverseC1);
-    });
-
-    it('flashhead hides standard video UI capabilities', () => {
-        const caps = resolveCapabilities('fal-ai/flashhead');
-        assert.equal(caps.ui.flashhead, true);
-        assert.equal(caps.ui.videoLength, undefined);
-    });
-
-    it('lists all fal video model ids', () => {
-        const ids = listFalVideoModelIds();
-        assert.ok(ids.includes('bytedance/seedance-2.0/image-to-video'));
-        assert.ok(ids.includes('fal-ai/flashhead'));
-        assert.equal(ids.length, 7);
+    it('exposes seedance video api model and aspect ratios via capabilities', () => {
+        const caps = resolveCapabilities('evolink/seedance-2.0/image-to-video');
+        assert.equal(caps.evolink.apiModel, 'seedance-2.0-image-to-video');
+        assert.ok(caps.evolink.aspectRatios.includes('adaptive'));
+        assert.ok(caps.ui.videoLength);
+        assert.equal(caps.ui.generateAudio, true);
     });
 });
 

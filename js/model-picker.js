@@ -539,7 +539,7 @@ export function updateSettingsForModel(model) {
     const webSearchGroup = document.getElementById('web-search-group');
     const webSearchSwitch = document.getElementById('setting-web-search-switch');
     const flashheadSettingsGroup = document.getElementById('flashhead-settings-group');
-    const falImageToVideoHintGroup = document.getElementById('fal-image-to-video-hint-group');
+    const imageToVideoHintGroup = document.getElementById('image-to-video-hint-group');
 
     const ui = getUiCapabilities(model);
 
@@ -553,7 +553,7 @@ export function updateSettingsForModel(model) {
     generateAudioGroup?.classList.toggle('settings-group--hidden', !ui.generateAudio);
     webSearchGroup?.classList.toggle('settings-group--hidden', !ui.webSearch);
     flashheadSettingsGroup?.classList.toggle('settings-group--hidden', !ui.flashhead);
-    falImageToVideoHintGroup?.classList.toggle('settings-group--hidden', !ui.imageToVideoHint);
+    imageToVideoHintGroup?.classList.toggle('settings-group--hidden', !ui.imageToVideoHint);
 
     if (ui.generateAudio && generateAudioSwitch instanceof HTMLInputElement) {
         generateAudioSwitch.checked = true;

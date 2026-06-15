@@ -30,10 +30,6 @@
             "dest": "/api/test-xai-key.js"
         },
         {
-            "src": "/api/test-fal-key",
-            "dest": "/api/test-fal-key.js"
-        },
-        {
             "src": "/api/test-evolink-key",
             "dest": "/api/test-evolink-key.js"
         },

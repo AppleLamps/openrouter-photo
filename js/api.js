@@ -13,10 +13,8 @@ const RANDOM_PROMPT_ENDPOINT = '/api/random-prompt';
 const VIDEO_STATUS_ENDPOINT = '/api/video-status';
 const OPENROUTER_API_KEY_STORAGE_KEY = 'openrouter_api_key';
 const XAI_API_KEY_STORAGE_KEY = 'xai_api_key';
-const FAL_API_KEY_STORAGE_KEY = 'fal_api_key';
 const EVOLINK_API_KEY_STORAGE_KEY = 'evolink_api_key';
 const APP_ACCESS_TOKEN_STORAGE_KEY = 'app_access_token';
-const TEST_FAL_KEY_ENDPOINT = '/api/test-fal-key';
 
 const encoder = new TextEncoder();
 
@@ -54,21 +52,6 @@ function getOpenRouterApiKey() {
 function getXaiApiKey() {
     try {
         const raw = localStorage.getItem(XAI_API_KEY_STORAGE_KEY);
-        if (!raw) return null;
-        const trimmed = raw.trim();
-        return trimmed.length > 0 ? trimmed : null;
-    } catch {
-        return null;
-    }
-}
-
-/**
- * Read the user's Fal API key from localStorage (if set).
- * @returns {string | null}
- */
-function getFalApiKey() {
-    try {
-        const raw = localStorage.getItem(FAL_API_KEY_STORAGE_KEY);
         if (!raw) return null;
         const trimmed = raw.trim();
         return trimmed.length > 0 ? trimmed : null;
@@ -188,7 +171,6 @@ export async function generateImage(prompt, options = {}, signal = null) {
     try {
         const openRouterApiKey = getOpenRouterApiKey();
         const xaiApiKey = getXaiApiKey();
-        const falApiKey = getFalApiKey();
         const evolinkApiKey = getEvolinkApiKey();
         const serializedBody = JSON.stringify(requestBody);
         assertPayloadWithinLimit(serializedBody);
@@ -199,7 +181,6 @@ export async function generateImage(prompt, options = {}, signal = null) {
                 'Content-Type': 'application/json',
                 ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
                 ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
-                ...(falApiKey ? { 'X-FAL-Api-Key': falApiKey } : {}),
                 ...(evolinkApiKey ? { 'X-Evolink-Api-Key': evolinkApiKey } : {}),
                 ...getAppAccessHeaders(),
             },
@@ -392,39 +373,6 @@ export async function testXaiKey() {
 }
 
 /**
- * Test the user's Fal API key.
- * @returns {Promise<void>}
- */
-export async function testFalKey() {
-    const falApiKey = getFalApiKey();
-    if (!falApiKey) {
-        const err = new Error('Fal API key required');
-        err.code = 'FAL_API_KEY_REQUIRED';
-        err.help = { url: 'https://fal.ai/dashboard/keys' };
-        throw err;
-    }
-
-    const response = await fetch(TEST_FAL_KEY_ENDPOINT, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-FAL-Api-Key': falApiKey,
-        },
-        body: JSON.stringify({}),
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
-        if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
-            err.code = errorData.code;
-            err.help = errorData.help;
-        }
-        throw err;
-    }
-}
-
-/**
  * Test the user's Evolink API key.
  * @returns {Promise<void>}
  */
@@ -510,13 +458,13 @@ export async function getRandomPromptFromAI() {
  */
 export async function pollVideoStatus(requestId, signal = null, meta = {}) {
     const xaiApiKey = getXaiApiKey();
-    const falApiKey = getFalApiKey();
+    const evolinkApiKey = getEvolinkApiKey();
     const response = await fetch(VIDEO_STATUS_ENDPOINT, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
-            ...(falApiKey ? { 'X-FAL-Api-Key': falApiKey } : {}),
+            ...(evolinkApiKey ? { 'X-Evolink-Api-Key': evolinkApiKey } : {}),
             ...getAppAccessHeaders(),
         },
         body: JSON.stringify({

@@ -7,7 +7,6 @@ const { DEFAULT_MODEL_ID, getApiKey } = require('../api/model-catalog');
 const PROVIDER_NAMES = {
     openrouter: 'OpenRouter',
     xai: 'xAI',
-    fal: 'Fal',
     evolink: 'Evolink',
 };
 

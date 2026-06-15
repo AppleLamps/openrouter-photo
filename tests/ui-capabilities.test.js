@@ -9,7 +9,6 @@ describe('UI capabilities', () => {
         assert.deepEqual(ui.resolution?.options, ['1K', '2K', '4K']);
         assert.equal(ui.resolution?.default, '1K');
         assert.equal(ui.videoLength, null);
-        assert.equal(ui.flashhead, false);
     });
 
     it('grok video exposes video length and quality only', () => {
@@ -18,36 +17,15 @@ describe('UI capabilities', () => {
         assert.equal(ui.resolution, null);
         assert.ok(ui.videoLength);
         assert.deepEqual(ui.videoQuality?.options, ['480p', '720p']);
-        assert.equal(ui.flashhead, false);
     });
 
-    it('flashhead exposes flashhead settings only', () => {
-        const ui = getUiCapabilities('fal-ai/flashhead');
-        assert.equal(ui.aspectRatio, false);
-        assert.equal(ui.resolution, null);
-        assert.equal(ui.videoLength, null);
-        assert.equal(ui.videoQuality, null);
-        assert.equal(ui.flashhead, true);
-        assert.equal(ui.imageToVideoHint, true);
-    });
-
-    it('pixverse i2v exposes video length, quality, and generate audio', () => {
-        const ui = getUiCapabilities('fal-ai/pixverse/c1/image-to-video');
-        assert.equal(ui.aspectRatio, false);
-        assert.equal(ui.resolution, null);
-        assert.ok(ui.videoLength);
-        assert.ok(ui.videoQuality);
-        assert.equal(ui.generateAudio, true);
-        assert.equal(ui.flashhead, false);
-        assert.equal(ui.imageToVideoHint, true);
-    });
-
-    it('z-image exposes aspect ratio without resolution or video controls', () => {
-        const ui = getUiCapabilities('fal-ai/z-image/turbo/lora');
+    it('evolink seedance i2v exposes aspect ratio, video length, quality, audio, and the i2v hint', () => {
+        const ui = getUiCapabilities('evolink/seedance-2.0/image-to-video');
         assert.equal(ui.aspectRatio, true);
-        assert.equal(ui.resolution, null);
-        assert.equal(ui.videoLength, null);
-        assert.equal(ui.generateAudio, false);
+        assert.ok(ui.videoLength);
+        assert.deepEqual(ui.videoQuality?.options, ['480p', '720p', '1080p']);
+        assert.equal(ui.generateAudio, true);
+        assert.equal(ui.imageToVideoHint, true);
     });
 
     it('evolink z-image-turbo exposes aspect ratio without resolution', () => {
@@ -73,14 +51,12 @@ describe('UI capabilities', () => {
 });
 
 describe('picker visibility', () => {
-    it('hides fal api-key models from the picker while keeping them in the catalog', async () => {
+    it('shows every catalog model in the picker', async () => {
         const { isVisibleInPicker } = await import('../js/model-capabilities.js');
         const catalog = require('../shared/model-catalog.json');
 
-        const falModels = catalog.models.filter((m) => m.via === 'fal');
-        assert.ok(falModels.length > 0);
-        for (const m of falModels) {
-            assert.equal(isVisibleInPicker(m.id), false, m.id);
+        for (const m of catalog.models) {
+            assert.equal(isVisibleInPicker(m.id), true, m.id);
         }
 
         assert.equal(isVisibleInPicker('evolink/doubao-seedream-5.0-lite'), true);

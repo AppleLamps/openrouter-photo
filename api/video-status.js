@@ -1,7 +1,4 @@
-const { withMiddleware, redactKey, resolveXaiApiKey, resolveFalApiKey } = require('./_middleware');
-const { getFalVideoModel, normalizeModelId, isKnownFalVideoModelId } = require('./model-catalog');
-
-const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/bytedance/seedance/v1.5/pro/text-to-video';
+const { withMiddleware, redactKey, resolveXaiApiKey, resolveEvolinkApiKey } = require('./_middleware');
 
 const normalizeStringParam = (value) => {
     const candidate = Array.isArray(value) ? value[0] : value;
@@ -10,146 +7,81 @@ const normalizeStringParam = (value) => {
     return trimmed || null;
 };
 
-const resolveFalVideoModelId = (value) => {
-    const normalized = normalizeStringParam(value);
-    if (!normalized) return null;
-    return isKnownFalVideoModelId(normalized) ? normalizeModelId(normalized) : null;
-};
-
-const buildUniqueUrls = (urls) => {
-    const seen = new Set();
-    const out = [];
-    for (const url of urls) {
-        if (!url || typeof url !== 'string') continue;
-        const trimmed = url.trim();
-        if (!trimmed || seen.has(trimmed)) continue;
-        seen.add(trimmed);
-        out.push(trimmed);
+const extractEvolinkVideoUrl = (data) => {
+    const candidates = [
+        data?.results,
+        data?.data?.results,
+        data?.output,
+        data?.data?.output,
+    ];
+    for (const value of candidates) {
+        if (Array.isArray(value)) {
+            const url = value
+                .map((item) => (typeof item === 'string' ? item : item?.url || item?.video_url || item?.file_url || null))
+                .find((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
+            if (url) return url;
+        }
     }
-    return out;
-};
-
-const isTrustedFalQueueUrl = (rawUrl) => {
-    if (!rawUrl || typeof rawUrl !== 'string') return false;
-    try {
-        const parsed = new URL(rawUrl);
-        return parsed.protocol === 'https:' && parsed.hostname === 'queue.fal.run';
-    } catch {
-        return false;
-    }
+    const single = data?.video?.url || data?.url || data?.data?.url;
+    return typeof single === 'string' && /^https?:\/\//i.test(single) ? single : null;
 };
 
 module.exports = withMiddleware(async function handler(req, res) {
     const input = req.method === 'GET' ? req.query : req.body;
     const requestId = normalizeStringParam(input?.request_id);
     const provider = normalizeStringParam(input?.provider);
-    const model = resolveFalVideoModelId(input?.model);
 
     if (!requestId) {
         return res.status(400).json({ error: 'request_id is required' });
     }
 
-    // ---------- Fal video polling ----------
-    if (provider === 'fal') {
-        const FAL_KEY = resolveFalApiKey(req);
+    // ---------- Evolink video polling ----------
+    if (provider === 'evolink') {
+        const EVOLINK_API_KEY = resolveEvolinkApiKey(req);
 
-        if (!FAL_KEY) {
+        if (!EVOLINK_API_KEY) {
             return res.status(401).json({
-                code: 'FAL_API_KEY_REQUIRED',
-                error: 'Fal API key required',
+                code: 'EVOLINK_API_KEY_REQUIRED',
+                error: 'Evolink API key required',
                 help: {
-                    message: 'Open Settings → paste your Fal API key. Create one at fal.ai/dashboard/keys.',
-                    url: 'https://fal.ai/dashboard/keys'
-                }
+                    message: 'Open Settings → paste your Evolink API key. Create one at evolink.ai/dashboard/keys.',
+                    url: 'https://evolink.ai/dashboard/keys',
+                },
             });
         }
 
-        const falModel = model && getFalVideoModel(model) ? model : DEFAULT_FAL_VIDEO_MODEL;
-
-        const fetchFalJsonWithFallback = async (candidateUrls, errorPrefix) => {
-            let lastStatus = 502;
-            let lastBody = 'No response';
-            for (const url of candidateUrls) {
-                const resp = await fetch(url, {
-                    headers: { Authorization: `Key ${FAL_KEY}` },
-                });
-                if (resp.ok) {
-                    return { ok: true, data: await resp.json() };
-                }
-                lastStatus = resp.status;
-                lastBody = await resp.text();
-                // Continue trying alternates for not-found responses.
-                if (resp.status !== 404) {
-                    break;
-                }
-            }
-            return {
-                ok: false,
-                status: lastStatus,
-                body: lastBody,
-                error: errorPrefix,
-            };
-        };
-
-        const extractFalVideoUrl = (data) => (
-            data?.video?.url ||
-            data?.url ||
-            data?.response?.video?.url ||
-            data?.response?.url ||
-            data?.data?.video?.url ||
-            data?.data?.url ||
-            null
-        );
-
         try {
-            // Only poll trusted Fal queue endpoints reconstructed from allowlisted model IDs.
-            const statusCandidates = buildUniqueUrls([
-                `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(requestId)}/status`,
-            ]);
-            const statusResult = await fetchFalJsonWithFallback(statusCandidates, 'Failed to retrieve Fal video status');
-            if (!statusResult.ok) {
-                return res.status(statusResult.status).json({
-                    error: statusResult.error,
-                    details: redactKey(statusResult.body),
+            const taskResponse = await fetch(`https://api.evolink.ai/v1/tasks/${encodeURIComponent(requestId)}`, {
+                headers: { Authorization: `Bearer ${EVOLINK_API_KEY}` },
+            });
+
+            if (!taskResponse.ok) {
+                const errorText = await taskResponse.text();
+                return res.status(taskResponse.status).json({
+                    error: 'Failed to retrieve Evolink video status',
+                    details: redactKey(errorText),
                 });
             }
 
-            const statusData = statusResult.data;
-            const status = String(statusData?.status || '').toUpperCase();
-            const resultBaseUrl = `https://queue.fal.run/${falModel}/requests/${encodeURIComponent(requestId)}`;
-            const resultCandidates = buildUniqueUrls([
-                isTrustedFalQueueUrl(statusData?.response_url) ? statusData.response_url : null,
-                resultBaseUrl,
-                `${resultBaseUrl}/response`,
-            ]);
+            const taskData = await taskResponse.json();
+            const status = String(taskData?.status || taskData?.data?.status || '').toLowerCase();
 
-            const result = await fetchFalJsonWithFallback(resultCandidates, 'Failed to retrieve Fal video result');
-            if (result.ok) {
-                const videoUrl = extractFalVideoUrl(result.data);
+            if (status === 'completed') {
+                const videoUrl = extractEvolinkVideoUrl(taskData);
                 if (videoUrl) {
                     return res.status(200).json({ status: 'completed', url: videoUrl });
                 }
-            }
-
-            if (status === 'COMPLETED') {
-                if (!result.ok) {
-                    return res.status(result.status).json({
-                        error: result.error,
-                        details: redactKey(result.body),
-                    });
-                }
-
                 return res.status(200).json({ status: 'failed' });
             }
 
-            if (['FAILED', 'ERROR'].includes(status)) {
+            if (status === 'failed') {
                 return res.status(200).json({ status: 'failed' });
             }
 
-            // IN_QUEUE or IN_PROGRESS → still pending
+            // pending or processing → still pending
             return res.status(200).json({ status: 'pending' });
         } catch (error) {
-            console.error('Fal video status error:', redactKey(error));
+            console.error('Evolink video status error:', redactKey(error));
             return res.status(500).json({ error: 'Internal server error' });
         }
     }

@@ -5,7 +5,6 @@
 import {
     testOpenRouterKey,
     testXaiKey,
-    testFalKey,
     testEvolinkKey,
 } from './api.js';
 
@@ -53,27 +52,6 @@ const API_KEY_FIELDS = [
             defaultUrl: 'https://console.x.ai',
             defaultMessage:
                 'You need an xAI API key to use xAI models. Create one at console.x.ai, then paste it into Settings.',
-        },
-    },
-    {
-        id: 'fal',
-        storageKey: 'fal_api_key',
-        inputId: 'setting-fal-key',
-        showId: 'setting-fal-key-show',
-        saveId: 'setting-fal-save',
-        testId: 'setting-fal-test',
-        statusId: 'setting-fal-save-status',
-        savedMessage: 'Fal API key saved.',
-        successMessage: 'Fal API key is valid.',
-        saveStatusSaved: 'Saved',
-        test: testFalKey,
-        requiredErrorCode: 'FAL_API_KEY_REQUIRED',
-        popup: {
-            modalId: 'fal-key-modal',
-            title: 'Fal API key required',
-            defaultUrl: 'https://fal.ai/dashboard/keys',
-            defaultMessage:
-                'You need a Fal API key to use Fal Seedream models. Create one at fal.ai/dashboard/keys, then paste it into Settings.',
         },
     },
     {
@@ -188,12 +166,6 @@ export function showOpenRouterApiKeyPopup(help) {
 /** @param {{ message?: string, url?: string } | undefined} help */
 export function showXaiApiKeyPopup(help) {
     const config = API_KEY_FIELDS.find((f) => f.id === 'xai')?.popup;
-    if (config) showApiKeyPopup(config, help);
-}
-
-/** @param {{ message?: string, url?: string } | undefined} help */
-export function showFalApiKeyPopup(help) {
-    const config = API_KEY_FIELDS.find((f) => f.id === 'fal')?.popup;
     if (config) showApiKeyPopup(config, help);
 }
 
@@ -321,7 +293,6 @@ export function initApiKeySettings(deps) {
 export const API_KEY_POPUP_BY_CODE = {
     OPENROUTER_API_KEY_REQUIRED: showOpenRouterApiKeyPopup,
     XAI_API_KEY_REQUIRED: showXaiApiKeyPopup,
-    FAL_API_KEY_REQUIRED: showFalApiKeyPopup,
     EVOLINK_API_KEY_REQUIRED: showEvolinkApiKeyPopup,
 };
 

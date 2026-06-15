@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="AI Image Generator - Create stunning images and videos with AI. Supports OpenRouter, xAI Grok, and Fal models.">
+    <meta name="description" content="AI Image Generator - Create stunning images and videos with AI. Supports OpenRouter, xAI Grok, and Evolink models.">
     <meta name="theme-color" content="#1a1a1a">
     <meta name="mobile-web-app-capable" content="yes">
     <title>AI Image Generator</title>
@@ -32,8 +32,6 @@
     <!-- Preconnect to API domains -->
     <link rel="preconnect" href="https://openrouter.ai">
     <link rel="preconnect" href="https://api.x.ai">
-    <link rel="preconnect" href="https://fal.run">
-    <link rel="dns-prefetch" href="https://queue.fal.run">
     <link rel="preconnect" href="https://api.evolink.ai">
     <link rel="dns-prefetch" href="https://files-api.evolink.ai">
 
@@ -204,7 +202,7 @@
                     </div>
 
                     <div id="empty-state-no-key" class="empty-state__no-key">
-                        <p class="empty-state__no-key-text">You need a Fal API key to generate with the default model.</p>
+                        <p class="empty-state__no-key-text">You need an Evolink API key to generate with the default model.</p>
                         <button id="empty-state-add-key-btn" class="empty-state__button" type="button">
                             Add API Key
                         </button>
@@ -444,32 +442,6 @@
                     </p>
                 </div>
 
-                <!-- Fal API Key -->
-                <div class="settings-group">
-                    <label class="settings-label" for="setting-fal-key">Fal API Key</label>
-                    <div class="settings-inline">
-                        <input type="password" id="setting-fal-key" class="settings-input settings-inline__input"
-                            placeholder="Paste your Fal key (stored locally in your browser)">
-                        <button type="button" id="setting-fal-save"
-                            class="settings-btn settings-btn--inline settings-btn--sm">
-                            Save
-                        </button>
-                        <button type="button" id="setting-fal-test"
-                            class="settings-btn settings-btn--inline settings-btn--sm">
-                            Test
-                        </button>
-                    </div>
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="setting-fal-key-show">
-                        <span>Show API key</span>
-                    </label>
-                    <span id="setting-fal-save-status" class="settings-hint"></span>
-                    <p class="settings-hint">
-                        Stored in <code>localStorage</code> and sent to <code>/api</code> when using Fal Seedream
-                        models.
-                    </p>
-                </div>
-
                 <!-- Evolink API Key -->
                 <div class="settings-group">
                     <label class="settings-label" for="setting-evolink-key">Evolink API Key</label>
@@ -521,7 +493,7 @@
                 <!-- Model Selection -->
                 <div class="settings-group">
                     <label class="settings-label">Advanced</label>
-                    <p class="settings-hint settings-hint--flush">Aspect ratio is supported for Gemini, Seedream, Fal,
+                    <p class="settings-hint settings-hint--flush">Aspect ratio is supported for Gemini, Seedream, Evolink,
                         and xAI models. Image resolution is supported for Gemini and xAI image models.</p>
                 </div>
 
@@ -539,7 +511,7 @@
                         <option value="21:9">21:9 (Ultrawide)</option>
                         <option value="9:21">9:21</option>
                     </select>
-                    <p class="settings-hint">Applied for Gemini, Seedream, Fal, Evolink, and xAI models.</p>
+                    <p class="settings-hint">Applied for Gemini, Seedream, Evolink, and xAI models.</p>
                 </div>
 
                 <!-- Resolution / image size -->
@@ -624,7 +596,7 @@
                 </div>
 
                 <!-- Image-to-Video Frames Hint -->
-                <div class="settings-group settings-group--hidden" id="fal-image-to-video-hint-group">
+                <div class="settings-group settings-group--hidden" id="image-to-video-hint-group">
                     <p class="settings-hint">Use the image attachment button to attach the <strong>start frame</strong>
                         (required). Attach a second image as the <strong>end frame</strong> (optional).</p>
                 </div>

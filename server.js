@@ -5,7 +5,6 @@ const generateHandler = require('./api/generate');
 const enhanceHandler = require('./api/enhance');
 const testKeyHandler = require('./api/test-key');
 const testXaiKeyHandler = require('./api/test-xai-key');
-const testFalKeyHandler = require('./api/test-fal-key');
 const testEvolinkKeyHandler = require('./api/test-evolink-key');
 const randomPromptHandler = require('./api/random-prompt');
 const videoStatusHandler = require('./api/video-status');
@@ -89,10 +88,6 @@ app.post('/api/test-key', (req, res) => {
 
 app.post('/api/test-xai-key', (req, res) => {
     return testXaiKeyHandler(req, res);
-});
-
-app.post('/api/test-fal-key', (req, res) => {
-    return testFalKeyHandler(req, res);
 });
 
 app.post('/api/test-evolink-key', (req, res) => {

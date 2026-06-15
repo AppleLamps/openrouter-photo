@@ -111,7 +111,7 @@ describe('api middleware payload limit', () => {
     it('keeps CORS allow headers hyphenated only', () => {
         assert.equal(API_CORS_ALLOW_HEADERS.includes('_'), false);
         assert.match(API_CORS_ALLOW_HEADERS, /X-OpenRouter-Api-Key/);
-        assert.match(API_CORS_ALLOW_HEADERS, /X-FAL-Api-Key/);
+        assert.match(API_CORS_ALLOW_HEADERS, /X-Evolink-Api-Key/);
     });
 
     it('prunes expired rate limit buckets', () => {

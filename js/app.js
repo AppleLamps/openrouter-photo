@@ -55,10 +55,6 @@ const API_KEY_EMPTY_STATE = {
         text: 'You need an xAI API key to generate with the selected model.',
         code: 'XAI_API_KEY_REQUIRED',
     },
-    fal: {
-        text: 'You need a Fal API key to generate with the selected model.',
-        code: 'FAL_API_KEY_REQUIRED',
-    },
     evolink: {
         text: 'You need an Evolink API key to generate with the selected model.',
         code: 'EVOLINK_API_KEY_REQUIRED',

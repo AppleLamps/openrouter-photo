@@ -2,7 +2,6 @@ const {
     withMiddleware,
     resolveOpenRouterApiKey,
     resolveXaiApiKey,
-    resolveFalApiKey,
     resolveEvolinkApiKey,
 } = require('./_middleware');
 const {
@@ -16,8 +15,7 @@ const {
     validateRequiredInputImages,
 } = require('./generation-routing');
 const { handleEvolink } = require('./providers/evolink');
-const { handleFalImage } = require('./providers/fal-image');
-const { handleFalVideo } = require('./providers/fal-video');
+const { handleEvolinkVideo } = require('./providers/evolink-video');
 const { handleXai } = require('./providers/xai');
 const { handleOpenRouter } = require('./providers/openrouter');
 
@@ -53,14 +51,6 @@ const API_KEY_HELP = {
         help: {
             message: 'Open Settings → paste your xAI API key. Create one at console.x.ai.',
             url: 'https://console.x.ai',
-        },
-    },
-    fal: {
-        code: 'FAL_API_KEY_REQUIRED',
-        error: 'Fal API key required',
-        help: {
-            message: 'Open Settings → paste your Fal API key. Create one at fal.ai/dashboard/keys.',
-            url: 'https://fal.ai/dashboard/keys',
         },
     },
     evolink: {
@@ -108,13 +98,11 @@ module.exports = withMiddleware(async function handler(req, res) {
 
     const openRouterApiKey = resolveOpenRouterApiKey(req);
     const xaiKey = resolveXaiApiKey(req);
-    const falKey = resolveFalApiKey(req);
     const evolinkKey = resolveEvolinkApiKey(req);
 
     const apiKeys = {
         openrouter: openRouterApiKey,
         xai: xaiKey,
-        fal: falKey,
         evolink: evolinkKey,
     };
 
@@ -156,17 +144,14 @@ module.exports = withMiddleware(async function handler(req, res) {
         flashhead_stability,
         openRouterApiKey,
         xaiKey,
-        falKey,
         evolinkKey,
     };
 
     switch (modelCaps.backend) {
         case 'evolink':
             return handleEvolink(ctx);
-        case 'fal-image':
-            return handleFalImage(ctx);
-        case 'fal-video':
-            return handleFalVideo(ctx);
+        case 'evolink-video':
+            return handleEvolinkVideo(ctx);
         case 'xai':
             return handleXai(ctx);
         case 'openrouter':

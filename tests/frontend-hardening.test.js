@@ -35,7 +35,7 @@ describe('frontend hardening', () => {
         assert.match(controller, /const hasSelectOption/);
         assert.match(controller, /const setSelectIfValid/);
         assert.match(controller, /getUiCapabilities\(model\)/);
-        assert.match(controller, /getFalVideoConfig\(model\)/);
+        assert.match(controller, /resolveCapabilities\(model\)\.evolink\?\.aspectRatios/);
     });
 
     it('does not render empty video src attributes for missing video URLs', () => {

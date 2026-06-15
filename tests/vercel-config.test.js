@@ -13,12 +13,11 @@ describe('vercel config', () => {
     it('routes every settings API key test endpoint before the SPA catch-all', () => {
         assert.equal(getRouteDest('/api/test-key'), '/api/test-key.js');
         assert.equal(getRouteDest('/api/test-xai-key'), '/api/test-xai-key.js');
-        assert.equal(getRouteDest('/api/test-fal-key'), '/api/test-fal-key.js');
         assert.equal(getRouteDest('/api/test-evolink-key'), '/api/test-evolink-key.js');
         assert.equal(getRouteDest('/api/image-proxy'), '/api/image-proxy.js');
 
         const catchAllIndex = config.routes.findIndex((route) => route.src === '/(.*)');
-        for (const src of ['/api/test-key', '/api/test-xai-key', '/api/test-fal-key', '/api/test-evolink-key', '/api/image-proxy']) {
+        for (const src of ['/api/test-key', '/api/test-xai-key', '/api/test-evolink-key', '/api/image-proxy']) {
             const routeIndex = config.routes.findIndex((route) => route.src === src);
             assert.ok(routeIndex > -1 && routeIndex < catchAllIndex, `${src} must route before catch-all`);
         }

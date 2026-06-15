@@ -49,10 +49,6 @@ export function resolveCapabilities(modelId) {
     const profile = capabilityProfiles[entry.profile] || {};
     const merged = deepMerge(profile, entry.capabilities || {});
 
-    if (entry.falImage) {
-        merged.falImage = deepMerge(merged.falImage || {}, entry.falImage);
-    }
-
     if (entry.evolink) {
         merged.evolink = deepMerge(merged.evolink || {}, entry.evolink);
     }
@@ -97,19 +93,6 @@ export function isAsyncModel(modelId) {
     return Boolean(resolveCapabilities(modelId).async);
 }
 
-export function isFalImageModel(modelId) {
-    return getBackend(modelId) === 'fal-image';
-}
-
-export function isFalVideoModel(modelId) {
-    return getBackend(modelId) === 'fal-video';
-}
-
-export function isFalEditModel(modelId) {
-    const caps = resolveCapabilities(modelId);
-    return caps.backend === 'fal-image' && caps.type === 'edit';
-}
-
 export function isXaiModel(modelId) {
     return getBackend(modelId) === 'xai';
 }
@@ -118,31 +101,12 @@ export function isEvolinkModel(modelId) {
     return getBackend(modelId) === 'evolink';
 }
 
+export function isEvolinkVideoModel(modelId) {
+    return getBackend(modelId) === 'evolink-video';
+}
+
 export function isOpenRouterModel(modelId) {
     return getBackend(modelId) === 'openrouter';
-}
-
-export function getFalVideoConfig(modelId) {
-    const caps = resolveCapabilities(modelId);
-    if (caps.backend !== 'fal-video') return null;
-    const entry = findModel(caps.modelId);
-    return {
-        ...(caps.falVideo || {}),
-        pricing: caps.pricing || entry?.pricing || {},
-    };
-}
-
-export function getFalImageConfig(modelId) {
-    const caps = resolveCapabilities(modelId);
-    if (caps.backend !== 'fal-image') return null;
-    const falImage = caps.falImage || { variant: 'seedream-default', usesPresetImageSize: false };
-    const variant = falImage.variant || 'seedream-default';
-    const variantRegistry = catalog.falImageVariants?.[variant] || {};
-    const payloadDefaults = {
-        ...(variantRegistry.payloadDefaults || {}),
-        ...(falImage.payloadDefaults || {}),
-    };
-    return { ...falImage, variant, payloadDefaults };
 }
 
 export function getOpenRouterConfig(modelId) {
@@ -170,18 +134,7 @@ export function getUiCapabilities(modelId) {
     };
 }
 
-export function listFalVideoModelIds() {
-    return models
-        .filter((m) => capabilityProfiles[m.profile]?.backend === 'fal-video')
-        .map((m) => m.id);
-}
-
-export function isKnownFalVideoModelId(modelId) {
-    const id = legacyRedirects[modelId] || modelId;
-    return listFalVideoModelIds().includes(id);
-}
-
 export const DEFAULT_MODEL_ID = defaultModelId;
 export const LEGACY_MODEL_REDIRECTS = legacyRedirects;
-export const ANIMATE_MODEL_ID = defaults?.animateModelId || 'bytedance/seedance-2.0/image-to-video';
+export const ANIMATE_MODEL_ID = defaults?.animateModelId || 'evolink/seedance-2.0/image-to-video';
 export const CATALOG_MODELS = models;

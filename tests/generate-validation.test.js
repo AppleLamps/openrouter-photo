@@ -41,7 +41,7 @@ describe('generate validation', () => {
     it('rejects whitespace-only prompts before API key validation', async () => {
         const res = makeRes();
 
-        await handler(makeReq({ prompt: '   ', model: 'fal-ai/z-image/turbo/lora' }), res);
+        await handler(makeReq({ prompt: '   ', model: 'evolink/z-image-turbo' }), res);
 
         assert.equal(res.statusCode, 400);
         assert.deepEqual(res.body, { error: 'Prompt is required' });

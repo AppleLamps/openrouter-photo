@@ -16,7 +16,7 @@ import {
     removePlaceholder,
     showErrorCard,
 } from './gallery.js';
-import { DEFAULT_MODEL_ID, getFalVideoConfig, getUiCapabilities, normalizeModelId } from './models.js';
+import { DEFAULT_MODEL_ID, getUiCapabilities, normalizeModelId, resolveCapabilities } from './models.js';
 import {
     syncModelDropdownUI,
     syncNumImagesDropdownUI,
@@ -215,7 +215,7 @@ export function restoreSettings(settings) {
     }
 
     const ui = getUiCapabilities(model);
-    const falVideoConfig = getFalVideoConfig(model);
+    const videoAspectRatios = resolveCapabilities(model).evolink?.aspectRatios || null;
 
     const hasSelectOption = (select, value) =>
         select instanceof HTMLSelectElement
@@ -241,7 +241,7 @@ export function restoreSettings(settings) {
     };
 
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
-    setSelectIfValid(aspectRatioSelect, settings.aspect_ratio, falVideoConfig?.aspectRatios || null);
+    setSelectIfValid(aspectRatioSelect, settings.aspect_ratio, videoAspectRatios);
 
     const resolutionSelect = document.getElementById('setting-resolution');
     setSelectIfValid(resolutionSelect, settings.resolution, ui.resolution?.options || null);

@@ -7,7 +7,7 @@ const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_RATE_LIMIT_MAX = 60;
 const VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const RATE_LIMIT_PRUNE_INTERVAL_MS = 60 * 1000;
-const API_CORS_ALLOW_HEADERS = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-FAL-Api-Key, X-Evolink-Api-Key, X-App-Access-Token';
+const API_CORS_ALLOW_HEADERS = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-Evolink-Api-Key, X-App-Access-Token';
 const rateLimitBuckets = new Map();
 const SERVER_PROVIDER_KEY_ACCESS_HEADER = 'x-app-access-token';
 let lastRateLimitPruneMs = 0;
@@ -170,13 +170,6 @@ function resolveXaiApiKey(req) {
     ], 'XAI_API_KEY');
 }
 
-function resolveFalApiKey(req) {
-    return resolveProviderApiKey(req, [
-        'x-fal-api-key',
-        'x-fal-api_key',
-    ], 'FAL_KEY');
-}
-
 function resolveEvolinkApiKey(req) {
     return resolveProviderApiKey(req, [
         'x-evolink-api-key',
@@ -307,7 +300,6 @@ module.exports = {
     redactKey,
     resolveOpenRouterApiKey,
     resolveXaiApiKey,
-    resolveFalApiKey,
     resolveEvolinkApiKey,
     VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES,
     API_CORS_ALLOW_HEADERS,

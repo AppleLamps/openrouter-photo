@@ -20,8 +20,6 @@ export {
     getMaxInputImages,
     requiresInputImage,
     isAsyncModel,
-    getFalImageConfig,
-    getFalVideoConfig,
     getOpenRouterConfig,
     getModelPricing,
     isVisibleInPicker,
