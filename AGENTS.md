@@ -121,3 +121,10 @@ Quick checklist:
 6. Manual: picker, settings panels, one successful generation with the correct API key.
 
 Do not remove models, change `defaultModelId`, or alter UX defaults unless explicitly requested.
+
+## Cursor Cloud specific instructions
+
+- Standard commands are already documented above and in `README.md`: install with `npm install`, run with `npm start` (Express on port 3000), test with `npm test`. There is no build step or lint command (zero-build vanilla JS).
+- The Express server auto-increments the port if 3000 is taken (see `startServer` in `server.js`), so check the startup log for the actual `http://localhost:<port>`.
+- Non-obvious key resolution: in non-production dev, `api/_middleware.js` (`canUseServerProviderKey`) falls back to env vars (`OPENROUTER_API_KEY`, `XAI_API_KEY`, `FAL_KEY`, `EVOLINK_API_KEY`) when no key header is sent, so requests work without pasting keys in the Settings UI. The browser UI itself does not send these env keys — it only sends keys saved in localStorage — so a generation triggered from the browser uses the server env fallback only when the UI has no saved key.
+- Core functionality (image/video generation, prompt enhance, random prompt) calls external providers and requires a valid provider API key with credits. Without a valid key, the app loads and routes correctly but provider calls return upstream 401s (e.g. OpenRouter "User not found"); this is a credential issue, not an environment/setup problem.
