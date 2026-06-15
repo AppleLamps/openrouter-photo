@@ -102,6 +102,28 @@
         "supportsGenerateAudio": true,
         "defaultGenerateAudio": true
       }
+    },
+    "evolink-video-seedance2-t2v": {
+      "apiKey": "evolink",
+      "backend": "evolink-video",
+      "ui": {
+        "aspectRatio": true,
+        "videoLength": { "min": 4, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["480p", "720p", "1080p"], "default": "720p" },
+        "generateAudio": true,
+        "webSearch": true
+      },
+      "input": { "maxImages": 0, "required": false },
+      "async": true,
+      "evolink": {
+        "variant": "seedance2-t2v",
+        "apiModel": "seedance-2.0-text-to-video",
+        "aspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+        "defaultAspectRatio": "16:9",
+        "supportsGenerateAudio": true,
+        "defaultGenerateAudio": true,
+        "supportsWebSearch": true
+      }
     }
   },
   "models": [
@@ -111,6 +133,7 @@
     { "id": "evolink/doubao-seedream-5.0-lite", "name": "Seedream 5 Lite", "provider": "Bytedance", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-image", "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-lite" }, "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "3K" }, "webSearch": true } } },
     { "id": "evolink/z-image-turbo", "name": "Z Image Turbo", "provider": "Tongyi", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-z-image", "pricing": { "price": { "type": "flat", "amount": 0.004 } } },
     { "id": "evolink/seedance-2.0/image-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "image-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-i2v" },
+    { "id": "evolink/seedance-2.0/text-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "text-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-t2v" },
     { "id": "black-forest-labs/flux.2-pro", "name": "Flux 2 Pro", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
     { "id": "black-forest-labs/flux.2-max", "name": "Flux 2 Max", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
     { "id": "black-forest-labs/flux.2-flex", "name": "Flux 2 Flex", "provider": "Black Forest Labs", "type": "image", "tier": "balanced", "profile": "openrouter-image" },

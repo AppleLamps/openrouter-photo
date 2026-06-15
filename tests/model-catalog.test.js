@@ -74,13 +74,20 @@ describe('model catalog — backend routing', () => {
         assert.equal(requiresInputImage('evolink/doubao-seedream-5.0-lite'), false);
     });
 
-    it('routes the evolink seedance video model', () => {
-        const id = 'evolink/seedance-2.0/image-to-video';
-        assert.equal(getBackend(id), 'evolink-video');
-        assert.equal(getApiKey(id), 'evolink');
-        assert.ok(isEvolinkVideoModel(id));
-        assert.ok(requiresInputImage(id));
-        assert.equal(getMaxInputImages(id), 2);
+    it('routes the evolink seedance video models', () => {
+        const i2v = 'evolink/seedance-2.0/image-to-video';
+        assert.equal(getBackend(i2v), 'evolink-video');
+        assert.equal(getApiKey(i2v), 'evolink');
+        assert.ok(isEvolinkVideoModel(i2v));
+        assert.ok(requiresInputImage(i2v));
+        assert.equal(getMaxInputImages(i2v), 2);
+
+        const t2v = 'evolink/seedance-2.0/text-to-video';
+        assert.equal(getBackend(t2v), 'evolink-video');
+        assert.equal(getApiKey(t2v), 'evolink');
+        assert.ok(isEvolinkVideoModel(t2v));
+        assert.equal(requiresInputImage(t2v), false);
+        assert.equal(getMaxInputImages(t2v), 0);
     });
 });
 
@@ -110,6 +117,15 @@ describe('model catalog — evolink config', () => {
         assert.ok(caps.evolink.aspectRatios.includes('adaptive'));
         assert.ok(caps.ui.videoLength);
         assert.equal(caps.ui.generateAudio, true);
+    });
+
+    it('exposes seedance text-to-video with web search and no required input', () => {
+        const caps = resolveCapabilities('evolink/seedance-2.0/text-to-video');
+        assert.equal(caps.evolink.apiModel, 'seedance-2.0-text-to-video');
+        assert.equal(caps.evolink.supportsWebSearch, true);
+        assert.equal(caps.ui.webSearch, true);
+        assert.equal(caps.ui.imageToVideoHint, undefined);
+        assert.equal(caps.input.required, false);
     });
 });
 

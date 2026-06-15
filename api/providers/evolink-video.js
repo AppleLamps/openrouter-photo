@@ -30,7 +30,7 @@ function estimateVideoCost(model, duration) {
 }
 
 /**
- * Evolink Seedance 2.0 image-to-video.
+ * Evolink Seedance 2.0 video (text-to-video and image-to-video).
  * Async: create a task, return 202 + request_id so the client polls /api/video-status?provider=evolink.
  */
 async function handleEvolinkVideo(ctx) {
@@ -44,15 +44,17 @@ async function handleEvolinkVideo(ctx) {
         xai_video_length,
         xai_video_quality,
         generate_audio_switch,
+        enable_web_search,
         evolinkKey,
     } = ctx;
 
     const caps = modelCaps || resolveCapabilities(model);
     const evolink = caps.evolink || {};
-    const apiModel = evolink.apiModel || 'seedance-2.0-image-to-video';
+    const apiModel = evolink.apiModel || 'seedance-2.0-text-to-video';
     const videoUi = caps.ui || {};
+    const isImageToVideo = caps.type === 'image-to-video';
 
-    if (!Array.isArray(normalizedInputImages) || normalizedInputImages.length === 0) {
+    if (isImageToVideo && (!Array.isArray(normalizedInputImages) || normalizedInputImages.length === 0)) {
         return res.status(400).json({
             error: 'Seedance 2.0 requires at least one attached image. Attach a start frame and try again.',
         });
@@ -94,9 +96,10 @@ async function handleEvolinkVideo(ctx) {
     };
 
     try {
-        // Seedance 2.0 accepts 1 image (first frame) or 2 images (first + last frame).
-        const frames = normalizedInputImages.slice(0, 2);
-        const imageUrls = await Promise.all(frames.map(uploadEvolinkReferenceImage));
+        // Seedance 2.0 i2v accepts 1 image (first frame) or 2 images (first + last frame).
+        const imageUrls = isImageToVideo
+            ? await Promise.all(normalizedInputImages.slice(0, 2).map(uploadEvolinkReferenceImage))
+            : [];
 
         const durationLimits = videoUi.videoLength || { min: 4, max: 15, default: 5 };
         const duration = normalizeVideoDuration(xai_video_length, durationLimits);
@@ -108,18 +111,21 @@ async function handleEvolinkVideo(ctx) {
         );
         const aspectRatio = normalizeVideoAspectRatio(
             normalizedAspectRatio,
-            evolink.defaultAspectRatio || 'adaptive',
+            evolink.defaultAspectRatio || '16:9',
         );
         const generateAudio = generate_audio_switch !== false;
 
         const payload = {
             model: apiModel,
             prompt: prompt.trim(),
-            image_urls: imageUrls,
             duration,
             quality,
             aspect_ratio: aspectRatio,
             generate_audio: generateAudio,
+            ...(isImageToVideo ? { image_urls: imageUrls } : {}),
+            ...(!isImageToVideo && evolink.supportsWebSearch && enable_web_search === true
+                ? { model_params: { web_search: true } }
+                : {}),
         };
 
         const createResponse = await fetch('https://api.evolink.ai/v1/videos/generations', {

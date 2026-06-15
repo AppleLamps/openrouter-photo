@@ -26,6 +26,7 @@ describe('generate routing — provider resolution', () => {
         assert.equal(resolveProviderHandler('evolink/z-image-turbo'), 'evolink');
         assert.equal(resolveProviderHandler('evolink/doubao-seedream-5.0-lite/edit'), 'evolink');
         assert.equal(resolveProviderHandler('evolink/seedance-2.0/image-to-video'), 'evolink-video');
+        assert.equal(resolveProviderHandler('evolink/seedance-2.0/text-to-video'), 'evolink-video');
     });
 
     it('normalizes legacy ids before routing', () => {
@@ -64,6 +65,11 @@ describe('generate routing — input image validation', () => {
         const err = validateRequiredInputImages('evolink/z-image-turbo', []);
         assert.equal(err, null);
         assert.equal(requiresInputImage('evolink/z-image-turbo'), false);
+    });
+
+    it('allows seedance text-to-video without images', () => {
+        assert.equal(validateRequiredInputImages('evolink/seedance-2.0/text-to-video', []), null);
+        assert.equal(requiresInputImage('evolink/seedance-2.0/text-to-video'), false);
     });
 
     it('allows evolink seedream 5 lite text-to-image and image-to-image without requiring edit tab', () => {

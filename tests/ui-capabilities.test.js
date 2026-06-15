@@ -28,6 +28,16 @@ describe('UI capabilities', () => {
         assert.equal(ui.imageToVideoHint, true);
     });
 
+    it('evolink seedance t2v exposes video controls, audio, and web search (no i2v hint)', () => {
+        const ui = getUiCapabilities('evolink/seedance-2.0/text-to-video');
+        assert.equal(ui.aspectRatio, true);
+        assert.ok(ui.videoLength);
+        assert.deepEqual(ui.videoQuality?.options, ['480p', '720p', '1080p']);
+        assert.equal(ui.generateAudio, true);
+        assert.equal(ui.webSearch, true);
+        assert.equal(ui.imageToVideoHint, false);
+    });
+
     it('evolink z-image-turbo exposes aspect ratio without resolution', () => {
         const ui = getUiCapabilities('evolink/z-image-turbo');
         assert.equal(ui.aspectRatio, true);

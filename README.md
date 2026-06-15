@@ -1,6 +1,6 @@
 # AI Image & Video Generator
 
-A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports **44 models** across OpenRouter, xAI, Fal, and Evolink.
+A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports **17 models** across OpenRouter, xAI, and Evolink.
 
 ![No Build Tools](https://img.shields.io/badge/Build-None%20Required-green)
 ![Vercel Ready](https://img.shields.io/badge/Deploy-Vercel-black)
@@ -12,11 +12,11 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 ### Image & Video Generation
 
-- **Multi-Model Support** — 44 catalog-driven models (27 image, 9 edit, 8 video)
+- **Multi-Model Support** — 17 catalog-driven models (13 image, 1 edit, 3 video)
 - **Batch Generation** — Create 1–4 images per request (video models produce 1)
 - **Configurable Output** — Aspect ratio, resolution, video length/quality, and model-specific options from the catalog
-- **Video Generation** — Text-to-video and image-to-video via xAI Grok, Fal Seedance, PixVerse, FlashHead, and more
-- **Audio in Videos** — PixVerse and Seedance models support generated audio where configured
+- **Video Generation** — Text-to-video via xAI Grok and Evolink Seedance 2.0; image-to-video via Evolink Seedance 2.0
+- **Audio in Videos** — Evolink Seedance 2.0 supports generated audio
 
 ### Image Editing
 
@@ -59,17 +59,15 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 All models are defined in `shared/model-catalog.json` — the single source of truth for routing, UI capabilities, and pricing.
 
 | Provider | Models | Types | API Key |
-|----------|--------|-------|---------|
-| **Black Forest Labs** | Flux 2 Pro / Max / Flex (OpenRouter), Flux 1.1 Pro, Flux 2 Klein 9B LoRA | Image, Edit | OpenRouter / Fal |
+| --- | --- | --- | --- |
+| **Black Forest Labs** | Flux 2 Pro / Max / Flex | Image | OpenRouter |
 | **Google** | Gemini 3 Pro Image, Gemini 2.5 Flash Image | Image | OpenRouter |
 | **OpenAI** | GPT-5 Image, GPT-5 Image Mini | Image | OpenRouter |
-| **ByteDance** | Seedream 4.5 & 5 Lite (T2I + Edit), Seedance 1.5 Pro & 2.0 (T2V + I2V) | Image, Edit, Video | OpenRouter / Fal / Evolink |
+| **ByteDance** | Seedream 4.5 (OpenRouter + Evolink), Seedream 4.5 Edit, Seedream 5 Lite, Seedance 2.0 (T2V + I2V) | Image, Edit, Video | OpenRouter / Evolink |
+| **Tongyi** | Z Image Turbo | Image | Evolink |
 | **xAI** | Grok Image, Grok Image Quality, Grok Video | Image, Video | xAI |
-| **fal.ai** | Phota, FlashHead, Z-Image Turbo, Wan 2.7, Qwen-Image Max, and more | Image, Edit, Video | Fal |
-| **Other Fal hosts** | Nucleus, Ovis, GLM Image, BitDance, Ernie, PixVerse C1, Happy Horse | Image, Video | Fal |
-| **Evolink** | Seedream 4.5 & 5 Lite (T2I + Edit), Z Image Turbo | Image, Edit | Evolink |
 
-**Totals:** 44 models — 8 OpenRouter, 21 Fal image, 7 Fal video, 3 xAI, 5 Evolink (some Seedream variants appear under multiple providers).
+**Totals:** 17 models — 8 OpenRouter, 6 Evolink (4 image + 2 video), 3 xAI. By type: 13 image, 1 edit, 3 video (2 text-to-video, 1 image-to-video).
 
 ---
 
@@ -78,28 +76,27 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 - **Frontend:** HTML5, CSS3 (Custom Properties + Flexbox/Grid), Vanilla JavaScript (ES6 Modules)
 - **Backend:** Vercel Serverless Functions (Node.js) / Express for local development
 - **Storage:** IndexedDB (primary), localStorage (fallback)
-- **APIs:** OpenRouter, xAI, Fal, Evolink
+- **APIs:** OpenRouter, xAI, Evolink
 - **Testing:** Node.js built-in test runner (`npm test`), GitHub Actions CI
 
 ---
 
 ## Project Structure
 
-```
+```text
 ├── api/
 │   ├── generate.js           # Generation endpoint — routes to provider modules
 │   ├── generation-routing.js # Shared validation & provider resolution
 │   ├── model-catalog.js      # Backend catalog mirror (CJS)
 │   ├── enhance.js            # Prompt enhancement (xAI)
 │   ├── random-prompt.js      # AI random prompt generation
-│   ├── video-status.js       # Async Fal video job polling
+│   ├── video-status.js       # Async video job polling (xAI + Evolink)
 │   ├── test-key.js           # API key validation endpoints
 │   └── providers/            # Provider-specific handlers
 │       ├── openrouter.js
 │       ├── xai.js
-│       ├── fal-image.js
-│       ├── fal-video.js
-│       ├── evolink.js
+│       ├── evolink.js        # Evolink image (Seedream, Z Image Turbo)
+│       ├── evolink-video.js  # Evolink Seedance 2.0 video (T2V + I2V)
 │       └── format-errors.js
 ├── shared/
 │   └── model-catalog.json    # Single source of truth for all models
@@ -119,7 +116,6 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 │   ├── catalog-integrity.test.js
 │   ├── model-catalog.test.js
 │   ├── generate-routing.test.js
-│   ├── fal-payload.test.js
 │   ├── evolink-payload.test.js
 │   └── ui-capabilities.test.js
 ├── css/                      # base, layout, components, gallery
@@ -137,9 +133,8 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 - [Node.js](https://nodejs.org/) v18+
 - API key for at least one provider:
   - [OpenRouter](https://openrouter.ai/keys) — FLUX, Gemini, GPT-5, Seedream (OR)
-  - [Fal](https://fal.ai/dashboard/keys) — Seedream, Seedance, Wan, Phota, and other Fal-hosted models
   - [xAI](https://console.x.ai) — Grok image and video models
-  - [Evolink](https://evolink.ai/dashboard/keys) — Seedream 4.5/5 Lite and Z Image Turbo
+  - [Evolink](https://evolink.ai/dashboard/keys) — Seedream 4.5/5 Lite, Z Image Turbo, and Seedance 2.0 video
 
 ### Local Development
 
@@ -165,7 +160,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 
 3. **Open in browser**
 
-   ```
+   ```text
    http://localhost:3000
    ```
 
@@ -179,7 +174,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 npm test
 ```
 
-Tests cover catalog integrity, provider routing, Fal payload shapes, and UI capability flags. CI runs on every push via GitHub Actions.
+Tests cover catalog integrity, provider routing, Evolink payload shapes, and UI capability flags. CI runs on every push via GitHub Actions.
 
 ### Deploy to Vercel
 
@@ -212,13 +207,13 @@ npx vercel --prod
 2. Attach up to 4 reference images (8 MB max each)
 3. Images are automatically compressed if too large
 4. Describe the changes you want applied
-5. Generate with a compatible edit model (Seedream Edit, GPT-5, Gemini, Wan Edit, etc.)
+5. Generate with a compatible edit model (Seedream 4.5 Edit, GPT-5, Gemini, etc.)
 
 ### Image-to-Video
 
-1. Select an image-to-video model (e.g. Seedance 1.5 Pro I2V, Seedance 2.0 I2V, PixVerse C1)
-2. Attach **1 image** as the start frame (required for most I2V models)
-3. Optionally attach a **second image** as the end frame (where supported)
+1. Select the image-to-video model (Evolink Seedance 2.0 I2V) — or click **Animate** on any generated image
+2. Attach **1 image** as the start frame (required)
+3. Optionally attach a **second image** as the end frame
 4. Enter a motion/scene prompt
 5. Adjust video length and quality in Settings if the model supports them
 6. Generate — the card shows progress while rendering, then displays an inline video player
@@ -242,14 +237,13 @@ npx vercel --prod
 ## Settings Reference
 
 | Setting | Description | Options |
-|---------|-------------|---------|
+| --- | --- | --- |
 | **OpenRouter API Key** | Key for OpenRouter-backed models | Text input with show/hide toggle |
 | **xAI API Key** | Key for Grok image/video models | Text input with show/hide toggle |
-| **Fal API Key** | Key for Fal-hosted image and video models | Text input with show/hide toggle |
-| **Evolink API Key** | Key for Evolink-hosted models (Seedream, Z Image Turbo) | Text input with show/hide toggle |
+| **Evolink API Key** | Key for Evolink-hosted models (Seedream, Z Image Turbo, Seedance 2.0 video) | Text input with show/hide toggle |
 | **Aspect Ratio** | Output dimensions (where supported) | 1:1, 4:3, 3:4, 16:9, 9:16, 3:2, 2:3, 21:9, 9:21 |
-| **Resolution** | Output resolution (Gemini, Phota, etc.) | 1K, 2K, 4K (model-dependent) |
-| **Video Length** | Duration for video models | Model-dependent (e.g. 4–12 s Seedance, 1–15 s xAI) |
+| **Resolution** | Output resolution (Gemini, Evolink Seedream, xAI) | 1K, 2K, 3K, 4K (model-dependent) |
+| **Video Length** | Duration for video models | Model-dependent (e.g. 4–15 s Seedance, 1–15 s xAI) |
 | **Video Quality** | Resolution for video models | 480p, 720p, 1080p |
 | **Photo Visibility** | Controls "All Photos" gallery behavior | Show all photos / Folder-only view |
 
@@ -260,7 +254,7 @@ Available settings depend on the selected model — the UI reads capability flag
 ## Keyboard Shortcuts
 
 | Key | Action |
-|-----|--------|
+| --- | --- |
 | `Enter` | Generate images |
 | `Shift + Enter` | New line in prompt |
 | `Escape` | Close lightbox or modal |
@@ -271,7 +265,7 @@ Available settings depend on the selected model — the UI reads capability flag
 ## Technical Limits
 
 | Constraint | Limit |
-|------------|-------|
+| --- | --- |
 | **Request/Response Body** | 4.5 MB (Vercel limit) |
 | **Image Attachments** | 4 images max per generation |
 | **Attachment Size** | 8 MB max per image |
@@ -287,9 +281,8 @@ Available settings depend on the selected model — the UI reads capability flag
 
 - Open Settings and enter the key for your selected model's provider
 - OpenRouter — FLUX, Gemini, GPT-5, Seedream (OR)
-- Fal — Seedream, Seedance, Wan, Phota, and other Fal models
 - xAI — Grok image and video models
-- Evolink — Seedream 4.5/5 Lite and Z Image Turbo
+- Evolink — Seedream 4.5/5 Lite, Z Image Turbo, and Seedance 2.0 video
 - Ensure the key is saved (click Save)
 
 ### Images not generating
@@ -301,9 +294,9 @@ Available settings depend on the selected model — the UI reads capability flag
 
 ### Video generation stuck on pending
 
-- Video generation typically takes 30–90 seconds; polling runs every 3 s up to a 6-minute timeout
-- If it times out, try again — Fal queue jobs can occasionally stall
-- Verify your Fal/xAI API key has credits
+- Video generation typically takes 30–180 seconds; polling runs every 3 s up to a 6-minute timeout
+- If it times out, try again — async video jobs can occasionally stall
+- Verify your Evolink/xAI API key has credits
 
 ### Storage full warning
 
@@ -329,7 +322,7 @@ Available settings depend on the selected model — the UI reads capability flag
 
 Models are defined in [`shared/model-catalog.json`](shared/model-catalog.json) — one catalog entry drives the picker, settings UI, backend routing, and pricing hints. No hardcoded model lists elsewhere.
 
-**→ [Adding a model](docs/adding-a-model.md)** — decision tree, profile reference, JSON examples, Fal variants, and test checklist.
+**→ [Adding a model](docs/adding-a-model.md)** — decision tree, profile reference, JSON examples, and test checklist.
 
 Architecture notes for agents: [`AGENTS.md`](AGENTS.md).
 
@@ -344,5 +337,6 @@ MIT License
 ## Acknowledgments
 
 - [OpenRouter](https://openrouter.ai/) for unified AI model access
-- [Fal](https://fal.ai/) for hosted image and video models
+- [Evolink](https://evolink.ai/) for hosted Seedream image and Seedance video models
+- [xAI](https://x.ai/) for Grok image and video models
 - [Vercel](https://vercel.com/) for serverless hosting

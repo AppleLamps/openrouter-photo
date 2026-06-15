@@ -3,7 +3,7 @@
 All models are defined in **`shared/model-catalog.json`**. That file is the single source of truth for:
 
 - Model picker entries (name, provider, type, tier)
-- Backend routing (`openrouter`, `xai`, `fal-image`, `fal-video`, `evolink`)
+- Backend routing (`openrouter`, `xai`, `evolink`, `evolink-video`)
 - Settings panel visibility (aspect ratio, resolution, video length, etc.)
 - Input image requirements and limits
 - Spend-tracker pricing hints
@@ -16,16 +16,15 @@ You do **not** edit `js/models.js`, `index.html` model lists, or `api/generate.j
 
 1. Find the closest existing model in `shared/model-catalog.json` and copy its pattern.
 2. Add a row to the `models` array (and a new `capabilityProfiles` entry only if no profile fits).
-3. For Fal image models with a new API shape, add or reuse a `falImageVariants` entry.
-4. For Fal video models with a new payload family, you may need a new `falVideo.variant` branch in `api/providers/fal-video.js`.
-5. Run `npm test`.
-6. Manual smoke: pick the model in the UI, confirm settings panels, generate once.
+3. For a new Evolink API family, add a branch in `api/providers/evolink.js` (image) or `api/providers/evolink-video.js` (video).
+4. Run `npm test`.
+5. Manual smoke: pick the model in the UI, confirm settings panels, generate once.
 
 ---
 
 ## Decision tree
 
-```
+```text
 New model
     │
     ├─ OpenRouter (FLUX, Gemini, GPT-5, Seedream OR)
@@ -34,25 +33,19 @@ New model
     ├─ xAI (Grok image / video)
     │     └─ Catalog only → reuse xai-image or xai-video profile + pricing
     │
-    ├─ Evolink
+    ├─ Evolink image (Seedream, Z Image Turbo, …)
     │     ├─ Seedream 4.5 / 5 Lite (T2I or edit)? → catalog only → reuse evolink-image or evolink-edit
     │     │     (override `evolink.apiModel` and `ui.resolution` on the model entry when quality tiers differ)
     │     └─ New API family (e.g. Z Image Turbo)? → new profile + branch in api/providers/evolink.js
     │
-    ├─ Fal text-to-image or edit
-    │     ├─ Same payload as an existing variant? → catalog only (set falImage.variant)
-    │     └─ New payload fields / different aspect handling? → new falImageVariants entry
-    │           (+ maybe extend buildFalImagePayload switch in api/providers/fal-image.js)
-    │
-    └─ Fal video (T2V / I2V)
-          ├─ seedance15 / seedance20 / pixverse / happyHorse / flashhead family?
-          │     └─ Catalog only → reuse matching fal-video-* profile
-          └─ New video API family? → new profile + falVideo.variant + fal-video.js handler branch
+    └─ Evolink video (Seedance 2.0 T2V / I2V, …)
+          ├─ Same Seedance contract? → catalog only → reuse evolink-video-seedance2-t2v / -i2v
+          └─ New video API family? → new evolink-video profile + branch in api/providers/evolink-video.js
 ```
 
 **Catalog-only** means: edit `shared/model-catalog.json` only, then test.
 
-**Provider work** means: also touch `api/providers/fal-image.js` or `api/providers/fal-video.js` when the new API needs logic that no existing variant covers.
+**Provider work** means: also touch `api/providers/evolink.js` or `api/providers/evolink-video.js` when the new API needs logic that no existing variant covers.
 
 ---
 
@@ -61,27 +54,27 @@ New model
 ### Top-level keys
 
 | Key | Purpose |
-|-----|---------|
+| --- | --- |
 | `defaultModelId` | Fallback when an unknown model id is requested |
-| `defaults.animateModelId` | Default for the Animate action |
-| `legacyRedirects` | Map old ids → current ids (aliases, renamed endpoints) |
+| `defaults.animateModelId` | Model used by the Animate action (an image-to-video model) |
+| `picker.hiddenApiKeys` | API keys whose models are hidden from the picker (currently empty) |
+| `legacyRedirects` | Map old ids → current ids (aliases, renamed/removed endpoints) |
 | `capabilityProfiles` | Reusable capability + UI + backend config |
-| `falImageVariants` | Static Fal image payload defaults keyed by variant name |
 | `models` | One entry per selectable model |
 
 ### Model entry fields
 
 | Field | Required | Description |
-|-------|----------|-------------|
-| `id` | yes | Exact provider model id (Fal path, OpenRouter slug, etc.) |
+| --- | --- | --- |
+| `id` | yes | Exact provider model id (Evolink/OpenRouter slug, etc.) |
 | `name` | yes | Display name in the picker |
 | `provider` | yes | Brand shown in the picker (e.g. `"Bytedance"`, `"Google"`) |
 | `type` | yes | `"image"`, `"edit"`, `"text-to-video"`, or `"image-to-video"` |
 | `tier` | yes | `"fast"`, `"balanced"`, or `"quality"` (sort hint) |
 | `profile` | yes | Key into `capabilityProfiles` |
-| `via` | no | Badge in picker: `"fal"`, `"OpenRouter"`, `"Evolink"` |
-| `falImage` | no | Overrides profile's `falImage` (variant, `usesPresetImageSize`, `asyncQueue`) |
-| `capabilities` | no | Deep-merge overrides (e.g. `{ "input": { "maxImages": 10 } }`) |
+| `via` | no | Badge in picker: `"OpenRouter"`, `"Evolink"` |
+| `evolink` | no | Overrides profile's `evolink` block (`apiModel`, `variant`, etc.) |
+| `capabilities` | no | Deep-merge overrides (e.g. `{ "ui": { "resolution": { "options": ["2K","3K"] } } }`) |
 | `pricing` | no | Per-model pricing for spend tracker (see below) |
 
 After adding a model, it appears automatically in the picker (filtered by `type` tab). No HTML or hardcoded list changes.
@@ -95,14 +88,14 @@ Profiles define **backend**, **API key**, **UI controls**, and **input rules**.
 ### Common `ui` flags
 
 | Flag | Effect |
-|------|--------|
+| --- | --- |
 | `aspectRatio: true` | Show aspect ratio dropdown |
-| `resolution: { options, default }` | Show resolution dropdown (Gemini, Phota, xAI) |
+| `resolution: { options, default }` | Show resolution dropdown (Gemini, Evolink Seedream, xAI) |
 | `videoLength: { min, max, default }` | Video duration slider/input |
 | `videoQuality: { options, default }` | Video resolution dropdown |
-| `generateAudio: true` | Toggle for PixVerse-style audio |
-| `imageToVideoHint: true` | Hint that attachments are used as frames |
-| `flashhead: true` | FlashHead-specific voice/stability controls |
+| `generateAudio: true` | Toggle for video audio (Seedance) |
+| `webSearch: true` | Web-search toggle (Seedream 5 Lite, Seedance 2.0 T2V) |
+| `imageToVideoHint: true` | Hint that attachments are used as start/end frames |
 
 ### Input rules
 
@@ -110,27 +103,22 @@ Profiles define **backend**, **API key**, **UI controls**, and **input rules**.
 "input": { "maxImages": 3, "required": false }
 ```
 
-- `type: "edit"` or `image-to-video` profiles usually set `"required": true`.
+- `type: "edit"` or `image-to-video` profiles set `"required": true`.
 - Override per model with `"capabilities": { "input": { "maxImages": 10 } }`.
 
 ### Existing profiles (reuse before creating new)
 
 | Profile | Backend | Use for |
-|---------|---------|---------|
+| --- | --- | --- |
 | `openrouter-image` | openrouter | Generic OR image models |
 | `openrouter-seedream` | openrouter | Seedream via OpenRouter |
 | `openrouter-gemini` | openrouter | Gemini with resolution |
 | `xai-image` | xai | Grok image |
-| `xai-video` | xai | Grok video (async) |
-| `fal-image` | fal-image | Fal T2I (default `seedream-default` variant) |
-| `fal-edit` | fal-edit | Fal edit models |
+| `xai-video` | xai | Grok video (async, text-to-video) |
 | `evolink-image` / `evolink-edit` | evolink | Evolink Seedream (4.5 default; override `apiModel` / resolution per model) |
 | `evolink-z-image` | evolink | Evolink Z Image Turbo (aspect ratio only, async) |
-| `fal-video-seedance15-t2v` / `-i2v` | fal-video | Seedance 1.5 |
-| `fal-video-seedance20-t2v` / `-i2v` | fal-video | Seedance 2.0 |
-| `fal-video-pixverse` | fal-video | PixVerse C1 I2V |
-| `fal-video-happyhorse` | fal-video | Happy Horse multi-ref I2V |
-| `fal-video-flashhead` | fal-video | FlashHead |
+| `evolink-video-seedance2-i2v` | evolink-video | Seedance 2.0 image-to-video (async, 1–2 frames) |
+| `evolink-video-seedance2-t2v` | evolink-video | Seedance 2.0 text-to-video (async, web search) |
 
 ---
 
@@ -153,7 +141,7 @@ Copy an existing entry and change `id`, `name`, and `profile` if needed:
 
 Gemini models use `"profile": "openrouter-gemini"` for aspect ratio + 1K/2K/4K resolution.
 
-### 1b. Evolink Seedream — same family, different API model (catalog only)
+### 2. Evolink Seedream — same family, different API model (catalog only)
 
 Seedream 5 Lite reuses the Seedream profiles but overrides the API model and resolution options:
 
@@ -167,13 +155,13 @@ Seedream 5 Lite reuses the Seedream profiles but overrides the API model and res
   "via": "Evolink",
   "profile": "evolink-image",
   "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-lite" },
-  "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "2K" } } }
+  "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "3K" }, "webSearch": true } }
 }
 ```
 
 Use `"profile": "evolink-edit"` and the same overrides for an edit entry. The provider maps `ui.resolution.options` to Evolink `quality` (`2K`/`4K` for 4.5, `2K`/`3K` for 5 Lite).
 
-### 1c. Evolink Z Image Turbo (catalog + provider variant)
+### 3. Evolink Z Image Turbo (catalog + provider variant)
 
 Z Image Turbo uses a dedicated profile and async task polling (no batch `n`, no resolution control):
 
@@ -186,125 +174,55 @@ Z Image Turbo uses a dedicated profile and async task polling (no batch `n`, no 
   "tier": "fast",
   "via": "Evolink",
   "profile": "evolink-z-image",
-  "pricing": { "price": { "type": "flat", "amount": 0.026 } }
+  "pricing": { "price": { "type": "flat", "amount": 0.004 } }
 }
 ```
 
-If the new Evolink endpoint needs different payload fields or aspect-ratio handling, add a branch in `api/providers/evolink.js` keyed by `evolink.variant` from `getEvolinkConfig()`.
+If a new Evolink image endpoint needs different payload fields or aspect-ratio handling, add a branch in `api/providers/evolink.js` keyed by `evolink.variant` from `getEvolinkConfig()`.
 
-### 2. Fal image — existing variant (catalog only)
+### 4. Evolink video — Seedance 2.0 (catalog only)
 
-Wan and Seedream Fal endpoints share the default variant:
-
-```json
-{
-  "id": "fal-ai/wan/v2.7/text-to-image",
-  "name": "Wan 2.7",
-  "provider": "Wan",
-  "type": "image",
-  "tier": "balanced",
-  "via": "fal",
-  "profile": "fal-image",
-  "pricing": { "price": { "type": "flat", "amount": 0.04 } }
-}
-```
-
-The `fal-image` profile already sets `falImage.variant: "seedream-default"`.
-
-### 3. Fal image — different variant (catalog only)
-
-Z-Image uses a dedicated variant with preset `image_size` and 8 steps:
+Text-to-video and image-to-video share the `evolink-video` backend and `/v1/videos/generations` endpoint, but use separate profiles. The handler in `api/providers/evolink-video.js` branches on the model `type`:
 
 ```json
 {
-  "id": "fal-ai/z-image/turbo/lora",
-  "name": "Z-Image Turbo",
-  "provider": "Tongyi",
-  "type": "image",
-  "tier": "fast",
-  "via": "fal",
-  "profile": "fal-image",
-  "falImage": { "variant": "z-image", "usesPresetImageSize": true },
-  "pricing": { "price": { "type": "mpix", "amount": 0.0085 } }
-}
-```
-
-Set `usesPresetImageSize: true` when the API expects Fal preset strings (`landscape_16_9`, etc.) rather than raw aspect ratio.
-
-### 4. Fal edit (catalog only)
-
-Same as Fal image but `type: "edit"` and `profile: "fal-edit"` (requires attachments):
-
-```json
-{
-  "id": "fal-ai/wan/v2.7/edit",
-  "name": "Wan 2.7 Edit",
-  "provider": "Wan",
-  "type": "edit",
-  "tier": "balanced",
-  "via": "fal",
-  "profile": "fal-edit",
-  "pricing": { "price": { "type": "flat", "amount": 0.04 } }
-}
-```
-
-### 5. Fal video — Seedance (catalog only)
-
-Text-to-video and image-to-video use separate profiles:
-
-```json
-{
-  "id": "fal-ai/bytedance/seedance/v1.5/pro/text-to-video",
-  "name": "Seedance 1.5 Pro",
+  "id": "evolink/seedance-2.0/text-to-video",
+  "name": "Seedance 2.0",
   "provider": "Bytedance",
   "type": "text-to-video",
   "tier": "quality",
-  "via": "fal",
-  "profile": "fal-video-seedance15-t2v",
-  "pricing": {
-    "pricePerSecond": { "480p": 0.0241, "720p": 0.0518, "1080p": 0.1166 }
-  }
+  "via": "Evolink",
+  "profile": "evolink-video-seedance2-t2v"
 }
 ```
 
-Video models are **async**: the client polls `/api/video-status` after generate returns a `request_id`.
+```json
+{
+  "id": "evolink/seedance-2.0/image-to-video",
+  "name": "Seedance 2.0",
+  "provider": "Bytedance",
+  "type": "image-to-video",
+  "tier": "quality",
+  "via": "Evolink",
+  "profile": "evolink-video-seedance2-i2v"
+}
+```
 
-### 6. Legacy redirect (alias)
+- **Image-to-video** requires 1–2 attached frames (first frame, optional last frame); the handler uploads them via the Evolink files API and sends `image_urls`.
+- **Text-to-video** takes no images and sends `model_params: { web_search: true }` when the web-search toggle is on.
+- Both are **async**: generate returns `202 { request_id, provider: "evolink" }`, and the client polls `/api/video-status?provider=evolink` (Evolink task status `GET /v1/tasks/{task_id}`).
 
-When Fal or an old client uses a different id string:
+### 5. Legacy redirect (alias)
+
+When an old client uses a different id string, or a removed model should map to its replacement:
 
 ```json
 "legacyRedirects": {
   "grok-imagine-image-pro": "grok-imagine-image-quality",
-  "fal-ai/bytedance/seedance-2.0/text-to-video": "bytedance/seedance-2.0/text-to-video"
+  "fal-ai/bytedance/seedance-2.0/image-to-video": "evolink/seedance-2.0/image-to-video",
+  "bytedance/seedance-2.0/image-to-video": "evolink/seedance-2.0/image-to-video"
 }
 ```
-
----
-
-## Fal image variants
-
-Registered in `falImageVariants`. Each model points at one via `falImage.variant` (on the profile or model override).
-
-| Variant | Typical models | Notes |
-|---------|----------------|-------|
-| `seedream-default` | Wan, Seedream Fal | Generic sync; dual safety checkers off |
-| `z-image` | Z-Image Turbo | 8 steps, preset sizes |
-| `nucleus` | Nucleus | Uses `aspect_ratio`, not `image_size` |
-| `phota` | Phota, Phota Edit | Queue polling when `asyncQueue: true` |
-| `ernie` / `ernie-turbo` | Ernie LoRA | Preset sizes |
-| `ovis`, `glm`, `bitdance` | Various | Preset sizes |
-| `flux-klein-edit` | Flux 2 Klein edit | Edit + loras |
-| `flux-pro` | Flux 1.1 Pro | `safety_tolerance` instead of checker |
-| `qwen-max` | Qwen-Image Max | Prompt truncated to 800 chars |
-
-### Adding a new variant
-
-1. Add an entry under `falImageVariants` with `payloadDefaults` matching the Fal API schema.
-2. Set `"enable_safety_checker": false` (and `"enable_output_safety_checker": false` when the schema supports it).
-3. Point the model at it: `"falImage": { "variant": "your-variant" }`.
-4. If aspect ratio or field mapping differs from existing cases, add a `case` in `buildFalImagePayload()` inside `api/providers/fal-image.js`.
-5. Add a snapshot test in `tests/fal-payload.test.js`.
 
 ---
 
@@ -313,44 +231,22 @@ Registered in `falImageVariants`. Each model points at one via `falImage.variant
 Pricing is optional but recommended. Shapes used today:
 
 ```json
-// Flat per image
+// Flat per image (Evolink)
 "pricing": { "price": { "type": "flat", "amount": 0.04 } }
-
-// Per megapixel
-"pricing": { "price": { "type": "mpix", "amount": 0.0085 } }
-
-// Resolution-based (Phota edit)
-"pricing": { "price": { "type": "resolution", "oneK": 0.09, "fourK": 0.18 } }
 
 // xAI image
 "pricing": { "perImageOutput": 0.02, "inputImageCost": 0.002 }
 
-// xAI video (per second)
+// Per-second video (xAI video, and Evolink video when rates are known)
 "pricing": { "perSecondOutput": 0.05, "inputImageCost": 0.002 }
-
-// Fal video (per second by resolution)
-"pricing": { "pricePerSecond": { "720p": 0.0518, "1080p": 0.1166 } }
+"pricing": { "pricePerSecond": 0.05 }
 ```
 
-For Fal video, put `pricePerSecond` on the **profile** (or model `pricing`) and ensure every resolution exposed in `ui.videoQuality.options` has a rate — otherwise cost shows as `$0`.
+Notes:
 
-OpenRouter models often rely on live usage from the API response instead of catalog pricing.
-
----
-
-## Fal video variants
-
-Video payload logic lives in `api/providers/fal-video.js`. Catalog `falVideo.variant` selects the branch:
-
-| Variant | Profile example |
-|---------|-----------------|
-| `seedance15` | `fal-video-seedance15-t2v` / `-i2v` |
-| `seedance20` | `fal-video-seedance20-t2v` / `-i2v` |
-| `pixverse` | `fal-video-pixverse` |
-| `happyHorse` | `fal-video-happyhorse` |
-| `flashhead` | `fal-video-flashhead` |
-
-A new Fal video **family** needs a new variant string, profile, pricing table, and a handler branch in `fal-video.js`.
+- Image spend is recorded from each provider's per-image cost (Evolink/xAI) or live OpenRouter usage.
+- **Video spend is not recorded** — async video responses carry no usage records, so `estimated_cost` is informational only. Evolink Seedance video has no per-second rate wired yet (`estimated_cost` is `0`); add `pricePerSecond` to the profile/model `pricing` to populate it.
+- OpenRouter models often rely on live usage from the API response instead of catalog pricing.
 
 ---
 
@@ -361,20 +257,20 @@ npm test
 ```
 
 | Test file | What it catches |
-|-----------|-----------------|
-| `tests/catalog-integrity.test.js` | Duplicate ids, orphan variants, payload build for every Fal image model |
-| `tests/model-catalog.test.js` | Routing, redirects, Fal config resolution |
-| `tests/fal-payload.test.js` | Payload shape per Fal image variant |
+| --- | --- |
+| `tests/catalog-integrity.test.js` | Model counts, backend/type counts, legacy redirects, edit-model input requirements, no-fal guard |
+| `tests/model-catalog.test.js` | Routing, redirects, Evolink config resolution |
 | `tests/evolink-payload.test.js` | Evolink Seedream and Z Image Turbo payload shape |
 | `tests/generate-routing.test.js` | Input image validation, provider resolution |
-| `tests/ui-capabilities.test.js` | Settings panel flags per profile |
+| `tests/ui-capabilities.test.js` | Settings panel flags per profile, picker visibility |
 
 After tests pass, manually verify:
 
 - [ ] Model appears in picker (correct tab: Image / Edit / Video)
 - [ ] Settings panel shows only the controls that profile allows
-- [ ] Generate succeeds with the correct API key type (OpenRouter / Fal / xAI / Evolink)
+- [ ] Generate succeeds with the correct API key type (OpenRouter / xAI / Evolink)
 - [ ] Edit / I2V models reject generation with no attachments
+- [ ] Video models poll to completion and play inline
 - [ ] Spend pill updates (if pricing is configured)
 
 Use `npx vercel dev` when testing API routes with serverless behavior.
@@ -383,24 +279,21 @@ Use `npx vercel dev` when testing API routes with serverless behavior.
 
 ## Conventions
 
-- **Add only** — do not remove existing models or change defaults (`defaultModelId`, shortcuts, empty-state copy) unless explicitly asked.
 - **Copy similar models** — match an existing entry's profile and variant before inventing a new pattern.
-- **Safety off for Fal** — disable checkers in `payloadDefaults`; match each endpoint's schema (some only expose `enable_safety_checker`).
-- **No scattered id checks** — do not add `if (model === 'fal-ai/...')` in `generate.js`; use catalog profiles and provider modules.
-- **Provider API docs** — Fal reference dumps live in `api-docs/` and model-specific folders (e.g. `wan-models/`).
+- **No scattered id checks** — do not add `if (model === 'evolink/...')` in `generate.js`; use catalog profiles and provider modules.
+- **Catalog drives everything** — picker, settings UI, routing, and pricing all read from `shared/model-catalog.json`.
 
 ---
 
 ## Files touched (typical vs advanced)
 
 | Change | Files |
-|--------|-------|
+| --- | --- |
 | Most models | `shared/model-catalog.json` only |
-| New Fal image variant | + `api/providers/fal-image.js`, `tests/fal-payload.test.js` |
-| New Fal video family | + `api/providers/fal-video.js`, pricing in catalog |
-| New Evolink API family | + `api/providers/evolink.js`, `tests/evolink-payload.test.js` |
+| New Evolink image API family | + `api/providers/evolink.js`, `tests/evolink-payload.test.js` |
+| New Evolink video API family | + `api/providers/evolink-video.js`, pricing in catalog |
 | Legacy alias | `legacyRedirects` in catalog |
-| New provider entirely | New file under `api/providers/`, route in `api/generate.js`, mirror in `api/model-catalog.js` |
+| New provider entirely | New file under `api/providers/`, route in `api/generate.js`, mirror in `api/model-catalog.js`, video polling branch in `api/video-status.js` |
 
 ---
 
