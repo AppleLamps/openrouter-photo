@@ -124,6 +124,21 @@
         "defaultGenerateAudio": true,
         "supportsWebSearch": true
       }
+    },
+    "evolink-video-happyhorse1-i2v": {
+      "apiKey": "evolink",
+      "backend": "evolink-video",
+      "ui": {
+        "videoLength": { "min": 3, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["720p", "1080p"], "default": "720p" },
+        "imageToVideoHint": true
+      },
+      "input": { "maxImages": 1, "required": true },
+      "async": true,
+      "evolink": {
+        "variant": "happyhorse1-i2v",
+        "apiModel": "happyhorse-1.0-image-to-video"
+      }
     }
   },
   "models": [
@@ -134,6 +149,7 @@
     { "id": "evolink/z-image-turbo", "name": "Z Image Turbo", "provider": "Tongyi", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-z-image", "pricing": { "price": { "type": "flat", "amount": 0.004 } } },
     { "id": "evolink/seedance-2.0/image-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "image-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-i2v" },
     { "id": "evolink/seedance-2.0/text-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "text-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-t2v" },
+    { "id": "evolink/happyhorse-1.0/image-to-video", "name": "HappyHorse 1.0", "provider": "HappyHorse", "type": "image-to-video", "tier": "balanced", "via": "Evolink", "profile": "evolink-video-happyhorse1-i2v" },
     { "id": "black-forest-labs/flux.2-pro", "name": "Flux 2 Pro", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
     { "id": "black-forest-labs/flux.2-max", "name": "Flux 2 Max", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
     { "id": "black-forest-labs/flux.2-flex", "name": "Flux 2 Flex", "provider": "Black Forest Labs", "type": "image", "tier": "balanced", "profile": "openrouter-image" },

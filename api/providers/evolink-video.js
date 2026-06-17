@@ -56,7 +56,7 @@ async function handleEvolinkVideo(ctx) {
 
     if (isImageToVideo && (!Array.isArray(normalizedInputImages) || normalizedInputImages.length === 0)) {
         return res.status(400).json({
-            error: 'Seedance 2.0 requires at least one attached image. Attach a start frame and try again.',
+            error: 'This image-to-video model requires at least one attached image. Attach a start frame and try again.',
         });
     }
 
@@ -109,19 +109,25 @@ async function handleEvolinkVideo(ctx) {
             qualityOptions,
             videoUi.videoQuality?.default || '720p',
         );
-        const aspectRatio = normalizeVideoAspectRatio(
-            normalizedAspectRatio,
-            evolink.defaultAspectRatio || '16:9',
-        );
-        const generateAudio = generate_audio_switch !== false;
+        // Some Evolink video models (e.g. HappyHorse 1.0 i2v) derive the aspect ratio from
+        // the first frame and reject aspect_ratio/generate_audio; only send them when supported.
+        const supportsAspectRatio = videoUi.aspectRatio === true;
+        const supportsGenerateAudio = evolink.supportsGenerateAudio === true;
 
         const payload = {
             model: apiModel,
             prompt: prompt.trim(),
             duration,
             quality,
-            aspect_ratio: aspectRatio,
-            generate_audio: generateAudio,
+            ...(supportsAspectRatio
+                ? {
+                      aspect_ratio: normalizeVideoAspectRatio(
+                          normalizedAspectRatio,
+                          evolink.defaultAspectRatio || '16:9',
+                      ),
+                  }
+                : {}),
+            ...(supportsGenerateAudio ? { generate_audio: generate_audio_switch !== false } : {}),
             ...(isImageToVideo ? { image_urls: imageUrls } : {}),
             ...(!isImageToVideo && evolink.supportsWebSearch && enable_web_search === true
                 ? { model_params: { web_search: true } }
