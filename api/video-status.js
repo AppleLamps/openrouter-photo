@@ -65,17 +65,26 @@ module.exports = withMiddleware(async function handler(req, res) {
 
             const taskData = await taskResponse.json();
             const status = String(taskData?.status || taskData?.data?.status || '').toLowerCase();
+            const taskError = taskData?.error || taskData?.data?.error || null;
+            const failureReason =
+                (taskError && (taskError.message || taskError.code)) || null;
 
             if (status === 'completed') {
                 const videoUrl = extractEvolinkVideoUrl(taskData);
                 if (videoUrl) {
                     return res.status(200).json({ status: 'completed', url: videoUrl });
                 }
-                return res.status(200).json({ status: 'failed' });
+                return res.status(200).json({
+                    status: 'failed',
+                    error: 'Task completed but returned no video URL.',
+                });
             }
 
             if (status === 'failed') {
-                return res.status(200).json({ status: 'failed' });
+                return res.status(200).json({
+                    status: 'failed',
+                    ...(failureReason ? { error: redactKey(failureReason) } : {}),
+                });
             }
 
             // pending or processing → still pending

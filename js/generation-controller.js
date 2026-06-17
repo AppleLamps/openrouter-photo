@@ -396,10 +396,13 @@ async function handleGenerate(input, button, retryOptions = null) {
                 }
 
                 if (poll.status === 'failed') {
+                    const failMessage = poll.error
+                        ? `Video generation failed: ${poll.error}`
+                        : 'Video generation failed. Please try again.';
                     placeholderIds.forEach(id => {
                         const metadata = placeholderMetadata.get(id);
                         if (metadata) {
-                            showErrorCard(id, 'Video generation failed. Please try again.', metadata.prompt,
+                            showErrorCard(id, failMessage, metadata.prompt,
                                 () => retryGeneration(metadata.prompt, metadata.settings, metadata.folderId));
                             placeholderMetadata.delete(id);
                         }
