@@ -54,6 +54,20 @@ describe('UI capabilities', () => {
         assert.equal(ui.webSearch, true);
     });
 
+    it('evolink seedream 5 pro exposes its documented image options', () => {
+        const ui = getUiCapabilities('evolink/doubao-seedream-5.0-pro');
+        assert.equal(ui.aspectRatio, true);
+        assert.deepEqual(ui.aspectRatioOptions?.options, [
+            'auto', '1:1', '2:3', '3:2', '3:4', '4:3',
+            '4:5', '5:4', '9:16', '16:9', '21:9',
+        ]);
+        assert.equal(ui.aspectRatioOptions?.default, 'auto');
+        assert.deepEqual(ui.resolution?.options, ['1K', '2K']);
+        assert.equal(ui.resolution?.default, '1K');
+        assert.deepEqual(ui.outputFormat?.options, ['png', 'jpeg']);
+        assert.equal(ui.webSearch, false);
+    });
+
     it('does not expose web search for other evolink models', () => {
         assert.equal(getUiCapabilities('evolink/doubao-seedream-4.5').webSearch, false);
         assert.equal(getUiCapabilities('evolink/z-image-turbo').webSearch, false);
@@ -70,6 +84,7 @@ describe('picker visibility', () => {
         }
 
         assert.equal(isVisibleInPicker('evolink/doubao-seedream-5.0-lite'), true);
+        assert.equal(isVisibleInPicker('evolink/doubao-seedream-5.0-pro'), true);
         assert.equal(isVisibleInPicker('black-forest-labs/flux.2-pro'), true);
     });
 });

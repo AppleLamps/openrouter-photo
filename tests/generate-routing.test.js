@@ -25,6 +25,7 @@ describe('generate routing — provider resolution', () => {
         assert.equal(resolveProviderHandler('evolink/doubao-seedream-4.5/edit'), 'evolink');
         assert.equal(resolveProviderHandler('evolink/z-image-turbo'), 'evolink');
         assert.equal(resolveProviderHandler('evolink/doubao-seedream-5.0-lite/edit'), 'evolink');
+        assert.equal(resolveProviderHandler('evolink/doubao-seedream-5.0-pro'), 'evolink');
         assert.equal(resolveProviderHandler('evolink/seedance-2.0/image-to-video'), 'evolink-video');
         assert.equal(resolveProviderHandler('evolink/seedance-2.0/text-to-video'), 'evolink-video');
     });
@@ -80,6 +81,14 @@ describe('generate routing — input image validation', () => {
         );
         assert.equal(
             validateRequiredInputImages('evolink/doubao-seedream-5.0-lite/edit', [SAMPLE_IMAGE]),
+            null
+        );
+    });
+
+    it('allows evolink seedream 5 pro text-to-image and image-to-image without requiring edit tab', () => {
+        assert.equal(validateRequiredInputImages('evolink/doubao-seedream-5.0-pro', []), null);
+        assert.equal(
+            validateRequiredInputImages('evolink/doubao-seedream-5.0-pro', [SAMPLE_IMAGE]),
             null
         );
     });

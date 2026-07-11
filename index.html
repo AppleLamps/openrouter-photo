@@ -494,7 +494,7 @@
                 <div class="settings-group">
                     <label class="settings-label">Advanced</label>
                     <p class="settings-hint settings-hint--flush">Aspect ratio is supported for Gemini, Seedream, Evolink,
-                        and xAI models. Image resolution is supported for Gemini and xAI image models.</p>
+                        and xAI models. Image resolution and output options vary by model.</p>
                 </div>
 
                 <!-- Aspect Ratio -->
@@ -523,6 +523,15 @@
                         <option value="4K">4K</option>
                     </select>
                     <p class="settings-hint">Applied for Gemini, xAI, and Evolink Seedream models (options vary by model).</p>
+                </div>
+
+                <!-- Output format -->
+                <div class="settings-group settings-group--hidden" id="output-format-group">
+                    <label class="settings-label" for="setting-output-format">Output Format</label>
+                    <select id="setting-output-format" class="settings-select" aria-label="Output Format">
+                        <option value="" selected>Provider default</option>
+                    </select>
+                    <p class="settings-hint">Available formats vary by image model.</p>
                 </div>
 
 

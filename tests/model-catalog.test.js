@@ -72,6 +72,10 @@ describe('model catalog — backend routing', () => {
         assert.equal(getMaxInputImages('evolink/z-image-turbo'), 0);
         assert.equal(normalizeModelId('evolink/doubao-seedream-5.0-lite/edit'), 'evolink/doubao-seedream-5.0-lite');
         assert.equal(requiresInputImage('evolink/doubao-seedream-5.0-lite'), false);
+        assert.equal(normalizeModelId('evolink/doubao-seedream-5.0-pro/edit'), 'evolink/doubao-seedream-5.0-pro');
+        assert.equal(getBackend('evolink/doubao-seedream-5.0-pro'), 'evolink');
+        assert.equal(getMaxInputImages('evolink/doubao-seedream-5.0-pro'), 10);
+        assert.equal(requiresInputImage('evolink/doubao-seedream-5.0-pro'), false);
     });
 
     it('routes the evolink seedance video models', () => {
@@ -109,6 +113,14 @@ describe('model catalog — evolink config', () => {
         assert.equal(cfg.variant, 'seedream');
         assert.equal(cfg.apiModel, 'doubao-seedream-5.0-lite');
         assert.deepEqual(cfg.qualityOptions, ['2K', '3K']);
+    });
+
+    it('assigns seedream 5 pro api model, quality, and output format options', () => {
+        const cfg = getEvolinkConfig('evolink/doubao-seedream-5.0-pro');
+        assert.equal(cfg.variant, 'seedream');
+        assert.equal(cfg.apiModel, 'doubao-seedream-5.0-pro');
+        assert.deepEqual(cfg.qualityOptions, ['1K', '2K']);
+        assert.deepEqual(cfg.outputFormatOptions, ['png', 'jpeg']);
     });
 
     it('exposes seedance video api model and aspect ratios via capabilities', () => {

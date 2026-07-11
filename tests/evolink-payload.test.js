@@ -8,6 +8,7 @@ const {
     handleEvolink,
     normalizeZImageAspectRatio,
     normalizeSeedreamQuality,
+    normalizeSeedreamOutputFormat,
 } = require('../api/providers/evolink');
 
 const originalFetch = global.fetch;
@@ -75,6 +76,31 @@ describe('evolink payload builders', () => {
         });
     });
 
+    it('builds seedream 5 pro payload with 1K quality and PNG output', () => {
+        const payload = buildSeedreamPayload({
+            apiModel: 'doubao-seedream-5.0-pro',
+            prompt: 'a cinematic mountain landscape',
+            parsedNumImages: 1,
+            normalizedAspectRatio: '21:9',
+            resolution: '1K',
+            uploadedImageUrls: ['https://example.com/reference.png'],
+            qualityOptions: ['1K', '2K'],
+            outputFormat: 'png',
+            outputFormatOptions: ['png', 'jpeg'],
+        });
+
+        assert.deepEqual(payload, {
+            model: 'doubao-seedream-5.0-pro',
+            prompt: 'a cinematic mountain landscape',
+            n: 1,
+            size: '21:9',
+            quality: '1K',
+            prompt_priority: 'standard',
+            image_urls: ['https://example.com/reference.png'],
+            model_params: { output_format: 'png' },
+        });
+    });
+
     it('adds web search tools for seedream 5 lite when enabled', () => {
         const payload = buildSeedreamPayload({
             apiModel: 'doubao-seedream-5.0-lite',
@@ -138,6 +164,12 @@ describe('evolink payload builders', () => {
     it('falls back to 2K when resolution is unsupported for seedream quality', () => {
         assert.equal(normalizeSeedreamQuality('4K', ['2K', '3K']), '2K');
         assert.equal(normalizeSeedreamQuality('3K', ['2K', '3K']), '3K');
+    });
+
+    it('only accepts documented seedream output formats', () => {
+        assert.equal(normalizeSeedreamOutputFormat('jpeg', ['png', 'jpeg']), 'jpeg');
+        assert.equal(normalizeSeedreamOutputFormat('webp', ['png', 'jpeg']), null);
+        assert.equal(normalizeSeedreamOutputFormat(undefined, ['png', 'jpeg']), null);
     });
 
     it('builds z-image-turbo payload with nsfw check disabled', () => {

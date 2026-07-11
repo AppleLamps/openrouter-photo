@@ -124,7 +124,9 @@ export function getUiCapabilities(modelId) {
     const ui = resolveCapabilities(modelId).ui || {};
     return {
         aspectRatio: Boolean(ui.aspectRatio),
+        aspectRatioOptions: ui.aspectRatioOptions || null,
         resolution: ui.resolution || null,
+        outputFormat: ui.outputFormat || null,
         videoLength: ui.videoLength || null,
         videoQuality: ui.videoQuality || null,
         generateAudio: Boolean(ui.generateAudio),

@@ -22,6 +22,26 @@ import {
  */
 const _openDropdowns = new Set();
 
+const DEFAULT_ASPECT_RATIO_OPTIONS = [
+    ['1:1', '1:1 (Square)'],
+    ['4:3', '4:3 (Landscape)'],
+    ['3:4', '3:4 (Portrait)'],
+    ['16:9', '16:9 (Widescreen)'],
+    ['9:16', '9:16 (Vertical)'],
+    ['3:2', '3:2'],
+    ['2:3', '2:3'],
+    ['21:9', '21:9 (Ultrawide)'],
+    ['9:21', '9:21'],
+];
+
+const ASPECT_RATIO_LABELS = new Map([
+    ...DEFAULT_ASPECT_RATIO_OPTIONS,
+    ['auto', 'Auto'],
+    ['4:5', '4:5 (Portrait)'],
+    ['5:4', '5:4 (Landscape)'],
+    ['adaptive', 'Adaptive'],
+]);
+
 document.addEventListener('pointerdown', (e) => {
     for (const entry of _openDropdowns) {
         if (!entry.element.classList.contains('is-open')) continue;
@@ -529,9 +549,58 @@ function syncImageResolutionOptions(model) {
         : resolution.default;
 }
 
+function syncAspectRatioOptions(model) {
+    const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
+    if (!(aspectRatioSelect instanceof HTMLSelectElement)) return;
+
+    const { aspectRatioOptions } = getUiCapabilities(model);
+    const configuredOptions = aspectRatioOptions?.options;
+    const entries = Array.isArray(configuredOptions)
+        ? configuredOptions.map((value) => [value, ASPECT_RATIO_LABELS.get(value) || value])
+        : DEFAULT_ASPECT_RATIO_OPTIONS;
+    const currentValue = aspectRatioSelect.value;
+
+    aspectRatioSelect.innerHTML = '';
+    entries.forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        aspectRatioSelect.appendChild(option);
+    });
+    const values = entries.map(([value]) => value);
+    aspectRatioSelect.value = values.includes(currentValue)
+        ? currentValue
+        : aspectRatioOptions?.default || '3:4';
+}
+
+function syncOutputFormatOptions(model) {
+    const outputFormatSelect = document.getElementById('setting-output-format');
+    if (!(outputFormatSelect instanceof HTMLSelectElement)) return;
+
+    const { outputFormat } = getUiCapabilities(model);
+    if (!outputFormat) return;
+
+    const currentValue = outputFormatSelect.value;
+    outputFormatSelect.innerHTML = '';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Provider default';
+    outputFormatSelect.appendChild(defaultOption);
+    outputFormat.options.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value.toUpperCase();
+        outputFormatSelect.appendChild(option);
+    });
+    outputFormatSelect.value = outputFormat.options.includes(currentValue)
+        ? currentValue
+        : outputFormat.default || '';
+}
+
 export function updateSettingsForModel(model) {
     const resolutionGroup = document.getElementById('resolution-group');
     const aspectRatioGroup = document.getElementById('aspect-ratio-group');
+    const outputFormatGroup = document.getElementById('output-format-group');
     const xaiVideoLengthGroup = document.getElementById('xai-video-length-group');
     const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
     const generateAudioGroup = document.getElementById('generate-audio-group');
@@ -544,10 +613,13 @@ export function updateSettingsForModel(model) {
     const ui = getUiCapabilities(model);
 
     syncImageResolutionOptions(model);
+    syncAspectRatioOptions(model);
+    syncOutputFormatOptions(model);
     syncVideoQualityOptions(model);
 
     aspectRatioGroup?.classList.toggle('settings-group--hidden', !ui.aspectRatio);
     resolutionGroup?.classList.toggle('settings-group--hidden', !ui.resolution);
+    outputFormatGroup?.classList.toggle('settings-group--hidden', !ui.outputFormat);
     xaiVideoLengthGroup?.classList.toggle('settings-group--hidden', !ui.videoLength);
     xaiVideoQualityGroup?.classList.toggle('settings-group--hidden', !ui.videoQuality);
     generateAudioGroup?.classList.toggle('settings-group--hidden', !ui.generateAudio);

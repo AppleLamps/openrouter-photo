@@ -173,6 +173,7 @@ function getGenerationSettings() {
     const numImagesSelect = document.getElementById('setting-num-images');
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
     const resolutionSelect = document.getElementById('setting-resolution');
+    const outputFormatSelect = document.getElementById('setting-output-format');
     const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
     const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
@@ -194,6 +195,7 @@ function getGenerationSettings() {
         num_images: parseInt(numImagesSelect?.value || 2, 10),
         aspect_ratio: aspectRatioSelect?.value || '3:4',
         resolution: resolutionSelect?.value || '1K',
+        output_format: outputFormatSelect?.value || undefined,
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
         generate_audio_switch: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
@@ -216,6 +218,7 @@ export function restoreSettings(settings) {
 
     const ui = getUiCapabilities(model);
     const videoAspectRatios = resolveCapabilities(model).evolink?.aspectRatios || null;
+    const aspectRatioOptions = ui.aspectRatioOptions?.options || videoAspectRatios;
 
     const hasSelectOption = (select, value) =>
         select instanceof HTMLSelectElement
@@ -241,10 +244,13 @@ export function restoreSettings(settings) {
     };
 
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
-    setSelectIfValid(aspectRatioSelect, settings.aspect_ratio, videoAspectRatios);
+    setSelectIfValid(aspectRatioSelect, settings.aspect_ratio, aspectRatioOptions);
 
     const resolutionSelect = document.getElementById('setting-resolution');
     setSelectIfValid(resolutionSelect, settings.resolution, ui.resolution?.options || null);
+
+    const outputFormatSelect = document.getElementById('setting-output-format');
+    setSelectIfValid(outputFormatSelect, settings.output_format, ui.outputFormat?.options || null);
 
     const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
     const videoLength = ui.videoLength || {};

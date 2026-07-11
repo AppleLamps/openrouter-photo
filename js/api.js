@@ -116,7 +116,7 @@ function getAppAccessHeaders() {
  * @property {string} [aspect_ratio] - Aspect ratio for supported image/video models
  * @property {string} [safety_tolerance] - Safety tolerance level 1-6 (FLUX Kontext only)
  * @property {boolean} [enhance_prompt] - Enhance prompt (FLUX Kontext, Wan image-to-image)
- * @property {string} [resolution] - Resolution/image size (Gemini: 1K/2K/4K, xAI images: 1K/2K)
+ * @property {string} [resolution] - Resolution/image size (options vary by model)
  * @property {boolean} [limit_generations] - Limit generations per prompt to 1 (Nano Banana Pro)
  * @property {boolean} [enable_web_search] - Enable web search for image generation (Nano Banana Pro)
  * @property {number} [xai_video_length] - xAI video duration (seconds)

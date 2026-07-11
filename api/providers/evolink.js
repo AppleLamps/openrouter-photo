@@ -70,6 +70,13 @@ function normalizeSeedreamQuality(resolution, qualityOptions) {
     return options.includes('2K') ? '2K' : options[0];
 }
 
+function normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions) {
+    const options = Array.isArray(outputFormatOptions) ? outputFormatOptions : [];
+    return typeof outputFormat === 'string' && options.includes(outputFormat)
+        ? outputFormat
+        : null;
+}
+
 function buildSeedreamPayload({
     apiModel,
     prompt,
@@ -78,6 +85,8 @@ function buildSeedreamPayload({
     resolution,
     uploadedImageUrls,
     qualityOptions,
+    outputFormat,
+    outputFormatOptions,
     enableWebSearch = false,
 }) {
     const quality = normalizeSeedreamQuality(resolution, qualityOptions);
@@ -85,6 +94,11 @@ function buildSeedreamPayload({
         ? normalizedAspectRatio
         : 'auto';
     const supportsWebSearch = apiModel === 'doubao-seedream-5.0-lite';
+    const normalizedOutputFormat = normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions);
+    const modelParams = {
+        ...(normalizedOutputFormat ? { output_format: normalizedOutputFormat } : {}),
+        ...(supportsWebSearch && enableWebSearch ? { tools: [{ type: 'web_search' }] } : {}),
+    };
 
     return {
         model: apiModel,
@@ -94,11 +108,7 @@ function buildSeedreamPayload({
         quality,
         prompt_priority: 'standard',
         ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
-        ...(supportsWebSearch && enableWebSearch ? {
-            model_params: {
-                tools: [{ type: 'web_search' }],
-            },
-        } : {}),
+        ...(Object.keys(modelParams).length > 0 ? { model_params: modelParams } : {}),
     };
 }
 
@@ -119,6 +129,7 @@ async function handleEvolink(ctx) {
         parsedNumImages,
         normalizedAspectRatio,
         resolution,
+        output_format,
         normalizedInputImages,
         enable_web_search,
         evolinkKey,
@@ -261,7 +272,7 @@ async function handleEvolink(ctx) {
     };
 
     try {
-        const { variant, apiModel, qualityOptions } = evolinkConfig;
+        const { variant, apiModel, qualityOptions, outputFormatOptions } = evolinkConfig;
         const costPerImage = getEvolinkImageCostPerImage(model);
         const uploadedImageUrls = normalizedInputImages.length > 0
             ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
@@ -319,6 +330,8 @@ async function handleEvolink(ctx) {
                 resolution,
                 uploadedImageUrls,
                 qualityOptions,
+                outputFormat: output_format,
+                outputFormatOptions,
                 enableWebSearch: enable_web_search === true,
             });
             const taskResult = await createAndPollTask(payload);
@@ -364,4 +377,5 @@ module.exports = {
     getEvolinkImageCostPerImage,
     normalizeZImageAspectRatio,
     normalizeSeedreamQuality,
+    normalizeSeedreamOutputFormat,
 };

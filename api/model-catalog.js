@@ -94,10 +94,12 @@ function getEvolinkConfig(modelId) {
     if (caps.backend !== 'evolink') return null;
     const evolink = caps.evolink || { variant: 'seedream', apiModel: 'doubao-seedream-4.5' };
     const qualityOptions = caps.ui?.resolution?.options || ['2K', '4K'];
+    const outputFormatOptions = caps.ui?.outputFormat?.options || [];
     return {
         variant: evolink.variant || 'seedream',
         apiModel: evolink.apiModel || 'doubao-seedream-4.5',
         qualityOptions,
+        outputFormatOptions,
     };
 }
 
@@ -116,7 +118,9 @@ function getUiCapabilities(modelId) {
     const ui = resolveCapabilities(modelId).ui || {};
     return {
         aspectRatio: Boolean(ui.aspectRatio),
+        aspectRatioOptions: ui.aspectRatioOptions || null,
         resolution: ui.resolution || null,
+        outputFormat: ui.outputFormat || null,
         videoLength: ui.videoLength || null,
         videoQuality: ui.videoQuality || null,
         generateAudio: Boolean(ui.generateAudio),
