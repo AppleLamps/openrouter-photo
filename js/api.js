@@ -477,7 +477,9 @@ export async function pollVideoStatus(requestId, signal = null, meta = {}) {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const error = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        error.status = response.status;
+        throw error;
     }
 
     return response.json();
