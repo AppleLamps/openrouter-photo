@@ -24,6 +24,7 @@ import {
 } from './model-picker.js';
 import { recordSpend } from './spend-tracker.js';
 import { showApiKeyPopupForCode } from './settings-keys.js';
+import { isRetryablePollError } from './video-polling.js';
 
 /** @type {string[]} */
 let promptImageDataUrls = [];
@@ -388,10 +389,17 @@ async function handleGenerate(input, button, retryOptions = null) {
                 elapsed += pollDelay;
                 pollDelay = Math.min(pollDelay * VIDEO_POLL_MULTIPLIER, VIDEO_POLL_MAX_INTERVAL);
 
-                const poll = await pollVideoStatus(response.request_id, abortSignal, {
-                    provider: response.provider,
-                    model: response.model,
-                });
+                let poll;
+                try {
+                    poll = await pollVideoStatus(response.request_id, abortSignal, {
+                        provider: response.provider,
+                        model: response.model,
+                    });
+                } catch (error) {
+                    if (!isRetryablePollError(error)) throw error;
+                    console.warn('Transient video status error; polling will continue:', error.message);
+                    continue;
+                }
 
                 if (poll.status === 'completed' && poll.url) {
                     response = {

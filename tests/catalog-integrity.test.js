@@ -32,6 +32,10 @@ describe('catalog integrity — structure', () => {
         assert.ok(MODEL_IDS.includes(catalog.defaults.animateModelId));
     });
 
+    it('uses Seedream 5.0 Pro as the default model', () => {
+        assert.equal(DEFAULT_MODEL_ID, 'evolink/doubao-seedream-5.0-pro');
+    });
+
     it('legacy redirects resolve to catalog ids', () => {
         for (const [from, to] of Object.entries(LEGACY_MODEL_REDIRECTS)) {
             assert.ok(MODEL_IDS.includes(to), `redirect target missing: ${to}`);

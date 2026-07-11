@@ -282,13 +282,16 @@ async function handleEvolink(ctx) {
             const allResults = [];
             const requestMeta = [];
 
-            for (let index = 0; index < parsedNumImages; index++) {
+            const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, () => {
                 const payload = buildZImageTurboPayload({
                     apiModel,
                     prompt,
                     normalizedAspectRatio,
                 });
-                const taskResult = await createAndPollTask(payload);
+                return createAndPollTask(payload);
+            }));
+
+            for (const taskResult of taskResults) {
                 if (taskResult.error) {
                     return res.status(taskResult.error.status).json(taskResult.error.payload);
                 }
@@ -321,7 +324,7 @@ async function handleEvolink(ctx) {
         const allResults = [];
         const requestMeta = [];
 
-        for (let index = 0; index < parsedNumImages; index++) {
+        const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, () => {
             const payload = buildSeedreamPayload({
                 apiModel,
                 prompt,
@@ -334,7 +337,10 @@ async function handleEvolink(ctx) {
                 outputFormatOptions,
                 enableWebSearch: enable_web_search === true,
             });
-            const taskResult = await createAndPollTask(payload);
+            return createAndPollTask(payload);
+        }));
+
+        for (const taskResult of taskResults) {
             if (taskResult.error) {
                 return res.status(taskResult.error.status).json(taskResult.error.payload);
             }

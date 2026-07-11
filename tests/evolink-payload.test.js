@@ -204,26 +204,32 @@ describe('evolink payload builders', () => {
         assert.equal(buildEvolinkProxyUrl(remoteUrl), `/api/image-proxy?url=${encodeURIComponent(remoteUrl)}`);
     });
 
-    it('runs one Seedream task per requested image', async () => {
+    it('runs requested Seedream image tasks concurrently', async () => {
         const createBodies = [];
         const taskUrls = [
             'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream/a.jpeg',
             'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream/b.jpeg',
         ];
         let createCount = 0;
+        let releaseTaskPolls;
+        const taskPollBarrier = new Promise((resolve) => {
+            releaseTaskPolls = resolve;
+        });
 
         global.fetch = async (url, options = {}) => {
             if (url === 'https://api.evolink.ai/v1/images/generations') {
                 createBodies.push(JSON.parse(options.body));
                 createCount += 1;
+                const requestNumber = createCount;
                 return {
                     ok: true,
-                    json: async () => ({ id: `task-${createCount}` }),
+                    json: async () => ({ id: `task-${requestNumber}` }),
                 };
             }
 
             if (String(url).startsWith('https://api.evolink.ai/v1/tasks/task-')) {
                 const taskIndex = Number(String(url).split('task-')[1]) - 1;
+                await taskPollBarrier;
                 return {
                     ok: true,
                     json: async () => ({
@@ -237,7 +243,7 @@ describe('evolink payload builders', () => {
         };
 
         const res = makeRes();
-        await handleEvolink({
+        const request = handleEvolink({
             res,
             model: 'evolink/doubao-seedream-4.5',
             prompt: 'a city at night',
@@ -247,8 +253,13 @@ describe('evolink payload builders', () => {
             normalizedInputImages: [],
             evolinkKey: 'evolink-test-key',
         });
+        await new Promise((resolve) => setImmediate(resolve));
+        const tasksStartedBeforeAnyCompleted = createBodies.length;
+        releaseTaskPolls();
+        await request;
 
         assert.equal(res.statusCode, 200);
+        assert.equal(tasksStartedBeforeAnyCompleted, 2);
         assert.equal(createBodies.length, 2);
         assert.deepEqual(createBodies.map((body) => body.n), [1, 1]);
         assert.equal(res.body.images.length, 2);
