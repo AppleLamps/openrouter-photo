@@ -101,6 +101,37 @@ describe('evolink payload builders', () => {
         });
     });
 
+    it('uses the pro catalog default when resolution is omitted', () => {
+        const payload = buildSeedreamPayload({
+            apiModel: 'doubao-seedream-5.0-pro',
+            prompt: 'a studio portrait',
+            parsedNumImages: 1,
+            normalizedAspectRatio: '1:1',
+            uploadedImageUrls: [],
+            qualityOptions: ['1K', '2K'],
+            qualityDefault: '1K',
+        });
+
+        assert.equal(payload.quality, '1K');
+    });
+
+    it('passes exact pro dimensions without a quality tier', () => {
+        const payload = buildSeedreamPayload({
+            apiModel: 'doubao-seedream-5.0-pro',
+            prompt: 'a studio portrait',
+            parsedNumImages: 1,
+            normalizedAspectRatio: 'auto',
+            exactImageSize: '1600x1000',
+            resolution: '2K',
+            uploadedImageUrls: [],
+            qualityOptions: ['1K', '2K'],
+            qualityDefault: '1K',
+        });
+
+        assert.equal(payload.size, '1600x1000');
+        assert.equal('quality' in payload, false);
+    });
+
     it('adds web search tools for seedream 5 lite when enabled', () => {
         const payload = buildSeedreamPayload({
             apiModel: 'doubao-seedream-5.0-lite',

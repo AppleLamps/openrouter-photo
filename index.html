@@ -525,6 +525,23 @@
                     <p class="settings-hint">Applied for Gemini, xAI, and Evolink Seedream models (options vary by model).</p>
                 </div>
 
+                <!-- Exact pixel dimensions -->
+                <div class="settings-group settings-group--hidden" id="exact-size-group">
+                    <label class="settings-label" for="setting-size-mode">Size Mode</label>
+                    <select id="setting-size-mode" class="settings-select" aria-label="Image size mode">
+                        <option value="ratio" selected>Aspect ratio</option>
+                        <option value="exact">Exact pixels</option>
+                    </select>
+                    <div class="settings-inline settings-exact-size" id="exact-size-inputs" hidden>
+                        <input type="number" id="setting-exact-width" class="settings-input settings-inline__input"
+                            value="1024" min="1" step="1" aria-label="Image width in pixels">
+                        <span aria-hidden="true">x</span>
+                        <input type="number" id="setting-exact-height" class="settings-input settings-inline__input"
+                            value="1024" min="1" step="1" aria-label="Image height in pixels">
+                    </div>
+                    <p class="settings-hint">Exact dimensions must contain 1–4 megapixels with an aspect ratio from 1:16 to 16:1. Documented presets are also accepted.</p>
+                </div>
+
                 <!-- Output format -->
                 <div class="settings-group settings-group--hidden" id="output-format-group">
                     <label class="settings-label" for="setting-output-format">Output Format</label>

@@ -9,10 +9,12 @@ const {
     resolveCapabilities,
     getMaxInputImages,
     getApiKey,
+    getInputConstraints,
 } = require('./model-catalog');
 const {
     normalizeInputImages,
     validateRequiredInputImages,
+    normalizeExactImageSize,
 } = require('./generation-routing');
 const { handleEvolink } = require('./providers/evolink');
 const { handleEvolinkVideo } = require('./providers/evolink-video');
@@ -89,9 +91,19 @@ module.exports = withMiddleware(async function handler(req, res) {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
+    const promptMaxLength = getInputConstraints(model).promptMaxLength;
+    if (Number.isInteger(promptMaxLength) && Array.from(normalizedPrompt).length > promptMaxLength) {
+        return res.status(400).json({ error: `Prompt must be ${promptMaxLength} characters or fewer for this model` });
+    }
+
     const parsedNumImages = parseInt(num_images, 10);
     if (!Number.isInteger(parsedNumImages) || parsedNumImages < 1 || parsedNumImages > 4) {
         return res.status(400).json({ error: '`num_images` must be an integer between 1 and 4' });
+    }
+
+    const exactSizeResult = normalizeExactImageSize(model, image_size);
+    if (exactSizeResult?.error) {
+        return res.status(400).json({ error: exactSizeResult.error });
     }
 
     const modelCaps = resolveCapabilities(model);
@@ -135,6 +147,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         prompt: normalizedPrompt,
         parsedNumImages,
         normalizedAspectRatio,
+        exactImageSize: exactSizeResult?.value || null,
         resolution,
         output_format,
         normalizedInputImages,

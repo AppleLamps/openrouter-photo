@@ -89,6 +89,10 @@ export function requiresInputImage(modelId) {
     return Boolean(resolveCapabilities(modelId).input?.required);
 }
 
+export function getInputConstraints(modelId) {
+    return resolveCapabilities(modelId).input || {};
+}
+
 export function isAsyncModel(modelId) {
     return Boolean(resolveCapabilities(modelId).async);
 }
@@ -125,6 +129,7 @@ export function getUiCapabilities(modelId) {
     return {
         aspectRatio: Boolean(ui.aspectRatio),
         aspectRatioOptions: ui.aspectRatioOptions || null,
+        exactSize: ui.exactSize || null,
         resolution: ui.resolution || null,
         outputFormat: ui.outputFormat || null,
         videoLength: ui.videoLength || null,

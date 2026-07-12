@@ -65,12 +65,21 @@ describe('UI capabilities', () => {
         assert.deepEqual(ui.resolution?.options, ['1K', '2K']);
         assert.equal(ui.resolution?.default, '1K');
         assert.deepEqual(ui.outputFormat?.options, ['png', 'jpeg']);
+        assert.equal(ui.exactSize?.defaultWidth, 1024);
+        assert.equal(ui.exactSize?.maxPixels, 4194304);
         assert.equal(ui.webSearch, false);
     });
 
     it('does not expose web search for other evolink models', () => {
         assert.equal(getUiCapabilities('evolink/doubao-seedream-4.5').webSearch, false);
         assert.equal(getUiCapabilities('evolink/z-image-turbo').webSearch, false);
+    });
+
+    it('classifies seedream 5 pro as both image and edit without duplicating it', async () => {
+        const { PICKER_MODELS } = await import('../js/models.js');
+        const matches = PICKER_MODELS.filter((model) => model.id === 'evolink/doubao-seedream-5.0-pro');
+        assert.equal(matches.length, 1);
+        assert.deepEqual(matches[0].modes, ['image', 'edit']);
     });
 });
 

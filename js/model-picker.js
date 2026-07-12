@@ -13,6 +13,7 @@ import {
     getTriggerLabel,
     normalizeModelId,
     getUiCapabilities,
+    getInputConstraints,
 } from './models.js';
 
 /**
@@ -208,7 +209,7 @@ function createModelPicker() {
 
     const matches = (m) => {
         const tabDef = CAPABILITY_TABS.find(t => t.id === activeTab);
-        if (tabDef?.types && !tabDef.types.includes(m.type)) return false;
+        if (tabDef?.types && !m.modes.some((mode) => tabDef.types.includes(mode))) return false;
         if (!query) return true;
         const q = query.toLowerCase();
         return m.name.toLowerCase().includes(q)
@@ -256,7 +257,9 @@ function createModelPicker() {
         const badges = document.createElement('div');
         badges.className = 'model-picker__row-badges';
 
-        const typeText = TYPE_PILL_LABEL[m.type];
+        const typeText = m.modes.includes('image') && m.modes.includes('edit')
+            ? 'Image + Edit'
+            : TYPE_PILL_LABEL[m.type];
         if (typeText) badges.appendChild(buildBadge(`model-picker__badge--type model-picker__badge--type-${m.type}`, typeText));
         if (m.tier) badges.appendChild(buildBadge(`model-picker__badge--tier model-picker__badge--tier-${m.tier}`, TIER_LABEL[m.tier] || m.tier));
         if (m.via) badges.appendChild(buildBadge('model-picker__badge--via', `via ${m.via}`));
@@ -597,10 +600,40 @@ function syncOutputFormatOptions(model) {
         : outputFormat.default || '';
 }
 
+function syncExactSizeOptions(model) {
+    const { exactSize } = getUiCapabilities(model);
+    const modeSelect = document.getElementById('setting-size-mode');
+    const widthInput = document.getElementById('setting-exact-width');
+    const heightInput = document.getElementById('setting-exact-height');
+    if (!exactSize || !(modeSelect instanceof HTMLSelectElement)) return;
+
+    if (widthInput instanceof HTMLInputElement && !Number.isInteger(Number(widthInput.value))) {
+        widthInput.value = String(exactSize.defaultWidth);
+    }
+    if (heightInput instanceof HTMLInputElement && !Number.isInteger(Number(heightInput.value))) {
+        heightInput.value = String(exactSize.defaultHeight);
+    }
+}
+
+function updateExactSizeVisibility() {
+    const modeSelect = document.getElementById('setting-size-mode');
+    const inputs = document.getElementById('exact-size-inputs');
+    const resolutionGroup = document.getElementById('resolution-group');
+    const exactSizeGroup = document.getElementById('exact-size-group');
+    if (exactSizeGroup?.classList.contains('settings-group--hidden')) {
+        if (inputs instanceof HTMLElement) inputs.hidden = true;
+        return;
+    }
+    const exact = modeSelect instanceof HTMLSelectElement && modeSelect.value === 'exact';
+    if (inputs instanceof HTMLElement) inputs.hidden = !exact;
+    resolutionGroup?.classList.toggle('settings-group--hidden', exact);
+}
+
 export function updateSettingsForModel(model) {
     const resolutionGroup = document.getElementById('resolution-group');
     const aspectRatioGroup = document.getElementById('aspect-ratio-group');
     const outputFormatGroup = document.getElementById('output-format-group');
+    const exactSizeGroup = document.getElementById('exact-size-group');
     const xaiVideoLengthGroup = document.getElementById('xai-video-length-group');
     const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
     const generateAudioGroup = document.getElementById('generate-audio-group');
@@ -609,23 +642,44 @@ export function updateSettingsForModel(model) {
     const webSearchSwitch = document.getElementById('setting-web-search-switch');
     const flashheadSettingsGroup = document.getElementById('flashhead-settings-group');
     const imageToVideoHintGroup = document.getElementById('image-to-video-hint-group');
+    const promptInput = document.getElementById('prompt-input');
+    const attachmentButton = document.getElementById('prompt-image-btn');
 
     const ui = getUiCapabilities(model);
 
     syncImageResolutionOptions(model);
     syncAspectRatioOptions(model);
     syncOutputFormatOptions(model);
+    syncExactSizeOptions(model);
     syncVideoQualityOptions(model);
 
     aspectRatioGroup?.classList.toggle('settings-group--hidden', !ui.aspectRatio);
     resolutionGroup?.classList.toggle('settings-group--hidden', !ui.resolution);
     outputFormatGroup?.classList.toggle('settings-group--hidden', !ui.outputFormat);
+    exactSizeGroup?.classList.toggle('settings-group--hidden', !ui.exactSize);
     xaiVideoLengthGroup?.classList.toggle('settings-group--hidden', !ui.videoLength);
     xaiVideoQualityGroup?.classList.toggle('settings-group--hidden', !ui.videoQuality);
     generateAudioGroup?.classList.toggle('settings-group--hidden', !ui.generateAudio);
     webSearchGroup?.classList.toggle('settings-group--hidden', !ui.webSearch);
     flashheadSettingsGroup?.classList.toggle('settings-group--hidden', !ui.flashhead);
     imageToVideoHintGroup?.classList.toggle('settings-group--hidden', !ui.imageToVideoHint);
+
+    const input = getInputConstraints(model);
+    if (promptInput instanceof HTMLTextAreaElement) {
+        if (Number.isInteger(input.promptMaxLength)) promptInput.maxLength = input.promptMaxLength;
+        else promptInput.removeAttribute('maxlength');
+    }
+    if (attachmentButton instanceof HTMLButtonElement) {
+        const editing = input.maxImages > 0 && PICKER_MODELS.find((entry) => entry.id === model)?.modes.includes('edit');
+        const label = editing ? 'Attach reference images for editing' : 'Attach images';
+        attachmentButton.title = label;
+        attachmentButton.setAttribute('aria-label', label);
+    }
+    if (!ui.exactSize) {
+        const modeSelect = document.getElementById('setting-size-mode');
+        if (modeSelect instanceof HTMLSelectElement) modeSelect.value = 'ratio';
+    }
+    updateExactSizeVisibility();
 
     if (ui.generateAudio && generateAudioSwitch instanceof HTMLInputElement) {
         generateAudioSwitch.checked = true;
@@ -639,4 +693,5 @@ export function initModelPicker() {
     modelDropdown = createModelPicker();
     initNumImagesDropdown();
     initFolderSelectorDropdown();
+    document.getElementById('setting-size-mode')?.addEventListener('change', updateExactSizeVisibility);
 }

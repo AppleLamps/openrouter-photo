@@ -6,6 +6,7 @@ const {
     getApiKey,
     getBackend,
     getMaxInputImages,
+    getInputConstraints,
     requiresInputImage,
     getEvolinkConfig,
     getOpenRouterConfig,
@@ -120,7 +121,11 @@ describe('model catalog — evolink config', () => {
         assert.equal(cfg.variant, 'seedream');
         assert.equal(cfg.apiModel, 'doubao-seedream-5.0-pro');
         assert.deepEqual(cfg.qualityOptions, ['1K', '2K']);
+        assert.equal(cfg.qualityDefault, '1K');
         assert.deepEqual(cfg.outputFormatOptions, ['png', 'jpeg']);
+        const input = getInputConstraints('evolink/doubao-seedream-5.0-pro');
+        assert.equal(input.promptMaxLength, 2000);
+        assert.equal(input.imageConstraints.minWidth, 15);
     });
 
     it('exposes seedance video api model and aspect ratios via capabilities', () => {

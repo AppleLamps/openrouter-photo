@@ -19,6 +19,7 @@ export {
     getBackend,
     getMaxInputImages,
     requiresInputImage,
+    getInputConstraints,
     isAsyncModel,
     getOpenRouterConfig,
     getModelPricing,
@@ -28,12 +29,13 @@ export {
     LEGACY_MODEL_REDIRECTS,
 } from './model-capabilities.js';
 
-function toPickerModel({ id, name, provider, type, tier, via }) {
+function toPickerModel({ id, name, provider, type, modes, tier, via }) {
     return {
         id,
         name,
         provider,
         type,
+        modes: Array.isArray(modes) ? modes : [type],
         tier,
         ...(via ? { via } : {}),
     };

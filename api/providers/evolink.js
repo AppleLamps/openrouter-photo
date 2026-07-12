@@ -62,12 +62,12 @@ function extractEvolinkResults(data) {
     return [];
 }
 
-function normalizeSeedreamQuality(resolution, qualityOptions) {
+function normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault) {
     const options = Array.isArray(qualityOptions) && qualityOptions.length > 0
         ? qualityOptions
         : ['2K', '4K'];
     if (options.includes(resolution)) return resolution;
-    return options.includes('2K') ? '2K' : options[0];
+    return options.includes(qualityDefault) ? qualityDefault : options[0];
 }
 
 function normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions) {
@@ -82,14 +82,16 @@ function buildSeedreamPayload({
     prompt,
     parsedNumImages,
     normalizedAspectRatio,
+    exactImageSize,
     resolution,
     uploadedImageUrls,
     qualityOptions,
+    qualityDefault,
     outputFormat,
     outputFormatOptions,
     enableWebSearch = false,
 }) {
-    const quality = normalizeSeedreamQuality(resolution, qualityOptions);
+    const quality = normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault);
     const normalizedSize = EVOLINK_SEEDREAM_ASPECT_RATIOS.has(normalizedAspectRatio)
         ? normalizedAspectRatio
         : 'auto';
@@ -104,8 +106,8 @@ function buildSeedreamPayload({
         model: apiModel,
         prompt: prompt.trim(),
         n: parsedNumImages,
-        size: normalizedSize,
-        quality,
+        size: exactImageSize || normalizedSize,
+        ...(!exactImageSize ? { quality } : {}),
         prompt_priority: 'standard',
         ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
         ...(Object.keys(modelParams).length > 0 ? { model_params: modelParams } : {}),
@@ -128,6 +130,7 @@ async function handleEvolink(ctx) {
         prompt,
         parsedNumImages,
         normalizedAspectRatio,
+        exactImageSize,
         resolution,
         output_format,
         normalizedInputImages,
@@ -272,7 +275,7 @@ async function handleEvolink(ctx) {
     };
 
     try {
-        const { variant, apiModel, qualityOptions, outputFormatOptions } = evolinkConfig;
+        const { variant, apiModel, qualityOptions, qualityDefault, outputFormatOptions } = evolinkConfig;
         const costPerImage = getEvolinkImageCostPerImage(model);
         const uploadedImageUrls = normalizedInputImages.length > 0
             ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
@@ -330,9 +333,11 @@ async function handleEvolink(ctx) {
                 prompt,
                 parsedNumImages: 1,
                 normalizedAspectRatio,
+                exactImageSize,
                 resolution,
                 uploadedImageUrls,
                 qualityOptions,
+                qualityDefault,
                 outputFormat: output_format,
                 outputFormatOptions,
                 enableWebSearch: enable_web_search === true,

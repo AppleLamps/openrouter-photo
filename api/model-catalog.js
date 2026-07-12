@@ -77,6 +77,10 @@ function requiresInputImage(modelId) {
     return Boolean(resolveCapabilities(modelId).input?.required);
 }
 
+function getInputConstraints(modelId) {
+    return resolveCapabilities(modelId).input || {};
+}
+
 function isXaiModel(modelId) {
     return getBackend(modelId) === 'xai';
 }
@@ -94,11 +98,13 @@ function getEvolinkConfig(modelId) {
     if (caps.backend !== 'evolink') return null;
     const evolink = caps.evolink || { variant: 'seedream', apiModel: 'doubao-seedream-4.5' };
     const qualityOptions = caps.ui?.resolution?.options || ['2K', '4K'];
+    const qualityDefault = caps.ui?.resolution?.default || qualityOptions[0];
     const outputFormatOptions = caps.ui?.outputFormat?.options || [];
     return {
         variant: evolink.variant || 'seedream',
         apiModel: evolink.apiModel || 'doubao-seedream-4.5',
         qualityOptions,
+        qualityDefault,
         outputFormatOptions,
     };
 }
@@ -119,6 +125,7 @@ function getUiCapabilities(modelId) {
     return {
         aspectRatio: Boolean(ui.aspectRatio),
         aspectRatioOptions: ui.aspectRatioOptions || null,
+        exactSize: ui.exactSize || null,
         resolution: ui.resolution || null,
         outputFormat: ui.outputFormat || null,
         videoLength: ui.videoLength || null,
@@ -139,6 +146,7 @@ module.exports = {
     getBackend,
     getMaxInputImages,
     requiresInputImage,
+    getInputConstraints,
     isXaiModel,
     isEvolinkModel,
     isEvolinkVideoModel,

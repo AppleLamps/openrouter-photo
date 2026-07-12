@@ -4,6 +4,7 @@ const {
     resolveProviderHandler,
     validateRequiredInputImages,
     normalizeInputImages,
+    normalizeExactImageSize,
     listModelsByBackend,
 } = require('../api/generation-routing');
 const { requiresInputImage } = require('../api/model-catalog');
@@ -35,6 +36,26 @@ describe('generate routing — provider resolution', () => {
             resolveProviderHandler('fal-ai/bytedance/seedance-2.0/image-to-video'),
             'evolink-video'
         );
+    });
+});
+
+describe('generate routing — exact image size', () => {
+    const model = 'evolink/doubao-seedream-5.0-pro';
+
+    it('accepts documented presets and valid custom dimensions', () => {
+        assert.deepEqual(normalizeExactImageSize(model, '832x1248'), { value: '832x1248' });
+        assert.deepEqual(normalizeExactImageSize(model, '1600x1000'), { value: '1600x1000' });
+    });
+
+    it('rejects malformed and out-of-range dimensions', () => {
+        assert.match(normalizeExactImageSize(model, '1000xnope').error, /WIDTHxHEIGHT/);
+        assert.match(normalizeExactImageSize(model, '500x500').error, /supported/);
+        assert.match(normalizeExactImageSize(model, '4096x128').error, /supported/);
+    });
+
+    it('rejects exact dimensions for unsupported models', () => {
+        assert.match(normalizeExactImageSize('evolink/z-image-turbo', '1024x1024').error, /not supported/);
+        assert.equal(normalizeExactImageSize(model, 'square_hd'), null);
     });
 });
 

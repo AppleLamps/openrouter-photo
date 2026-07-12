@@ -121,6 +121,30 @@ export async function compressImageForUpload(file) {
     });
 }
 
+function getImageDimensions(source) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+        img.onerror = () => reject(new Error('Image could not be decoded'));
+        img.src = source;
+    });
+}
+
+function getImageConstraintError({ width, height }, constraints) {
+    if (!constraints) return null;
+    if (width < constraints.minWidth || height < constraints.minHeight) {
+        return `Image dimensions must be at least ${constraints.minWidth}x${constraints.minHeight} pixels.`;
+    }
+    if (width > constraints.maxWidth || height > constraints.maxHeight) {
+        return `Image dimensions must not exceed ${constraints.maxWidth}x${constraints.maxHeight} pixels.`;
+    }
+    const aspectRatio = width / height;
+    if (aspectRatio < constraints.minAspectRatio || aspectRatio > constraints.maxAspectRatio) {
+        return 'Image aspect ratio must be between 1:16 and 16:1.';
+    }
+    return null;
+}
+
 async function addPromptImageFiles(files) {
     const list = Array.from(files || []).filter((f) => f && f.type && f.type.startsWith('image/'));
     if (list.length === 0) return;
@@ -136,7 +160,15 @@ async function addPromptImageFiles(files) {
         }
 
         try {
+            const model = normalizeModelId(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID);
+            const constraints = resolveCapabilities(model).input?.imageConstraints;
             const dataUrl = await compressImageForUpload(file);
+            const dimensions = await getImageDimensions(dataUrl);
+            const constraintError = getImageConstraintError(dimensions, constraints);
+            if (constraintError) {
+                deps.showError(`${file.name}: ${constraintError}`);
+                continue;
+            }
             if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
                 promptImageDataUrls.push(dataUrl);
                 renderPromptAttachments();
@@ -175,6 +207,9 @@ function getGenerationSettings() {
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
     const resolutionSelect = document.getElementById('setting-resolution');
     const outputFormatSelect = document.getElementById('setting-output-format');
+    const sizeModeSelect = document.getElementById('setting-size-mode');
+    const exactWidthInput = document.getElementById('setting-exact-width');
+    const exactHeightInput = document.getElementById('setting-exact-height');
     const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
     const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
@@ -183,6 +218,10 @@ function getGenerationSettings() {
     const flashheadStabilityInput = document.getElementById('setting-flashhead-stability');
 
     const model = normalizeModelId(modelSelect?.value || DEFAULT_MODEL_ID);
+    const exactSize = getUiCapabilities(model).exactSize;
+    const useExactSize = Boolean(exactSize)
+        && sizeModeSelect instanceof HTMLSelectElement
+        && sizeModeSelect.value === 'exact';
 
     const parsedXaiVideoLength = parseInt(xaiVideoLengthInput?.value || 10, 10);
     const xaiVideoLength = Number.isFinite(parsedXaiVideoLength) ? parsedXaiVideoLength : 10;
@@ -195,6 +234,9 @@ function getGenerationSettings() {
         model,
         num_images: parseInt(numImagesSelect?.value || 2, 10),
         aspect_ratio: aspectRatioSelect?.value || '3:4',
+        ...(useExactSize ? {
+            image_size: `${exactWidthInput?.value || exactSize.defaultWidth}x${exactHeightInput?.value || exactSize.defaultHeight}`,
+        } : {}),
         resolution: resolutionSelect?.value || '1K',
         output_format: outputFormatSelect?.value || undefined,
         xai_video_length: xaiVideoLength,
@@ -252,6 +294,17 @@ export function restoreSettings(settings) {
 
     const outputFormatSelect = document.getElementById('setting-output-format');
     setSelectIfValid(outputFormatSelect, settings.output_format, ui.outputFormat?.options || null);
+
+    const exactMatch = typeof settings.image_size === 'string' && settings.image_size.match(/^(\d+)x(\d+)$/);
+    const sizeModeSelect = document.getElementById('setting-size-mode');
+    if (ui.exactSize && sizeModeSelect instanceof HTMLSelectElement) {
+        sizeModeSelect.value = exactMatch ? 'exact' : 'ratio';
+        if (exactMatch) {
+            setNumberInput(document.getElementById('setting-exact-width'), exactMatch[1], ui.exactSize.defaultWidth, 1, Number.MAX_SAFE_INTEGER);
+            setNumberInput(document.getElementById('setting-exact-height'), exactMatch[2], ui.exactSize.defaultHeight, 1, Number.MAX_SAFE_INTEGER);
+        }
+        sizeModeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
 
     const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
     const videoLength = ui.videoLength || {};
@@ -332,35 +385,62 @@ async function handleGenerate(input, button, retryOptions = null) {
         : null;
     const settings = retrySettings || getGenerationSettings();
     const numImages = settings.num_images;
-
-    generationAbortController = new AbortController();
-    setLoading(input, button, true);
+    const inputConstraints = resolveCapabilities(settings.model).input || {};
+    if (Number.isInteger(inputConstraints.promptMaxLength) && Array.from(prompt).length > inputConstraints.promptMaxLength) {
+        isGenerating = false;
+        deps.showError(`Prompt must be ${inputConstraints.promptMaxLength} characters or fewer for this model.`);
+        input.focus();
+        return;
+    }
 
     const selectedFolderInputAtStart = document.getElementById('selected-folder');
     const generationFolderId = retryOptions && 'folderId' in retryOptions
         ? retryOptions.folderId || null
         : selectedFolderInputAtStart?.value || null;
 
+    const abortController = new AbortController();
+    const abortSignal = abortController.signal;
+    generationAbortController = abortController;
+    setLoading(input, button, true);
+
     const attachedImageUrls = Array.isArray(retryOptions?.imageUrls)
         ? retryOptions.imageUrls
         : getAttachedImageUrls();
-    const requestSettings = {
-        ...settings,
-        ...(attachedImageUrls.length > 0
-            ? { image_urls: attachedImageUrls }
-            : {}),
-    };
 
     const placeholderIds = [];
-    for (let i = 0; i < numImages; i++) {
-        const placeholderId = generateId();
-        placeholderIds.push(placeholderId);
-        showPlaceholder(placeholderId, generationFolderId);
-        placeholderMetadata.set(placeholderId, { prompt, settings: requestSettings, folderId: generationFolderId });
-    }
 
     try {
-        const abortSignal = generationAbortController.signal;
+        for (const imageUrl of attachedImageUrls) {
+            let dimensions;
+            try {
+                dimensions = await getImageDimensions(imageUrl);
+            } catch {
+                if (abortSignal.aborted) return;
+                deps.showError('An attached image could not be validated. Remove it and try again.');
+                return;
+            }
+            if (abortSignal.aborted) return;
+
+            const constraintError = getImageConstraintError(dimensions, inputConstraints.imageConstraints);
+            if (constraintError) {
+                deps.showError(constraintError);
+                return;
+            }
+        }
+
+        const requestSettings = {
+            ...settings,
+            ...(attachedImageUrls.length > 0
+                ? { image_urls: attachedImageUrls }
+                : {}),
+        };
+
+        for (let i = 0; i < numImages; i++) {
+            const placeholderId = generateId();
+            placeholderIds.push(placeholderId);
+            showPlaceholder(placeholderId, generationFolderId);
+            placeholderMetadata.set(placeholderId, { prompt, settings: requestSettings, folderId: generationFolderId });
+        }
 
         let response = await generateImage(prompt, requestSettings, abortSignal);
 
@@ -533,9 +613,11 @@ async function handleGenerate(input, button, retryOptions = null) {
         }
         deps.showError(error.message || 'Failed to generate image. Please try again.');
     } finally {
-        isGenerating = false;
-        generationAbortController = null;
-        setLoading(input, button, false);
+        if (generationAbortController === abortController) {
+            isGenerating = false;
+            generationAbortController = null;
+            setLoading(input, button, false);
+        }
     }
 }
 
