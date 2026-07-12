@@ -2,6 +2,13 @@ const { redactKey } = require('../_middleware');
 const { getEvolinkConfig, getModelPricing } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
 
+// Evolink task polling budget. `api/generate.js` has a 120s `maxDuration` (see vercel.json);
+// keep this comfortably below that so a slow-but-successful generation gets a real result
+// instead of the platform killing the function mid-poll (which would surface as a bare 504
+// with no JSON body). Leaves ~15s of headroom for upload/setup/response overhead.
+const EVOLINK_POLL_BUDGET_MS = 105000;
+const EVOLINK_POLL_INTERVAL_MS = 2000;
+
 const EVOLINK_SEEDREAM_ASPECT_RATIOS = new Set(['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
 const Z_IMAGE_TURBO_ASPECT_RATIOS = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '1:2', '2:1']);
 const Z_IMAGE_ASPECT_FALLBACK = {
@@ -180,8 +187,9 @@ async function handleEvolink(ctx) {
     };
 
     const pollEvolinkTask = async (taskId) => {
-        for (let attempt = 0; attempt < 45; attempt++) {
-            if (attempt > 0) await delay(2000);
+        const deadline = Date.now() + EVOLINK_POLL_BUDGET_MS;
+        for (let attempt = 0; Date.now() < deadline; attempt++) {
+            if (attempt > 0) await delay(EVOLINK_POLL_INTERVAL_MS);
 
             const taskResponse = await fetch(`https://api.evolink.ai/v1/tasks/${encodeURIComponent(taskId)}`, {
                 headers: { Authorization: `Bearer ${evolinkKey}` },
