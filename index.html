@@ -240,7 +240,7 @@
                 <div class="input-bar__actions">
                     <div class="input-bar__actions-left">
                         <button id="settings-btn" class="input-bar__icon-btn" title="Generation settings"
-                            aria-label="Open generation settings">
+                            aria-label="Open generation settings" aria-controls="settings-panel" aria-expanded="false">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -379,10 +379,11 @@
         </div>
 
         <!-- Settings Panel -->
-        <div id="settings-panel" class="settings-panel">
+        <div id="settings-panel" class="settings-panel" role="dialog" aria-labelledby="settings-panel-title"
+            aria-hidden="true">
             <div class="settings-panel__header">
-                <h3 class="settings-panel__title">Generation Settings</h3>
-                <button id="settings-close" class="settings-panel__close" aria-label="Close settings">
+                <h3 id="settings-panel-title" class="settings-panel__title">Generation Settings</h3>
+                <button id="settings-close" class="settings-panel__close" type="button" aria-label="Close settings">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -492,7 +493,7 @@
 
                 <!-- Model Selection -->
                 <div class="settings-group">
-                    <label class="settings-label">Advanced</label>
+                    <label class="settings-label">Generation Options</label>
                     <p class="settings-hint settings-hint--flush">Aspect ratio is supported for Gemini, Seedream, Evolink,
                         and xAI models. Image resolution and output options vary by model.</p>
                 </div>

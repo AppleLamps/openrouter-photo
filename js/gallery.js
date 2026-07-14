@@ -169,6 +169,7 @@ function resetConfirmationState(imageId) {
         deleteBtn.classList.remove('gallery__delete-btn--confirm');
         deleteBtn.textContent = '✕';
         deleteBtn.title = 'Delete image';
+        deleteBtn.setAttribute('aria-label', 'Delete image');
     }
 }
 
@@ -184,6 +185,7 @@ function handleFirstDeletePress(imageId) {
         deleteBtn.classList.add('gallery__delete-btn--confirm');
         deleteBtn.textContent = '!';
         deleteBtn.title = 'Tap again to confirm';
+        deleteBtn.setAttribute('aria-label', 'Confirm delete image');
     }
 
     // Auto-reset after 3 seconds
@@ -507,6 +509,7 @@ export async function downloadAllImages(button) {
  */
 function updateEditModeActionBar() {
     const existingBar = document.getElementById('edit-mode-action-bar');
+    document.body.classList.toggle('is-gallery-edit-mode', state.editMode);
 
     if (!state.editMode) {
         // Remove action bar if not in edit mode
@@ -520,11 +523,14 @@ function updateEditModeActionBar() {
         // Create action bar
         const bar = createElement('div', {
             id: 'edit-mode-action-bar',
-            className: 'edit-mode-action-bar'
+            className: 'edit-mode-action-bar',
+            role: 'toolbar',
+            'aria-label': 'Photo selection actions'
         });
 
         const countSpan = createElement('span', {
-            className: 'edit-mode-action-bar__count'
+            className: 'edit-mode-action-bar__count',
+            'aria-live': 'polite'
         }, `${selectedCount} selected`);
 
         const downloadBtn = createElement('button', {
@@ -683,10 +689,13 @@ function createImageCard(image, preloaded = false) {
             type: 'checkbox',
             className: 'gallery__checkbox',
             checked: isSelected,
+            'aria-label': `Select ${isVideo ? 'video' : 'image'}: ${image.prompt || 'Generated media'}`,
             onChange: () => {
                 state.toggleImageSelection(image.id);
                 // Update card's selected state
-                card.classList.toggle('gallery__card--selected', state.selectedImageIds.has(image.id));
+                const selected = state.selectedImageIds.has(image.id);
+                card.classList.toggle('gallery__card--selected', selected);
+                openButton.setAttribute('aria-pressed', String(selected));
             }
         });
 
@@ -700,7 +709,9 @@ function createImageCard(image, preloaded = false) {
     // Delete button (hidden in edit mode)
     const deleteBtn = createElement('button', {
         className: 'gallery__delete-btn',
+        type: 'button',
         title: 'Delete image',
+        'aria-label': 'Delete image',
         onClick: async (e) => {
             e.stopPropagation();
 
@@ -770,21 +781,29 @@ function createImageCard(image, preloaded = false) {
         media.addEventListener('loadeddata', handleLoaded);
     }
 
-    card.appendChild(deleteBtn);
-    card.appendChild(media);
-
-    // Click to open lightbox (or toggle selection in edit mode)
-    card.addEventListener('click', () => {
-        if (state.editMode) {
-            state.toggleImageSelection(image.id);
-            card.classList.toggle('gallery__card--selected', state.selectedImageIds.has(image.id));
-            // Update checkbox state
-            const checkbox = card.querySelector('.gallery__checkbox');
-            if (checkbox) checkbox.checked = state.selectedImageIds.has(image.id);
-        } else {
-            openLightbox(image);
+    const openButton = createElement('button', {
+        className: 'gallery__open-btn',
+        type: 'button',
+        'aria-label': `${isEditMode ? 'Select' : 'Open'} ${isVideo ? 'video' : 'image'}: ${image.prompt || 'Generated media'}`,
+        ...(isEditMode ? { 'aria-pressed': String(isSelected) } : {}),
+        onClick: () => {
+            if (state.editMode) {
+                state.toggleImageSelection(image.id);
+                const selected = state.selectedImageIds.has(image.id);
+                card.classList.toggle('gallery__card--selected', selected);
+                openButton.setAttribute('aria-pressed', String(selected));
+                // Update checkbox state
+                const checkbox = card.querySelector('.gallery__checkbox');
+                if (checkbox) checkbox.checked = selected;
+            } else {
+                openLightbox(image);
+            }
         }
     });
+
+    openButton.appendChild(media);
+    card.appendChild(openButton);
+    card.appendChild(deleteBtn);
 
     return card;
 }

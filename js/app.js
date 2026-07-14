@@ -45,6 +45,8 @@ let multiImageDataUris = [];
 let storageIndicatorQueued = false;
 let storageIndicatorInFlight = false;
 let storageIndicatorNeedsRerun = false;
+let settingsLastFocusedElement = null;
+const SETTINGS_MOBILE_MQ = window.matchMedia('(max-width: 768px)');
 
 const API_KEY_EMPTY_STATE = {
     openrouter: {
@@ -214,7 +216,33 @@ async function init() {
             if (settingsPanel.classList.contains('settings-panel--active') &&
                 !settingsPanel.contains(e.target) &&
                 !settingsBtn.contains(e.target)) {
+                closeSettings(settingsBtn, settingsPanel, false);
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && settingsPanel.classList.contains('settings-panel--active')) {
+                event.preventDefault();
                 closeSettings(settingsBtn, settingsPanel);
+            }
+        });
+
+        settingsPanel.addEventListener('keydown', (event) => {
+            if (event.key !== 'Tab' || !SETTINGS_MOBILE_MQ.matches) return;
+
+            const focusable = [...settingsPanel.querySelectorAll(
+                'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )].filter((element) => element instanceof HTMLElement && element.offsetParent !== null);
+            if (focusable.length === 0) return;
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
             }
         });
     }
@@ -679,20 +707,78 @@ function toggleSettings(button, panel) {
     }
 }
 
+function prioritizeMobileSettings(panel) {
+    if (!SETTINGS_MOBILE_MQ.matches || panel.dataset.mobileOrderReady === 'true') return;
+
+    const content = panel.querySelector('.settings-panel__content');
+    if (!(content instanceof HTMLElement)) return;
+
+    const credentialIds = [
+        'setting-openrouter-key',
+        'setting-xai-key',
+        'setting-evolink-key',
+        'setting-app-access-token',
+    ];
+    const credentialGroups = credentialIds
+        .map((id) => document.getElementById(id)?.closest('.settings-group'))
+        .filter((group) => group instanceof HTMLElement);
+
+    if (credentialGroups.length === 0) return;
+
+    const heading = document.createElement('div');
+    heading.className = 'settings-section-heading';
+    heading.textContent = 'Provider Keys';
+    content.appendChild(heading);
+    credentialGroups.forEach((group) => content.appendChild(group));
+    panel.dataset.mobileOrderReady = 'true';
+}
+
 /**
  * Open settings panel
  */
 function openSettings(button, panel) {
+    if (panel.classList.contains('settings-panel--active')) return;
+
+    prioritizeMobileSettings(panel);
+    settingsLastFocusedElement = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : button;
     panel.classList.add('settings-panel--active');
+    panel.setAttribute('aria-hidden', 'false');
+    if (SETTINGS_MOBILE_MQ.matches) {
+        panel.setAttribute('aria-modal', 'true');
+    } else {
+        panel.removeAttribute('aria-modal');
+    }
     button.classList.add('input-bar__icon-btn--active');
+    button.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('is-settings-open');
+
+    if (SETTINGS_MOBILE_MQ.matches) {
+        requestAnimationFrame(() => {
+            const closeButton = panel.querySelector('.settings-panel__close');
+            if (closeButton instanceof HTMLElement) {
+                closeButton.focus({ preventScroll: true });
+            }
+        });
+    }
 }
 
 /**
  * Close settings panel
  */
-function closeSettings(button, panel) {
+function closeSettings(button, panel, restoreFocus = true) {
     panel.classList.remove('settings-panel--active');
+    panel.setAttribute('aria-hidden', 'true');
+    panel.removeAttribute('aria-modal');
     button.classList.remove('input-bar__icon-btn--active');
+    button.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('is-settings-open');
+
+    if (restoreFocus && settingsLastFocusedElement instanceof HTMLElement) {
+        settingsLastFocusedElement.focus({ preventScroll: true });
+    }
+    settingsLastFocusedElement = null;
 }
 
 async function handleEnhance(input, button) {

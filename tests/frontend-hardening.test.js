@@ -81,6 +81,44 @@ describe('frontend hardening', () => {
         assert.match(components, /\.input-bar__actions-center\s*\{[^}]*flex: 0 0 100%;[^}]*width: 100%;/s);
     });
 
+    it('sets DOM boolean properties instead of serializing false boolean attributes', () => {
+        const utils = read('js/utils.js');
+        assert.match(utils, /BOOLEAN_PROPERTIES\.has\(key\)/);
+        assert.match(utils, /element\[key\] = Boolean\(value\)/);
+    });
+
+    it('uses accessible gallery action buttons and mobile-sized destructive targets', () => {
+        const gallery = read('js/gallery.js');
+        const styles = read('css/gallery.css');
+
+        assert.match(gallery, /className: 'gallery__open-btn'/);
+        assert.match(gallery, /'aria-label': 'Delete image'/);
+        assert.match(styles, /@media \(hover: none\), \(pointer: coarse\)[\s\S]*?\.gallery__delete-btn\s*\{[^}]*width: 44px;[^}]*height: 44px;/);
+    });
+
+    it('replaces the composer with a safe mobile selection toolbar in edit mode', () => {
+        const gallery = read('js/gallery.js');
+        const styles = read('css/gallery.css');
+
+        assert.match(gallery, /classList\.toggle\('is-gallery-edit-mode', state\.editMode\)/);
+        assert.match(styles, /body\.is-gallery-edit-mode \.input-bar\s*\{[^}]*visibility: hidden;/s);
+        assert.match(styles, /\.edit-mode-action-bar\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/s);
+    });
+
+    it('uses a focus-managed full-screen settings sheet on mobile', () => {
+        const html = read('index.html');
+        const app = read('js/app.js');
+        const styles = read('css/components.css');
+
+        assert.match(html, /id="settings-panel"[^>]+role="dialog"[^>]+aria-hidden="true"/);
+        assert.match(html, /aria-controls="settings-panel" aria-expanded="false"/);
+        assert.match(app, /panel\.setAttribute\('aria-modal', 'true'\)/);
+        assert.match(app, /event\.key !== 'Tab' \|\| !SETTINGS_MOBILE_MQ\.matches/);
+        assert.match(app, /function prioritizeMobileSettings\(panel\)/);
+        assert.match(app, /heading\.textContent = 'Provider Keys'/);
+        assert.match(styles, /\.settings-panel\s*\{[^}]*height: 100dvh;[^}]*max-height: none;/s);
+    });
+
     it('renders the model picker from picker-visible catalog models', () => {
         const picker = read('js/model-picker.js');
         assert.match(picker, /PICKER_MODELS\.filter\(matches\)/);

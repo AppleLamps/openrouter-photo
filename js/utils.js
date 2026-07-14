@@ -2,6 +2,17 @@
  * Utility functions for DOM manipulation and helpers
  */
 
+const BOOLEAN_PROPERTIES = new Set([
+    'autofocus',
+    'checked',
+    'disabled',
+    'hidden',
+    'multiple',
+    'readOnly',
+    'required',
+    'selected',
+]);
+
 /**
  * Create a DOM element with attributes and children
  * @param {string} tag - HTML tag name
@@ -23,6 +34,8 @@ export function createElement(tag, attributes = {}, children = []) {
         } else if (key.startsWith('on') && typeof value === 'function') {
             const eventName = key.slice(2).toLowerCase();
             element.addEventListener(eventName, value);
+        } else if (BOOLEAN_PROPERTIES.has(key)) {
+            element[key] = Boolean(value);
         } else {
             element.setAttribute(key, value);
         }

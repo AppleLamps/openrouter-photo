@@ -597,6 +597,12 @@
         padding-top: calc(env(safe-area-inset-top) + var(--spacing-md));
     }
 
+    .sidebar__collapse-btn,
+    .sidebar__folder-menu {
+        width: 44px;
+        height: 44px;
+    }
+
     .sidebar__content {
         padding-bottom: calc(env(safe-area-inset-bottom) + var(--spacing-md));
     }

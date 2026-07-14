@@ -879,6 +879,10 @@ body.is-modal-open .spend-tracker {
 
 /* Responsive Components */
 @media (max-width: 768px) {
+    .spend-tracker {
+        min-height: 44px;
+    }
+
     .input-bar {
         left: 0;
         right: 0;
@@ -1013,14 +1017,7 @@ body.is-modal-open .spend-tracker {
     }
 
     .modal__info::before {
-        content: '';
-        align-self: center;
-        width: 38px;
-        height: 4px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.26);
-        margin-bottom: 2px;
-        flex: 0 0 auto;
+        display: none;
     }
 
     .modal__info-header {
@@ -1094,7 +1091,11 @@ body.is-modal-open .spend-tracker {
     /* Stack actions on mobile to prevent overlaps */
     .input-bar__actions {
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 6px;
+    }
+
+    .input-bar__input-row {
+        margin-bottom: 6px;
     }
 
     .input-bar__actions-left {
@@ -1111,10 +1112,10 @@ body.is-modal-open .spend-tracker {
         order: 3;
         flex: 0 0 100%;
         width: 100%;
-        margin-top: 4px;
+        margin-top: 0;
         justify-content: space-between;
         border-top: 1px solid var(--border-color);
-        padding-top: 10px;
+        padding-top: 6px;
     }
 
     /* Make dropdowns take available space */
@@ -1154,8 +1155,13 @@ body.is-modal-open .spend-tracker {
     }
 
     .input-bar__inline-select {
-        min-height: 40px;
+        min-height: 44px;
         font-size: 0.78rem;
+    }
+
+    .input-bar__inline-select--compact {
+        min-width: 44px;
+        max-width: 44px;
     }
 }
 
@@ -1269,6 +1275,16 @@ body.is-modal-open .spend-tracker {
 
 .settings-group:last-child {
     margin-bottom: 0;
+}
+
+.settings-section-heading {
+    margin: var(--spacing-lg) 0 var(--spacing-md);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
 }
 
 .settings-label {
@@ -1612,23 +1628,85 @@ body.is-modal-open .spend-tracker {
 
 /* Responsive Settings Panel */
 @media (max-width: 768px) {
+    body.is-settings-open {
+        overflow: hidden;
+    }
+
+    body.is-settings-open .input-bar {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
     .settings-panel {
-        bottom: calc(80px + max(0px, calc(100% - 100dvh)));
-        width: calc(100% - var(--spacing-md) * 2);
-        max-height: 60vh;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        max-width: none;
+        max-height: none;
+        border-width: 0;
+        border-radius: 0;
+        transform: translateY(24px);
+        z-index: calc(var(--z-modal) + 10);
+    }
+
+    .settings-panel--active {
+        transform: translateY(0);
+    }
+
+    .settings-panel__header {
+        min-height: calc(64px + env(safe-area-inset-top));
+        padding:
+            calc(var(--spacing-md) + env(safe-area-inset-top))
+            max(var(--spacing-lg), env(safe-area-inset-right))
+            var(--spacing-md)
+            max(var(--spacing-lg), env(safe-area-inset-left));
+    }
+
+    .settings-panel__content {
+        padding:
+            var(--spacing-lg)
+            max(var(--spacing-lg), env(safe-area-inset-right))
+            calc(var(--spacing-xl) + env(safe-area-inset-bottom))
+            max(var(--spacing-lg), env(safe-area-inset-left));
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .settings-panel__close,
+    .settings-panel .settings-input,
+    .settings-panel .settings-select,
+    .settings-panel .settings-btn {
+        min-height: 44px;
+    }
+
+    .settings-panel__close {
+        width: 44px;
+        height: 44px;
+    }
+
+    .settings-checkbox {
+        min-height: 44px;
+    }
+
+    .settings-checkbox input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
     }
 }
 
 @media (max-width: 600px) {
-    .settings-panel {
-        bottom: calc(180px + max(0px, calc(100% - 100dvh)));
-        /* Moved up to clear the taller input bar */
+    .settings-panel__content {
+        padding-left: max(var(--spacing-md), env(safe-area-inset-left));
+        padding-right: max(var(--spacing-md), env(safe-area-inset-right));
     }
 }
 
 @media (max-width: 480px) {
-    /* .settings-panel bottom handled by 600px rule above */
-
     .settings-row {
         flex-direction: column;
         gap: var(--spacing-sm);
