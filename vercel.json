@@ -34,6 +34,10 @@
             "dest": "/api/test-evolink-key.js"
         },
         {
+            "src": "/api/generation-status",
+            "dest": "/api/generation-status.js"
+        },
+        {
             "src": "/api/video-status",
             "dest": "/api/video-status.js"
         },

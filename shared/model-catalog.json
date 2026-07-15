@@ -18,12 +18,14 @@
       "apiKey": "openrouter",
       "backend": "openrouter",
       "ui": {},
+      "output": { "maxImages": 4, "defaultImages": 2 },
       "input": { "maxImages": 3, "required": false }
     },
     "openrouter-seedream": {
       "apiKey": "openrouter",
       "backend": "openrouter",
       "ui": { "aspectRatio": true },
+      "output": { "maxImages": 4, "defaultImages": 2 },
       "input": { "maxImages": 3, "required": false },
       "openrouter": { "seedream": true, "aspectRatioFallback": true }
     },
@@ -34,6 +36,7 @@
         "aspectRatio": true,
         "resolution": { "options": ["1K", "2K", "4K"], "default": "1K" }
       },
+      "output": { "maxImages": 4, "defaultImages": 2 },
       "input": { "maxImages": 3, "required": false },
       "openrouter": { "gemini": true }
     },
@@ -44,6 +47,7 @@
         "aspectRatio": true,
         "resolution": { "options": ["1K", "2K"], "default": "1K" }
       },
+      "output": { "maxImages": 4, "defaultImages": 2 },
       "input": { "maxImages": 5, "required": false }
     },
     "xai-video": {
@@ -53,6 +57,7 @@
         "videoLength": { "min": 1, "max": 15, "default": 10 },
         "videoQuality": { "options": ["480p", "720p"], "default": "720p" }
       },
+      "output": { "maxImages": 1, "defaultImages": 1 },
       "input": { "maxImages": 3, "required": false },
       "async": true
     },
@@ -63,6 +68,7 @@
         "aspectRatio": true,
         "resolution": { "options": ["2K", "4K"], "default": "2K" }
       },
+      "output": { "maxImages": 4, "defaultImages": 2 },
       "input": { "maxImages": 14, "required": false },
       "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-4.5" }
     },
@@ -73,6 +79,7 @@
         "aspectRatio": true,
         "resolution": { "options": ["2K", "4K"], "default": "2K" }
       },
+      "output": { "maxImages": 4, "defaultImages": 2 },
       "input": { "maxImages": 14, "required": true },
       "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-4.5" }
     },
@@ -80,6 +87,7 @@
       "apiKey": "evolink",
       "backend": "evolink",
       "ui": { "aspectRatio": true },
+      "output": { "maxImages": 4, "defaultImages": 2 },
       "input": { "maxImages": 0, "required": false },
       "evolink": { "variant": "z-image-turbo", "apiModel": "z-image-turbo" }
     },
@@ -93,6 +101,7 @@
         "generateAudio": true,
         "imageToVideoHint": true
       },
+      "output": { "maxImages": 1, "defaultImages": 1 },
       "input": { "maxImages": 2, "required": true },
       "async": true,
       "evolink": {
@@ -114,6 +123,7 @@
         "generateAudio": true,
         "webSearch": true
       },
+      "output": { "maxImages": 1, "defaultImages": 1 },
       "input": { "maxImages": 0, "required": false },
       "async": true,
       "evolink": {
@@ -134,6 +144,7 @@
         "videoQuality": { "options": ["720p", "1080p"], "default": "720p" },
         "imageToVideoHint": true
       },
+      "output": { "maxImages": 1, "defaultImages": 1 },
       "input": { "maxImages": 1, "required": true },
       "async": true,
       "evolink": {

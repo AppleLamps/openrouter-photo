@@ -14,11 +14,13 @@ npx vercel dev
 
 ## Environment Setup
 
-Create `.env.local` with:
+Optional server-side provider keys:
 
-- `OPENROUTER_API_KEY` - Required for image generation and prompt enhancement
+- `OPENROUTER_API_KEY` - OpenRouter generation and prompt enhancement
+- `XAI_API_KEY` - xAI image/video generation
+- `EVOLINK_API_KEY` - Evolink image/video generation
 
-Users can also paste their OpenRouter API key directly in the Settings panel (stored in localStorage).
+Users can instead paste provider keys directly in the Settings **Keys** tab (stored in localStorage).
 
 ## Architecture
 
@@ -27,7 +29,9 @@ Users can also paste their OpenRouter API key directly in the Settings panel (st
 ### Data Flow
 
 ```text
-User Input → js/app.js → js/api.js → /api/generate or /api/enhance → OpenRouter API → localStorage (state.js) → gallery.js render
+User Input → js/app.js → js/api.js → /api/generate → provider module
+    ├─ synchronous result → state.js → gallery.js
+    └─ async task(s) → /api/generation-status polling → state.js → gallery.js
 ```
 
 ### Two Deployment Modes
@@ -111,7 +115,8 @@ const btn = createElement('button', { className: 'btn', onClick: handler }, 'Cli
 - API key UI for OpenRouter, xAI, and Evolink lives in `js/settings-keys.js` (`API_KEY_FIELDS` config table).
 - Multiple provider API keys are used (not only OpenRouter); keys are sent from the client via headers and resolved in `api/_middleware.js`.
 - Evolink model-specific payload shapes use `evolink.variant` / `evolink.apiModel` on capability profiles (or per-model overrides) and branches in `api/providers/evolink.js` (image) or `api/providers/evolink-video.js` (Seedance 2.0 video).
-- Video models are async: `generate.js` returns `202 { request_id, provider }` and the client polls `/api/video-status` (xAI and Evolink Seedance task status).
+- Evolink images and all video models are async: `generate.js` returns canonical `202 { status, provider, model, media_type, requests[] }`; the client polls `/api/generation-status`, while `/api/video-status` remains a backward-compatible alias.
+- Capability profiles define catalog-driven output constraints through `output.maxImages` and `output.defaultImages`; video profiles force one output in both the UI and API.
 - `.hintrc` extends `development` and ignores intentional compat warnings for `meta[name=theme-color]` and `video[playsinline]`.
 - `tests/catalog-integrity.test.js` enforces catalog completeness (model counts, backend/type counts, legacy redirects, edit-model input requirements, no-fal guard).
 
@@ -124,7 +129,7 @@ Quick checklist:
 1. Copy the closest existing model in `shared/model-catalog.json`; add to `models` (new `capabilityProfiles` entry only if nothing fits).
 2. Evolink image with new payload family → new `evolink-*` profile (or model `evolink` override) + branch in `api/providers/evolink.js`.
 3. Evolink video with new payload family → new `evolink-video-*` profile + branch in `api/providers/evolink-video.js`.
-4. New provider entirely → new file under `api/providers/`, route in `api/generate.js`, mirror in `api/model-catalog.js` (and a `video-status.js` branch for async video).
+4. New provider entirely → new file under `api/providers/`, route in `api/generate.js`, mirror in `api/model-catalog.js` (and a `generation-status.js` branch for async tasks).
 5. Run `npm test`.
 6. Manual: picker, settings panels, one successful generation with the correct API key.
 

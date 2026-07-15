@@ -83,7 +83,7 @@ After adding a model, it appears automatically in the picker (filtered by `type`
 
 ## Capability profiles
 
-Profiles define **backend**, **API key**, **UI controls**, and **input rules**.
+Profiles define **backend**, **API key**, **UI controls**, **input rules**, and **output limits**.
 
 ### Common `ui` flags
 
@@ -105,6 +105,16 @@ Profiles define **backend**, **API key**, **UI controls**, and **input rules**.
 
 - `type: "edit"` or `image-to-video` profiles set `"required": true`.
 - Override per model with `"capabilities": { "input": { "maxImages": 10 } }`.
+
+### Output rules
+
+```json
+"output": { "maxImages": 4, "defaultImages": 2 }
+```
+
+- Image profiles currently allow up to four outputs and default to two.
+- Video profiles must use `{ "maxImages": 1, "defaultImages": 1 }`; the picker hides the count selector and the API enforces the same limit.
+- Override per model only when the provider contract requires a stricter count.
 
 ### Existing profiles (reuse before creating new)
 
@@ -210,7 +220,9 @@ Text-to-video and image-to-video share the `evolink-video` backend and `/v1/vide
 
 - **Image-to-video** requires 1–2 attached frames (first frame, optional last frame); the handler uploads them via the Evolink files API and sends `image_urls`.
 - **Text-to-video** takes no images and sends `model_params: { web_search: true }` when the web-search toggle is on.
-- Both are **async**: generate returns `202 { request_id, provider: "evolink" }`, and the client polls `/api/video-status?provider=evolink` (Evolink task status `GET /v1/tasks/{task_id}`).
+- Both are **async**: generate returns the canonical pending response with `requests[]` plus the legacy top-level `request_id`/`estimated_cost`, and the client polls `/api/generation-status`. `/api/video-status` remains a backward-compatible alias.
+
+Evolink image profiles are async too. One task is created per requested output so the browser can save successes independently and retry only failed placeholders with `num_images: 1`.
 
 ### 5. Legacy redirect (alias)
 
@@ -245,7 +257,8 @@ Pricing is optional but recommended. Shapes used today:
 Notes:
 
 - Image spend is recorded from each provider's per-image cost (Evolink/xAI) or live OpenRouter usage.
-- **Video spend is not recorded** — async video responses carry no usage records, so `estimated_cost` is informational only. Evolink Seedance video has no per-second rate wired yet (`estimated_cost` is `0`); add `pricePerSecond` to the profile/model `pricing` to populate it.
+- Async image/video spend is recorded once when each task completes successfully. Video usage is marked estimated because providers do not return final billing usage in the status response.
+- Evolink video cost remains `0` when no `pricePerSecond` is configured; add it to the profile/model `pricing` to produce a useful estimate.
 - OpenRouter models often rely on live usage from the API response instead of catalog pricing.
 
 ---
@@ -262,6 +275,9 @@ npm test
 | `tests/model-catalog.test.js` | Routing, redirects, Evolink config resolution |
 | `tests/evolink-payload.test.js` | Evolink Seedream and Z Image Turbo payload shape |
 | `tests/generate-routing.test.js` | Input image validation, provider resolution |
+| `tests/generation-status.test.js` | Generic pending/completed/failed mappings and redacted provider errors |
+| `tests/generation-polling.test.js` | Request normalization, transient retries, timeout, and cancellation |
+| `tests/pwa-assets.test.js` | Startup import graph, offline manifest, service-worker serving |
 | `tests/ui-capabilities.test.js` | Settings panel flags per profile, picker visibility |
 
 After tests pass, manually verify:
@@ -270,7 +286,7 @@ After tests pass, manually verify:
 - [ ] Settings panel shows only the controls that profile allows
 - [ ] Generate succeeds with the correct API key type (OpenRouter / xAI / Evolink)
 - [ ] Edit / I2V models reject generation with no attachments
-- [ ] Video models poll to completion and play inline
+- [ ] Async image/video models poll to completion; mixed outcomes preserve successes and retry only failures
 - [ ] Spend pill updates (if pricing is configured)
 
 Use `npx vercel dev` when testing API routes with serverless behavior.
@@ -293,7 +309,7 @@ Use `npx vercel dev` when testing API routes with serverless behavior.
 | New Evolink image API family | + `api/providers/evolink.js`, `tests/evolink-payload.test.js` |
 | New Evolink video API family | + `api/providers/evolink-video.js`, pricing in catalog |
 | Legacy alias | `legacyRedirects` in catalog |
-| New provider entirely | New file under `api/providers/`, route in `api/generate.js`, mirror in `api/model-catalog.js`, video polling branch in `api/video-status.js` |
+| New provider entirely | New file under `api/providers/`, route in `api/generate.js`, mirror in `api/model-catalog.js`, status branch in `api/generation-status.js` for async tasks |
 
 ---
 

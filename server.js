@@ -7,7 +7,7 @@ const testKeyHandler = require('./api/test-key');
 const testXaiKeyHandler = require('./api/test-xai-key');
 const testEvolinkKeyHandler = require('./api/test-evolink-key');
 const randomPromptHandler = require('./api/random-prompt');
-const videoStatusHandler = require('./api/video-status');
+const generationStatusHandler = require('./api/generation-status');
 const imageProxyHandler = require('./api/image-proxy');
 const { API_CORS_ALLOW_HEADERS } = require('./api/_middleware');
 
@@ -70,6 +70,10 @@ app.use('/css', express.static(path.join(__dirname, 'css')));
 app.use('/js', express.static(path.join(__dirname, 'js')));
 app.use('/shared', express.static(path.join(__dirname, 'shared')));
 
+app.get('/sw.js', (_req, res) => {
+    res.type('application/javascript').sendFile(path.join(__dirname, 'sw.js'));
+});
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -98,8 +102,12 @@ app.post('/api/random-prompt', (req, res) => {
     return randomPromptHandler(req, res);
 });
 
+app.all('/api/generation-status', (req, res) => {
+    return generationStatusHandler(req, res);
+});
+
 app.all('/api/video-status', (req, res) => {
-    return videoStatusHandler(req, res);
+    return generationStatusHandler(req, res);
 });
 
 app.get('/api/image-proxy', (req, res) => {

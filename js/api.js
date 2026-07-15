@@ -10,7 +10,7 @@ const TEST_KEY_ENDPOINT = '/api/test-key';
 const TEST_XAI_KEY_ENDPOINT = '/api/test-xai-key';
 const TEST_EVOLINK_KEY_ENDPOINT = '/api/test-evolink-key';
 const RANDOM_PROMPT_ENDPOINT = '/api/random-prompt';
-const VIDEO_STATUS_ENDPOINT = '/api/video-status';
+const GENERATION_STATUS_ENDPOINT = '/api/generation-status';
 const OPENROUTER_API_KEY_STORAGE_KEY = 'openrouter_api_key';
 const XAI_API_KEY_STORAGE_KEY = 'xai_api_key';
 const EVOLINK_API_KEY_STORAGE_KEY = 'evolink_api_key';
@@ -215,9 +215,10 @@ export async function generateImage(prompt, options = {}, signal = null) {
 
         const data = await response.json();
 
-        // Handle async video generation (202 = pending, needs client-side polling)
-        if (response.status === 202 && data.status === 'pending' && data.request_id) {
-            return data; // Caller (app.js) will poll via pollVideoStatus
+        // Async image/video generation returns task descriptors for client-side polling.
+        if (response.status === 202 && data.status === 'pending'
+            && (data.request_id || (Array.isArray(data.requests) && data.requests.length > 0))) {
+            return data;
         }
 
         // Validate response structure
@@ -456,10 +457,10 @@ export async function getRandomPromptFromAI() {
  * @returns {Promise<{status: string, url?: string}>}
  * @throws {Error} If polling fails
  */
-export async function pollVideoStatus(requestId, signal = null, meta = {}) {
+export async function pollGenerationStatus(requestId, signal = null, meta = {}) {
     const xaiApiKey = getXaiApiKey();
     const evolinkApiKey = getEvolinkApiKey();
-    const response = await fetch(VIDEO_STATUS_ENDPOINT, {
+    const response = await fetch(GENERATION_STATUS_ENDPOINT, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -471,6 +472,7 @@ export async function pollVideoStatus(requestId, signal = null, meta = {}) {
             request_id: requestId,
             ...(meta.provider ? { provider: meta.provider } : {}),
             ...(meta.model ? { model: meta.model } : {}),
+            ...(meta.media_type ? { media_type: meta.media_type } : {}),
         }),
         ...(signal ? { signal } : {}),
     });
@@ -484,3 +486,6 @@ export async function pollVideoStatus(requestId, signal = null, meta = {}) {
 
     return response.json();
 }
+
+// Backward-compatible client export.
+export const pollVideoStatus = pollGenerationStatus;

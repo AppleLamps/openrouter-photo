@@ -2,7 +2,7 @@
  * Gallery module for rendering the grid
  */
 
-import { createElement, downloadImage } from './utils.js';
+import { createElement, downloadImage, responseToMediaBlob } from './utils.js';
 import { state } from './state.js';
 
 /** @type {HTMLElement|null} */
@@ -407,7 +407,7 @@ async function getImageBlobForDownload(imageId) {
         try {
             const fullUrl = await state.getFullImageUrl(imageId);
             const response = await fetch(fullUrl || image.url);
-            return await response.blob();
+            return await responseToMediaBlob(response);
         } catch (error) {
             console.error(`Failed to fetch video ${imageId}:`, error);
             return null;
@@ -426,7 +426,7 @@ async function getImageBlobForDownload(imageId) {
     try {
         const fullUrl = await state.getFullImageUrl(imageId);
         const response = await fetch(fullUrl || image.url);
-        return await response.blob();
+        return await responseToMediaBlob(response);
     } catch (error) {
         console.error(`Failed to fetch image ${imageId}:`, error);
         return null;
@@ -446,14 +446,23 @@ async function downloadImagesByIds(imageIds, button, options = {}) {
 
     try {
         const files = [];
+        let failures = 0;
         for (const id of ids) {
             const blob = await getImageBlobForDownload(id);
-            if (!blob) continue;
+            if (!blob) {
+                failures += 1;
+                continue;
+            }
             const extension = getExtensionFromType(blob.type);
             files.push({ id, blob, extension, type: blob.type });
         }
 
-        if (files.length === 0) return false;
+        if (files.length === 0) {
+            window.dispatchEvent(new CustomEvent('media-download-summary', {
+                detail: { completed: 0, failed: failures },
+            }));
+            return false;
+        }
 
         if (options.forceZip || files.length >= ZIP_DOWNLOAD_THRESHOLD) {
             if (button) button.textContent = 'Zipping...';
@@ -466,6 +475,7 @@ async function downloadImagesByIds(imageIds, button, options = {}) {
                 });
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
                 triggerBlobDownload(zipBlob, options.zipFilename || `ai-media-${files.length}.zip`);
+                if (failures) window.dispatchEvent(new CustomEvent('media-download-summary', { detail: { completed: files.length, failed: failures } }));
                 return true;
             } catch (error) {
                 console.error('Bulk zip download failed, falling back to individual downloads:', error);
@@ -476,6 +486,11 @@ async function downloadImagesByIds(imageIds, button, options = {}) {
             const prefix = type?.startsWith('video') ? 'ai-video' : 'ai-image';
             triggerBlobDownload(blob, `${prefix}-${id}.${extension}`);
         });
+        if (failures) {
+            window.dispatchEvent(new CustomEvent('media-download-summary', {
+                detail: { completed: files.length, failed: failures },
+            }));
+        }
         return true;
     } catch (error) {
         console.error('Failed to download images:', error);
@@ -527,7 +542,6 @@ function updateEditModeActionBar() {
             role: 'toolbar',
             'aria-label': 'Photo selection actions'
         });
-
         const countSpan = createElement('span', {
             className: 'edit-mode-action-bar__count',
             'aria-live': 'polite'

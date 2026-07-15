@@ -233,6 +233,7 @@
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         </svg>
                     </button>
+                    <span id="prompt-attachment-status" class="sr-only" aria-live="polite"></span>
                     <textarea id="prompt-input" class="input-bar__input" placeholder="Describe an image to generate..."
                         rows="1"></textarea>
                 </div>
@@ -382,7 +383,7 @@
         <div id="settings-panel" class="settings-panel" role="dialog" aria-labelledby="settings-panel-title"
             aria-hidden="true">
             <div class="settings-panel__header">
-                <h3 id="settings-panel-title" class="settings-panel__title">Generation Settings</h3>
+                <h3 id="settings-panel-title" class="settings-panel__title">Settings</h3>
                 <button id="settings-close" class="settings-panel__close" type="button" aria-label="Close settings">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -579,7 +580,7 @@
                         <input type="checkbox" id="setting-generate-audio-switch" checked>
                         <span>Generate audio</span>
                     </label>
-                    <p class="settings-hint">PixVerse C1 can add native audio to generated videos.</p>
+                    <p class="settings-hint">Adds native audio when the selected video model supports it.</p>
                 </div>
 
                 <!-- Evolink Web Search -->
@@ -588,7 +589,7 @@
                         <input type="checkbox" id="setting-web-search-switch" checked>
                         <span>Web search</span>
                     </label>
-                    <p class="settings-hint">Seedream 5 Lite can use web search when the prompt needs current details.</p>
+                    <p class="settings-hint">Allows supported models to use current web information.</p>
                 </div>
 
                 <!-- FlashHead Voice -->

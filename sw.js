@@ -3,7 +3,7 @@
  * Caches core assets for offline loading
  */
 
-const CACHE_NAME = 'ai-image-gen-v7';
+const CACHE_NAME = 'ai-image-gen-v8';
 
 const CORE_ASSETS = [
     '/',
@@ -20,7 +20,20 @@ const CORE_ASSETS = [
     '/js/config.js',
     '/js/image-utils.js',
     '/js/sidebar.js',
-    '/js/storage.js'
+    '/js/storage.js',
+    '/js/generation-controller.js',
+    '/js/generation-polling.js',
+    '/js/model-capabilities.js',
+    '/js/model-picker.js',
+    '/js/models.js',
+    '/js/settings-keys.js',
+    '/js/spend-tracker.js',
+    '/js/video-polling.js',
+    '/shared/model-catalog.json',
+    '/public/manifest.json',
+    '/public/icon-192.svg',
+    '/public/icon-512.svg',
+    '/public/vendor/jszip.min.js',
 ];
 
 /**
@@ -119,9 +132,11 @@ self.addEventListener('fetch', (event) => {
                 }
                 return networkResponse;
             })
-            .catch(() => {
-                // Network failed, try cache
-                return caches.match(request);
+            .catch(async () => {
+                const cached = await caches.match(request);
+                if (cached) return cached;
+                if (request.mode === 'navigate') return caches.match('/');
+                return Response.error();
             })
     );
 });

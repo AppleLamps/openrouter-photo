@@ -1,8 +1,13 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { getUiCapabilities } = require('../api/model-catalog');
+const { getOutputConstraints, getUiCapabilities } = require('../api/model-catalog');
 
 describe('UI capabilities', () => {
+    it('catalog limits video to one output and images to their default batch', () => {
+        assert.deepEqual(getOutputConstraints('grok-imagine-video'), { maxImages: 1, defaultImages: 1 });
+        assert.deepEqual(getOutputConstraints('evolink/seedance-2.0/text-to-video'), { maxImages: 1, defaultImages: 1 });
+        assert.deepEqual(getOutputConstraints('evolink/doubao-seedream-5.0-pro'), { maxImages: 4, defaultImages: 2 });
+    });
     it('gemini exposes aspect ratio and 1K/2K/4K resolution', () => {
         const ui = getUiCapabilities('google/gemini-3-pro-image-preview');
         assert.equal(ui.aspectRatio, true);

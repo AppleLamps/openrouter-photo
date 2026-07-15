@@ -2,7 +2,7 @@
  * Image/video generation flow, prompt attachments, and settings restore
  */
 
-import { generateImage, pollVideoStatus } from './api.js';
+import { generateImage, pollGenerationStatus } from './api.js';
 import {
     PROMPT_ATTACHMENTS_MAX,
     PROMPT_ATTACHMENT_MAX_BYTES,
@@ -16,7 +16,7 @@ import {
     removePlaceholder,
     showErrorCard,
 } from './gallery.js';
-import { DEFAULT_MODEL_ID, getUiCapabilities, normalizeModelId, resolveCapabilities } from './models.js';
+import { DEFAULT_MODEL_ID, getOutputConstraints, getUiCapabilities, normalizeModelId, resolveCapabilities } from './models.js';
 import {
     syncModelDropdownUI,
     syncNumImagesDropdownUI,
@@ -24,7 +24,11 @@ import {
 } from './model-picker.js';
 import { recordSpend } from './spend-tracker.js';
 import { showApiKeyPopupForCode } from './settings-keys.js';
-import { isRetryablePollError } from './video-polling.js';
+import {
+    buildAsyncSpendMeta,
+    normalizePendingRequests,
+    pollGenerationRequest,
+} from './generation-polling.js';
 
 /** @type {string[]} */
 let promptImageDataUrls = [];
@@ -34,16 +38,16 @@ let isGenerating = false;
 
 /** @type {AbortController|null} */
 let generationAbortController = null;
+let isProcessingAttachments = false;
 
 /** @type {Map<string, {prompt: string, settings: Object}>} */
 let placeholderMetadata = new Map();
 
-/** @type {{ showError: Function, shakeElement: Function, autoResizeTextarea: Function, getExtraImageUrls: () => string[] }} */
+/** @type {{ showError: Function, shakeElement: Function, autoResizeTextarea: Function }} */
 let deps = {
     showError: () => {},
     shakeElement: () => {},
     autoResizeTextarea: () => {},
-    getExtraImageUrls: () => [],
 };
 
 export function renderPromptAttachments() {
@@ -147,35 +151,56 @@ function getImageConstraintError({ width, height }, constraints) {
 
 async function addPromptImageFiles(files) {
     const list = Array.from(files || []).filter((f) => f && f.type && f.type.startsWith('image/'));
-    if (list.length === 0) return;
+    if (list.length === 0 || isProcessingAttachments) return;
 
-    for (const file of list) {
-        if (promptImageDataUrls.length >= PROMPT_ATTACHMENTS_MAX) {
-            deps.showError(`Maximum ${PROMPT_ATTACHMENTS_MAX} images can be attached.`);
-            break;
-        }
-        if (file.size > PROMPT_ATTACHMENT_MAX_BYTES) {
-            deps.showError(`Image "${file.name}" is too large (max 8MB).`);
-            continue;
-        }
+    const button = document.getElementById('prompt-image-btn');
+    const status = document.getElementById('prompt-attachment-status');
+    isProcessingAttachments = true;
+    if (button instanceof HTMLButtonElement) {
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+    }
 
-        try {
-            const model = normalizeModelId(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID);
-            const constraints = resolveCapabilities(model).input?.imageConstraints;
-            const dataUrl = await compressImageForUpload(file);
-            const dimensions = await getImageDimensions(dataUrl);
-            const constraintError = getImageConstraintError(dimensions, constraints);
-            if (constraintError) {
-                deps.showError(`${file.name}: ${constraintError}`);
+    try {
+        for (const [index, file] of list.entries()) {
+            const progress = `Processing ${index + 1} of ${list.length}`;
+            if (status) status.textContent = progress;
+            if (button instanceof HTMLButtonElement) button.setAttribute('aria-label', progress);
+            if (promptImageDataUrls.length >= PROMPT_ATTACHMENTS_MAX) {
+                deps.showError(`Maximum ${PROMPT_ATTACHMENTS_MAX} images can be attached.`);
+                break;
+            }
+            if (file.size > PROMPT_ATTACHMENT_MAX_BYTES) {
+                deps.showError(`Image "${file.name}" is too large (max 8MB).`);
                 continue;
             }
-            if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
-                promptImageDataUrls.push(dataUrl);
-                renderPromptAttachments();
+
+            try {
+                const model = normalizeModelId(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID);
+                const constraints = resolveCapabilities(model).input?.imageConstraints;
+                const dataUrl = await compressImageForUpload(file);
+                const dimensions = await getImageDimensions(dataUrl);
+                const constraintError = getImageConstraintError(dimensions, constraints);
+                if (constraintError) {
+                    deps.showError(`${file.name}: ${constraintError}`);
+                    continue;
+                }
+                if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+                    promptImageDataUrls.push(dataUrl);
+                    renderPromptAttachments();
+                }
+            } catch (error) {
+                console.error('Failed to compress image:', error);
+                deps.showError(`Failed to process "${file.name}".`);
             }
-        } catch (error) {
-            console.error('Failed to compress image:', error);
-            deps.showError(`Failed to process "${file.name}".`);
+        }
+    } finally {
+        isProcessingAttachments = false;
+        if (status) status.textContent = '';
+        if (button instanceof HTMLButtonElement) {
+            button.disabled = false;
+            button.removeAttribute('aria-busy');
+            updateSettingsForModel(normalizeModelId(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID));
         }
     }
 }
@@ -193,10 +218,8 @@ export function setPromptAttachments(urls) {
 }
 
 export function getAttachedImageUrls(limit = PROMPT_ATTACHMENTS_MAX) {
-    const images = [
-        ...promptImageDataUrls,
-        ...deps.getExtraImageUrls(),
-    ].filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
+    const images = promptImageDataUrls
+        .filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
 
     return Array.from(new Set(images)).slice(0, limit);
 }
@@ -230,9 +253,11 @@ function getGenerationSettings() {
         ? Math.min(Math.max(parsedFlashHeadStability, 0), 1)
         : 0.5;
 
+    const output = getOutputConstraints(model);
+    const parsedNumImages = parseInt(numImagesSelect?.value || output.defaultImages, 10);
     return {
         model,
-        num_images: parseInt(numImagesSelect?.value || 2, 10),
+        num_images: Math.min(Math.max(Number.isInteger(parsedNumImages) ? parsedNumImages : output.defaultImages, 1), output.maxImages),
         aspect_ratio: aspectRatioSelect?.value || '3:4',
         ...(useExactSize ? {
             image_size: `${exactWidthInput?.value || exactSize.defaultWidth}x${exactHeightInput?.value || exactSize.defaultHeight}`,
@@ -335,9 +360,11 @@ export function restoreSettings(settings) {
     const numImagesSelect = document.getElementById('setting-num-images');
     if (numImagesSelect && settings.num_images !== undefined) {
         const parsedNumImages = Number.parseInt(settings.num_images, 10);
-        if (Number.isInteger(parsedNumImages) && parsedNumImages >= 1 && parsedNumImages <= 4) {
-            numImagesSelect.value = String(parsedNumImages);
-        }
+        const output = getOutputConstraints(model);
+        numImagesSelect.value = String(Math.min(Math.max(
+            Number.isInteger(parsedNumImages) ? parsedNumImages : output.defaultImages,
+            1,
+        ), output.maxImages));
         syncNumImagesDropdownUI();
     }
 }
@@ -450,92 +477,19 @@ async function handleGenerate(input, button, retryOptions = null) {
             return;
         }
 
-        if (response.status === 'pending' && response.request_id) {
-            const VIDEO_POLL_INITIAL = 3000;
-            const VIDEO_POLL_MULTIPLIER = 1.5;
-            const VIDEO_POLL_MAX_INTERVAL = 15000;
-            const VIDEO_POLL_MAX_ELAPSED = 360000;
-            let pollDelay = VIDEO_POLL_INITIAL;
-            let elapsed = 0;
-
-            while (elapsed < VIDEO_POLL_MAX_ELAPSED) {
-                if (abortSignal.aborted) {
-                    placeholderIds.forEach(id => removePlaceholder(id));
-                    placeholderIds.forEach(id => placeholderMetadata.delete(id));
-                    return;
-                }
-
-                await new Promise(r => setTimeout(r, pollDelay));
-                elapsed += pollDelay;
-                pollDelay = Math.min(pollDelay * VIDEO_POLL_MULTIPLIER, VIDEO_POLL_MAX_INTERVAL);
-
-                let poll;
-                try {
-                    poll = await pollVideoStatus(response.request_id, abortSignal, {
-                        provider: response.provider,
-                        model: response.model,
-                    });
-                } catch (error) {
-                    if (!isRetryablePollError(error)) throw error;
-                    console.warn('Transient video status error; polling will continue:', error.message);
-                    continue;
-                }
-
-                if (poll.status === 'completed' && poll.url) {
-                    response = {
-                        images: [{ url: poll.url, media_type: 'video', model: response.model }],
-                        meta: { model: response.model, estimated_cost: response.estimated_cost }
-                    };
-                    break;
-                }
-
-                if (poll.status === 'failed') {
-                    const failMessage = poll.error
-                        ? `Video generation failed: ${poll.error}`
-                        : 'Video generation failed. Please try again.';
-                    placeholderIds.forEach(id => {
-                        const metadata = placeholderMetadata.get(id);
-                        if (metadata) {
-                            showErrorCard(id, failMessage, metadata.prompt,
-                                () => retryGeneration(metadata.prompt, metadata.settings, metadata.folderId));
-                            placeholderMetadata.delete(id);
-                        }
-                    });
-                    return;
-                }
-            }
-
-            if (elapsed >= VIDEO_POLL_MAX_ELAPSED && !(response.images && response.images.length > 0)) {
-                placeholderIds.forEach(id => {
-                    const metadata = placeholderMetadata.get(id);
-                    if (metadata) {
-                        showErrorCard(id, 'Video generation timed out. Please try again.', metadata.prompt,
-                            () => retryGeneration(metadata.prompt, metadata.settings, metadata.folderId));
-                        placeholderMetadata.delete(id);
-                    }
-                });
-                return;
-            }
-        }
-
-        if (response.images && response.images.length > 0) {
-            recordSpend(response.meta, response.images.length);
-            const storableSettings = { ...settings };
-            delete storableSettings.image_url;
-            delete storableSettings.image_urls;
-
-            const folderId = generationFolderId;
-
-            const saveResults = await Promise.all(response.images.map(async (image, index) => {
+        const storableSettings = { ...settings };
+        delete storableSettings.image_url;
+        delete storableSettings.image_urls;
+        const generationCreatedAt = Date.now();
+        const saveGeneratedImage = async (image, index) => {
                 const mediaType = image.media_type || image.mediaType || 'image';
-
                 const result = await state.addImage({
                     id: generateId(),
                     url: image.url,
                     prompt: prompt,
-                    createdAt: Date.now(),
+                    createdAt: generationCreatedAt + index,
                     settings: storableSettings,
-                    folderId: folderId,
+                    folderId: generationFolderId,
                     mediaType,
                     sourceUrl: image.source_url || image.sourceUrl || null,
                     generation: {
@@ -549,9 +503,116 @@ async function handleGenerate(input, button, retryOptions = null) {
                     removePlaceholder(placeholderIds[index]);
                     placeholderMetadata.delete(placeholderIds[index]);
                 }
-
                 return result;
-            }));
+        };
+        const showTaskFailure = (index, message) => {
+            const placeholderId = placeholderIds[index];
+            const metadata = placeholderMetadata.get(placeholderId);
+            if (!placeholderId || !metadata) return;
+            const retrySettings = { ...metadata.settings, num_images: 1 };
+            showErrorCard(
+                placeholderId,
+                message || 'Generation failed. Please try again.',
+                metadata.prompt,
+                () => retryGeneration(metadata.prompt, retrySettings, metadata.folderId),
+            );
+            placeholderMetadata.delete(placeholderId);
+        };
+
+        if (response.status === 'pending') {
+            const requests = normalizePendingRequests(response);
+            const initialErrors = Array.isArray(response.errors) ? response.errors : [];
+            const handledIndexes = new Set();
+            let successCount = 0;
+            let failureCount = 0;
+            let persistenceWarning = false;
+
+            initialErrors.forEach((entry) => {
+                const index = Number.isInteger(entry?.index) ? entry.index : requests.length + failureCount;
+                handledIndexes.add(index);
+                failureCount += 1;
+                showTaskFailure(index, entry?.error || 'Failed to start generation task.');
+            });
+
+            let persistenceQueue = Promise.resolve();
+            const pollPromises = requests.map(async (request, requestIndex) => {
+                const index = Number.isInteger(request.index) ? request.index : requestIndex;
+                handledIndexes.add(index);
+                let outcome;
+                try {
+                    outcome = await pollGenerationRequest(request, pollGenerationStatus, abortSignal);
+                } catch (error) {
+                    if (error?.name === 'AbortError') return { aborted: true, error, request, index };
+                    outcome = { status: 'failed', request, error: error?.message || 'Generation failed.' };
+                }
+
+                if (outcome.status === 'failed') {
+                    failureCount += 1;
+                    showTaskFailure(index, outcome.error);
+                    return { outcome, request, index };
+                }
+
+                const image = {
+                    url: outcome.result.url,
+                    source_url: outcome.result.source_url || null,
+                    media_type: outcome.result.media_type || request.media_type,
+                    model: request.model,
+                    cost: request.estimated_cost || 0,
+                    provider: request.provider,
+                };
+                const savePromise = persistenceQueue.then(() => saveGeneratedImage(image, index));
+                persistenceQueue = savePromise.catch(() => {});
+                const result = await savePromise;
+                persistenceWarning ||= result?.persisted === false;
+                recordSpend(buildAsyncSpendMeta(request), 1);
+                successCount += 1;
+                return { outcome, request, index };
+            });
+            const polledTasks = await Promise.all(pollPromises);
+            const outcomes = polledTasks
+                .filter((task) => !task.aborted)
+                .map((task) => task.outcome);
+            if (polledTasks.some((task) => task.aborted)) {
+                placeholderIds.forEach((id) => {
+                    removePlaceholder(id);
+                    placeholderMetadata.delete(id);
+                });
+                return;
+            }
+
+            placeholderIds.forEach((id, index) => {
+                if (!handledIndexes.has(index)) {
+                    removePlaceholder(id);
+                    placeholderMetadata.delete(id);
+                }
+            });
+            if (persistenceWarning) {
+                deps.showError('Generated media is visible now, but could not be saved for reload. Download anything important.');
+            }
+            if (failureCount > 0 && successCount > 0) {
+                deps.showError(`${successCount} generation${successCount === 1 ? '' : 's'} completed; ${failureCount} failed. Successful results were kept.`);
+            }
+            if (successCount > 0) {
+                input.value = '';
+                deps.autoResizeTextarea(input);
+                clearPromptAttachments();
+            }
+            if (outcomes.length === 0 && failureCount === 0) {
+                throw new Error('Generation did not return any task IDs.');
+            }
+            return;
+        }
+
+        if (response.images && response.images.length > 0) {
+            recordSpend(response.meta, response.images.length);
+            const saveResults = [];
+            for (let index = 0; index < response.images.length; index++) {
+                saveResults.push(await saveGeneratedImage(response.images[index], index));
+                await new Promise((resolve) => {
+                    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(resolve);
+                    else setTimeout(resolve, 0);
+                });
+            }
 
             if (saveResults.some((result) => result && result.persisted === false)) {
                 deps.showError('Generated media is visible now, but could not be saved for reload. Download anything important.');

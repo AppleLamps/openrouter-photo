@@ -3,11 +3,6 @@
  */
 
 import { enhancePrompt, getRandomPromptFromAI } from './api.js';
-import {
-    PROMPT_ATTACHMENT_MAX_BYTES,
-    PROMPT_ATTACHMENT_MAX_DIMENSION,
-    PROMPT_ATTACHMENT_JPEG_QUALITY
-} from './config.js';
 import { state } from './state.js';
 import { initGallery, initLightbox, closeLightbox, downloadAllImages } from './gallery.js';
 import { formatBytes } from './image-utils.js';
@@ -37,11 +32,6 @@ import {
     setPromptAttachments,
 } from './generation-controller.js';
 
-/** @type {string|null} - Single image data URI for image-to-image models */
-let inputImageDataUri = null;
-
-/** @type {string[]} - Multiple image data URIs for multi-image models */
-let multiImageDataUris = [];
 let storageIndicatorQueued = false;
 let storageIndicatorInFlight = false;
 let storageIndicatorNeedsRerun = false;
@@ -178,15 +168,7 @@ async function init() {
     }
 
     // Generation controller (generate, cancel, attachments)
-    initGenerationController({
-        showError,
-        shakeElement,
-        autoResizeTextarea,
-        getExtraImageUrls: () => [
-            ...(inputImageDataUri ? [inputImageDataUri] : []),
-            ...multiImageDataUris,
-        ],
-    });
+    initGenerationController({ showError, shakeElement, autoResizeTextarea });
 
     // Set up enhance button listener
     if (enhanceBtn && promptInput) {
@@ -205,6 +187,7 @@ async function init() {
 
     // Set up settings panel
     if (settingsBtn && settingsPanel) {
+        initSettingsTabs(settingsPanel);
         settingsBtn.addEventListener('click', () => toggleSettings(settingsBtn, settingsPanel));
 
         if (settingsClose) {
@@ -257,11 +240,17 @@ async function init() {
 
     // Initialize settings UI interactions
     initApiKeyPopupContext({
-        openSettingsPanel: () => {
+        openSettingsPanel: (inputId) => {
             const settingsBtn = document.getElementById('settings-btn');
             const settingsPanel = document.getElementById('settings-panel');
             if (settingsBtn && settingsPanel) {
-                openSettings(settingsBtn, settingsPanel);
+                openSettings(settingsBtn, settingsPanel, 'keys');
+                const provider = getApiKey(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID);
+                const targetInputId = inputId || `setting-${provider}-key`;
+                const focusProviderKey = () => document.getElementById(targetInputId)?.focus({ preventScroll: true });
+                focusProviderKey();
+                requestAnimationFrame(focusProviderKey);
+                setTimeout(focusProviderKey, 50);
             }
         },
     });
@@ -277,6 +266,10 @@ async function init() {
 
     // Listen for animate-image event from lightbox
     window.addEventListener('animate-image', handleAnimateImage);
+    window.addEventListener('media-download-summary', (event) => {
+        const { completed = 0, failed = 0 } = event.detail || {};
+        showError(`${completed} file${completed === 1 ? '' : 's'} downloaded; ${failed} failed and were skipped.`);
+    });
 
     // Subscribe to image state changes only (avoid expensive updates on selection/edit events)
     state.subscribe((action) => {
@@ -438,264 +431,6 @@ function initSettingsUI() {
 }
 
 /**
- * Initialize image upload handlers for Qwen image editing
- */
-function initImageUpload() {
-    const imageInput = document.getElementById('setting-input-image');
-    const imageLabel = document.getElementById('image-upload-label');
-    const imagePreview = document.getElementById('image-preview');
-    const imagePreviewImg = document.getElementById('image-preview-img');
-    const imageClearBtn = document.getElementById('image-preview-clear');
-
-    // Reset image data URI on re-init
-    inputImageDataUri = null;
-
-    if (!imageInput || !imageLabel || !imagePreview || !imagePreviewImg || !imageClearBtn) {
-        return;
-    }
-
-    // Handle file selection
-    imageInput.addEventListener('change', (e) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            handleImageFile(file, imageLabel, imagePreview, imagePreviewImg);
-        }
-    });
-
-    // Handle drag and drop
-    imageLabel.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        imageLabel.classList.add('image-upload__label--dragover');
-    });
-
-    imageLabel.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        imageLabel.classList.remove('image-upload__label--dragover');
-    });
-
-    imageLabel.addEventListener('drop', (e) => {
-        e.preventDefault();
-        imageLabel.classList.remove('image-upload__label--dragover');
-        const file = e.dataTransfer?.files?.[0];
-        if (file && file.type.startsWith('image/')) {
-            handleImageFile(file, imageLabel, imagePreview, imagePreviewImg);
-            // Update the input to reflect the dropped file
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(file);
-            imageInput.files = dataTransfer.files;
-        }
-    });
-
-    // Handle clear button
-    imageClearBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        clearImageUpload(imageInput, imageLabel, imagePreview, imagePreviewImg);
-    });
-}
-
-/**
- * Handle an uploaded image file
- * @param {File} file - The image file
- * @param {HTMLElement} label - The upload label element
- * @param {HTMLElement} preview - The preview container
- * @param {HTMLImageElement} previewImg - The preview image element
- */
-async function handleImageFile(file, label, preview, previewImg) {
-    if (!file.type.startsWith('image/')) {
-        showError('Please select a valid image file');
-        return;
-    }
-
-    // Limit file size to 10MB
-    if (file.size > 10 * 1024 * 1024) {
-        showError('Image file is too large (max 10MB)');
-        return;
-    }
-
-    try {
-        const dataUri = await compressImageForUpload(file);
-        if (dataUri) {
-            // Store the data URI globally
-            inputImageDataUri = dataUri;
-            // Show preview
-            previewImg.src = dataUri;
-            preview.classList.remove('image-upload__preview--hidden');
-            label.style.display = 'none';
-        }
-    } catch (error) {
-        console.error('Failed to process image:', error);
-        showError('Failed to process image file');
-    }
-}
-
-/**
- * Clear the uploaded image
- * @param {HTMLInputElement} input - The file input
- * @param {HTMLElement} label - The upload label element
- * @param {HTMLElement} preview - The preview container
- * @param {HTMLImageElement} previewImg - The preview image element
- */
-function clearImageUpload(input, label, preview, previewImg) {
-    inputImageDataUri = null;
-    input.value = '';
-    previewImg.src = '';
-    preview.classList.add('image-upload__preview--hidden');
-    label.style.display = 'flex';
-}
-
-/**
- * Initialize multi-image upload handlers for Wan v2.6 image-to-image
- */
-function initMultiImageUpload() {
-    const multiImageInput = document.getElementById('setting-multi-images');
-    const multiImageLabel = document.getElementById('multi-image-upload-label');
-    const multiImagePreviews = document.getElementById('multi-image-previews');
-
-    // Reset multi-image data URIs on re-init
-    multiImageDataUris = [];
-
-    if (!multiImageInput || !multiImageLabel || !multiImagePreviews) {
-        return;
-    }
-
-    // Handle file selection
-    multiImageInput.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files || []);
-        if (files.length > 0) {
-            handleMultipleImageFiles(files, multiImagePreviews);
-        }
-    });
-
-    // Handle drag and drop
-    multiImageLabel.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        multiImageLabel.classList.add('image-upload__label--dragover');
-    });
-
-    multiImageLabel.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        multiImageLabel.classList.remove('image-upload__label--dragover');
-    });
-
-    multiImageLabel.addEventListener('drop', (e) => {
-        e.preventDefault();
-        multiImageLabel.classList.remove('image-upload__label--dragover');
-        const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
-        if (files.length > 0) {
-            handleMultipleImageFiles(files, multiImagePreviews);
-            // Update the input
-            const dataTransfer = new DataTransfer();
-            files.forEach(file => dataTransfer.items.add(file));
-            multiImageInput.files = dataTransfer.files;
-        }
-    });
-}
-
-/**
- * Handle multiple uploaded image files
- * @param {File[]} files - The image files
- * @param {HTMLElement} previewsContainer - The previews container
- */
-async function handleMultipleImageFiles(files, previewsContainer) {
-    // Validate individual files first, filtering out invalid ones
-    const validFiles = [];
-    for (const file of files) {
-        if (!file.type.startsWith('image/')) {
-            showError('Please select valid image files only');
-            return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-            showError(`Image "${file.name}" is too large (max 10MB)`);
-            return;
-        }
-        validFiles.push(file);
-    }
-
-    // Limit to 3 images for Wan v2.6 (after validation so all files are checked)
-    if (validFiles.length > 3) {
-        showError('Maximum 3 images allowed — using first 3');
-    }
-    files = validFiles.slice(0, 3);
-
-    // Clear existing previews
-    multiImageDataUris = [];
-    previewsContainer.innerHTML = '';
-
-    // Process each file
-    for (const [index, file] of files.entries()) {
-        try {
-            const dataUri = await compressImageForUpload(file);
-            if (dataUri) {
-                multiImageDataUris.push(dataUri);
-                addMultiImagePreview(dataUri, index + 1, previewsContainer);
-            }
-        } catch (error) {
-            console.error('Failed to process image:', error);
-            showError(`Failed to process image file: ${file.name}`);
-        }
-    }
-}
-
-/**
- * Add a preview for a multi-image upload
- * @param {string} dataUri - The image data URI
- * @param {number} index - The image number (1-based)
- * @param {HTMLElement} container - The container element
- */
-function addMultiImagePreview(dataUri, index, container) {
-    const preview = document.createElement('div');
-    preview.className = 'multi-image-preview';
-    preview.dataset.index = index;
-
-    const img = document.createElement('img');
-    img.className = 'multi-image-preview__img';
-    img.src = dataUri;
-    img.alt = `Image ${index}`;
-
-    const label = document.createElement('div');
-    label.className = 'multi-image-preview__label';
-    label.textContent = `Image ${index}`;
-
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'multi-image-preview__remove';
-    removeBtn.textContent = '✕';
-    removeBtn.type = 'button';
-    removeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        removeMultiImagePreview(index, container);
-    });
-
-    preview.appendChild(img);
-    preview.appendChild(label);
-    preview.appendChild(removeBtn);
-    container.appendChild(preview);
-}
-
-/**
- * Remove a multi-image preview
- * @param {number} index - The image number (1-based)
- * @param {HTMLElement} container - The container element
- */
-function removeMultiImagePreview(index, container) {
-    // Remove from data array
-    multiImageDataUris.splice(index - 1, 1);
-
-    // Clear and rebuild previews
-    container.innerHTML = '';
-    multiImageDataUris.forEach((dataUri, i) => {
-        addMultiImagePreview(dataUri, i + 1, container);
-    });
-
-    // Update file input
-    const multiImageInput = document.getElementById('setting-multi-images');
-    if (multiImageInput && multiImageDataUris.length === 0) {
-        multiImageInput.value = '';
-    }
-}
-
-/**
  * Toggle settings panel
  */
 function toggleSettings(button, panel) {
@@ -707,39 +442,80 @@ function toggleSettings(button, panel) {
     }
 }
 
-function prioritizeMobileSettings(panel) {
-    if (!SETTINGS_MOBILE_MQ.matches || panel.dataset.mobileOrderReady === 'true') return;
+function selectSettingsTab(panel, tabId, focusTab = false) {
+    panel.querySelectorAll('[role="tab"]').forEach((tab) => {
+        const selected = tab.dataset.settingsTab === tabId;
+        tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+        tab.tabIndex = selected ? 0 : -1;
+        if (selected && focusTab) tab.focus();
+    });
+    panel.querySelectorAll('[role="tabpanel"]').forEach((tabPanel) => {
+        tabPanel.hidden = tabPanel.dataset.settingsPanel !== tabId;
+    });
+}
 
+function initSettingsTabs(panel) {
     const content = panel.querySelector('.settings-panel__content');
-    if (!(content instanceof HTMLElement)) return;
+    if (!(content instanceof HTMLElement) || content.dataset.tabbed === 'true') return;
 
-    const credentialIds = [
-        'setting-openrouter-key',
-        'setting-xai-key',
-        'setting-evolink-key',
-        'setting-app-access-token',
-    ];
-    const credentialGroups = credentialIds
-        .map((id) => document.getElementById(id)?.closest('.settings-group'))
-        .filter((group) => group instanceof HTMLElement);
+    const tabList = document.createElement('div');
+    tabList.className = 'settings-tabs';
+    tabList.setAttribute('role', 'tablist');
+    tabList.setAttribute('aria-label', 'Settings sections');
+    const panels = new Map();
+    for (const [id, label] of [['generation', 'Generation'], ['storage', 'Storage'], ['keys', 'Keys']]) {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.id = `settings-tab-${id}`;
+        tab.className = 'settings-tabs__tab';
+        tab.dataset.settingsTab = id;
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-controls', `settings-panel-${id}`);
+        tab.textContent = label;
+        tab.addEventListener('click', () => selectSettingsTab(panel, id));
+        tabList.appendChild(tab);
 
-    if (credentialGroups.length === 0) return;
+        const tabPanel = document.createElement('div');
+        tabPanel.id = `settings-panel-${id}`;
+        tabPanel.className = 'settings-tab-panel';
+        tabPanel.dataset.settingsPanel = id;
+        tabPanel.setAttribute('role', 'tabpanel');
+        tabPanel.setAttribute('aria-labelledby', tab.id);
+        panels.set(id, tabPanel);
+    }
 
-    const heading = document.createElement('div');
-    heading.className = 'settings-section-heading';
-    heading.textContent = 'Provider Keys';
-    content.appendChild(heading);
-    credentialGroups.forEach((group) => content.appendChild(group));
-    panel.dataset.mobileOrderReady = 'true';
+    const groups = Array.from(content.children);
+    const keyGroups = new Set(['setting-openrouter-key', 'setting-xai-key', 'setting-evolink-key', 'setting-app-access-token']
+        .map((id) => document.getElementById(id)?.closest('.settings-group')));
+    groups.forEach((group) => {
+        const target = keyGroups.has(group) ? 'keys'
+            : group.classList.contains('settings-group--storage') ? 'storage'
+                : 'generation';
+        panels.get(target).appendChild(group);
+    });
+
+    content.replaceChildren(tabList, ...panels.values());
+    content.dataset.tabbed = 'true';
+    tabList.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const tabs = Array.from(tabList.querySelectorAll('[role="tab"]'));
+        const current = tabs.indexOf(document.activeElement);
+        if (current < 0) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0
+            : event.key === 'End' ? tabs.length - 1
+                : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        selectSettingsTab(panel, tabs[next].dataset.settingsTab, true);
+    });
+    selectSettingsTab(panel, 'generation');
 }
 
 /**
  * Open settings panel
  */
-function openSettings(button, panel) {
+function openSettings(button, panel, tabId = 'generation') {
+    selectSettingsTab(panel, tabId);
     if (panel.classList.contains('settings-panel--active')) return;
-
-    prioritizeMobileSettings(panel);
     settingsLastFocusedElement = document.activeElement instanceof HTMLElement
         ? document.activeElement
         : button;

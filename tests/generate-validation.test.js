@@ -83,4 +83,16 @@ describe('generate validation', () => {
         assert.equal(res.statusCode, 401);
         assert.equal(res.body.code, 'EVOLINK_API_KEY_REQUIRED');
     });
+
+    it('rejects output counts outside each model catalog limit', async () => {
+        const video = makeRes();
+        await handler(makeReq({ prompt: 'test', model: 'grok-imagine-video', num_images: 2 }), video);
+        assert.equal(video.statusCode, 400);
+        assert.match(video.body.error, /between 1 and 1/);
+
+        const image = makeRes();
+        await handler(makeReq({ prompt: 'test', model: 'evolink\/z-image-turbo', num_images: 5 }), image);
+        assert.equal(image.statusCode, 400);
+        assert.match(image.body.error, /between 1 and 4/);
+    });
 });

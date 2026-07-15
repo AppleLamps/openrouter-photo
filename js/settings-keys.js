@@ -8,7 +8,7 @@ import {
     testEvolinkKey,
 } from './api.js';
 
-/** @type {(() => void) | null} */
+/** @type {((inputId?: string) => void) | null} */
 let openSettingsPanel = null;
 
 const API_KEY_FIELDS = [
@@ -90,7 +90,7 @@ const SECRET_FIELDS = [
 ];
 
 /**
- * @param {{ openSettingsPanel: () => void }} context
+ * @param {{ openSettingsPanel: (inputId?: string) => void }} context
  */
 export function initApiKeyPopupContext(context) {
     openSettingsPanel = context.openSettingsPanel;
@@ -106,7 +106,7 @@ export function initApiKeyPopupContext(context) {
  * @param {{ message?: string, url?: string } | undefined} help
  */
 export function showApiKeyPopup(config, help) {
-    openSettingsPanel?.();
+    openSettingsPanel?.(config.inputId);
 
     const keyInput = document.getElementById(config.inputId);
     if (keyInput) {
@@ -122,6 +122,7 @@ export function showApiKeyPopup(config, help) {
         existing.querySelector('.openrouter-key-modal__message').textContent = message;
         existing.querySelector('.openrouter-key-modal__link').href = url;
         existing.classList.add('openrouter-key-modal--active');
+        keyInput?.focus();
         return;
     }
 
@@ -149,30 +150,34 @@ export function showApiKeyPopup(config, help) {
     overlay.querySelector('.openrouter-key-modal__message').textContent = message;
     overlay.querySelector('.openrouter-key-modal__link').href = url;
 
-    const close = () => overlay.classList.remove('openrouter-key-modal--active');
+    const close = () => {
+        overlay.classList.remove('openrouter-key-modal--active');
+        keyInput?.focus();
+    };
     overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
     overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
     overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
 
     document.body.appendChild(overlay);
+    keyInput?.focus();
 }
 
 /** @param {{ message?: string, url?: string } | undefined} help */
 export function showOpenRouterApiKeyPopup(help) {
-    const config = API_KEY_FIELDS.find((f) => f.id === 'openrouter')?.popup;
-    if (config) showApiKeyPopup(config, help);
+    const field = API_KEY_FIELDS.find((f) => f.id === 'openrouter');
+    if (field?.popup) showApiKeyPopup({ ...field.popup, inputId: field.inputId }, help);
 }
 
 /** @param {{ message?: string, url?: string } | undefined} help */
 export function showXaiApiKeyPopup(help) {
-    const config = API_KEY_FIELDS.find((f) => f.id === 'xai')?.popup;
-    if (config) showApiKeyPopup(config, help);
+    const field = API_KEY_FIELDS.find((f) => f.id === 'xai');
+    if (field?.popup) showApiKeyPopup({ ...field.popup, inputId: field.inputId }, help);
 }
 
 /** @param {{ message?: string, url?: string } | undefined} help */
 export function showEvolinkApiKeyPopup(help) {
-    const config = API_KEY_FIELDS.find((f) => f.id === 'evolink')?.popup;
-    if (config) showApiKeyPopup(config, help);
+    const field = API_KEY_FIELDS.find((f) => f.id === 'evolink');
+    if (field?.popup) showApiKeyPopup({ ...field.popup, inputId: field.inputId }, help);
 }
 
 function readStorage(key) {

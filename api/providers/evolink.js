@@ -1,13 +1,7 @@
 const { redactKey } = require('../_middleware');
 const { getEvolinkConfig, getModelPricing } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
-
-// Evolink task polling budget. `api/generate.js` has a 120s `maxDuration` (see vercel.json);
-// keep this comfortably below that so a slow-but-successful generation gets a real result
-// instead of the platform killing the function mid-poll (which would surface as a bare 504
-// with no JSON body). Leaves ~15s of headroom for upload/setup/response overhead.
-const EVOLINK_POLL_BUDGET_MS = 105000;
-const EVOLINK_POLL_INTERVAL_MS = 2000;
+const { buildEvolinkProxyUrl } = require('./evolink-task');
 
 const EVOLINK_SEEDREAM_ASPECT_RATIOS = new Set(['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
 const Z_IMAGE_TURBO_ASPECT_RATIOS = new Set(['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '1:2', '2:1']);
@@ -30,43 +24,6 @@ function getEvolinkImageCostPerImage(model) {
         return price.amount;
     }
     return 0;
-}
-
-function buildEvolinkProxyUrl(url) {
-    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
-}
-
-function toEvolinkImage(url, model, cost) {
-    return {
-        url: buildEvolinkProxyUrl(url),
-        source_url: url,
-        sourceUrl: url,
-        model,
-        cost,
-        provider: 'evolink',
-    };
-}
-
-function extractEvolinkResults(data) {
-    const candidates = [
-        data?.results,
-        data?.data?.results,
-        data?.output,
-        data?.data?.output,
-        data?.images,
-        data?.data?.images,
-    ];
-    for (const value of candidates) {
-        if (Array.isArray(value)) {
-            return value
-                .map((item) => {
-                    if (typeof item === 'string') return item;
-                    return item?.url || item?.image_url || item?.file_url || null;
-                })
-                .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url));
-        }
-    }
-    return [];
 }
 
 function normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault) {
@@ -150,7 +107,6 @@ async function handleEvolink(ctx) {
         return res.status(500).json({ error: 'Evolink model configuration is missing' });
     }
 
-    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const evolinkHeaders = {
         Authorization: `Bearer ${evolinkKey}`,
         'Content-Type': 'application/json',
@@ -186,64 +142,7 @@ async function handleEvolink(ctx) {
         return fileUrl;
     };
 
-    const pollEvolinkTask = async (taskId) => {
-        const deadline = Date.now() + EVOLINK_POLL_BUDGET_MS;
-        for (let attempt = 0; Date.now() < deadline; attempt++) {
-            if (attempt > 0) await delay(EVOLINK_POLL_INTERVAL_MS);
-
-            const taskResponse = await fetch(`https://api.evolink.ai/v1/tasks/${encodeURIComponent(taskId)}`, {
-                headers: { Authorization: `Bearer ${evolinkKey}` },
-            });
-
-            if (!taskResponse.ok) {
-                const errorText = await taskResponse.text();
-                return {
-                    error: {
-                        status: taskResponse.status,
-                        payload: formatEvolinkError(errorText, 'Failed to retrieve Evolink task status'),
-                    },
-                };
-            }
-
-            const taskData = await taskResponse.json();
-            const status = String(taskData?.status || taskData?.data?.status || '').toLowerCase();
-
-            if (status === 'completed') {
-                const results = extractEvolinkResults(taskData);
-                if (results.length === 0) {
-                    return {
-                        error: {
-                            status: 502,
-                            payload: { error: 'Evolink completed without returning image URLs' },
-                        },
-                    };
-                }
-                return {
-                    results,
-                    taskData,
-                };
-            }
-
-            if (status === 'failed') {
-                const taskError = taskData?.error || taskData?.data?.error;
-                return {
-                    error: {
-                        status: 502,
-                        payload: formatEvolinkError(JSON.stringify(taskError || taskData), 'Evolink image generation failed'),
-                    },
-                };
-            }
-        }
-
-        return {
-            error: {
-                status: 504,
-                payload: { error: 'Evolink image generation timed out. Please try again.' },
-            },
-        };
-    };
-
-    const createAndPollTask = async (payload) => {
+    const createTask = async (payload, index) => {
         const createResponse = await fetch('https://api.evolink.ai/v1/images/generations', {
             method: 'POST',
             headers: evolinkHeaders,
@@ -257,6 +156,7 @@ async function handleEvolink(ctx) {
                     status: createResponse.status,
                     payload: formatEvolinkError(errorText, 'Failed to start image generation via Evolink'),
                 },
+                index,
             };
         }
 
@@ -268,17 +168,13 @@ async function handleEvolink(ctx) {
                     status: 502,
                     payload: { error: 'Evolink request did not return a task ID' },
                 },
+                index,
             };
         }
-
-        const pollResult = await pollEvolinkTask(taskId);
-        if (pollResult.error) return pollResult;
-
         return {
-            results: pollResult.results,
             createData,
-            taskData: pollResult.taskData,
             taskId,
+            index,
         };
     };
 
@@ -289,96 +185,75 @@ async function handleEvolink(ctx) {
             ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
             : [];
 
-        if (variant === 'z-image-turbo') {
-            const allResults = [];
-            const requestMeta = [];
-
-            const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, () => {
-                const payload = buildZImageTurboPayload({
+        const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, (_, index) => {
+            const payload = variant === 'z-image-turbo'
+                ? buildZImageTurboPayload({ apiModel, prompt, normalizedAspectRatio })
+                : buildSeedreamPayload({
                     apiModel,
                     prompt,
+                    parsedNumImages: 1,
                     normalizedAspectRatio,
+                    exactImageSize,
+                    resolution,
+                    uploadedImageUrls,
+                    qualityOptions,
+                    qualityDefault,
+                    outputFormat: output_format,
+                    outputFormatOptions,
+                    enableWebSearch: enable_web_search === true,
                 });
-                return createAndPollTask(payload);
-            }));
-
-            for (const taskResult of taskResults) {
-                if (taskResult.error) {
-                    return res.status(taskResult.error.status).json(taskResult.error.payload);
-                }
-
-                allResults.push(...taskResult.results.slice(0, 1));
-                requestMeta.push({
-                    model,
-                    provider_name: 'evolink',
-                    generation_id: taskResult.taskId,
-                    created_at: taskResult.taskData?.created || taskResult.createData?.created || null,
-                    usage: costPerImage,
-                    credits_reserved: taskResult.createData?.usage?.credits_reserved || null,
-                    imageCount: 1,
-                    usage_pending: false,
-                });
-            }
-
-            return res.status(200).json({
-                images: allResults.map((url) => ({
-                    ...toEvolinkImage(url, model, costPerImage),
-                })),
-                meta: {
-                    total_usage: requestMeta.reduce((sum, req) => sum + (req.usage || 0), 0),
-                    requests: requestMeta,
-                    usage_pending: false,
-                },
-            });
-        }
-
-        const allResults = [];
-        const requestMeta = [];
-
-        const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, () => {
-            const payload = buildSeedreamPayload({
-                apiModel,
-                prompt,
-                parsedNumImages: 1,
-                normalizedAspectRatio,
-                exactImageSize,
-                resolution,
-                uploadedImageUrls,
-                qualityOptions,
-                qualityDefault,
-                outputFormat: output_format,
-                outputFormatOptions,
-                enableWebSearch: enable_web_search === true,
-            });
-            return createAndPollTask(payload);
+            return createTask(payload, index);
         }));
 
-        for (const taskResult of taskResults) {
-            if (taskResult.error) {
-                return res.status(taskResult.error.status).json(taskResult.error.payload);
-            }
+        const requests = taskResults
+            .filter((result) => !result.error)
+            .map((result) => ({
+                index: result.index,
+                request_id: result.taskId,
+                estimated_cost: costPerImage,
+                credits_reserved: result.createData?.usage?.credits_reserved || null,
+                usage_estimated: false,
+            }));
+        const errors = taskResults
+            .filter((result) => result.error)
+            .map((result) => ({
+                index: result.index,
+                error: result.error.payload?.details || result.error.payload?.error || 'Failed to start Evolink image task',
+            }));
 
-            allResults.push(...taskResult.results.slice(0, 1));
-            requestMeta.push({
-                model,
-                provider_name: 'evolink',
-                generation_id: taskResult.taskId,
-                created_at: taskResult.taskData?.created || taskResult.createData?.created || null,
-                usage: costPerImage,
-                credits_reserved: taskResult.createData?.usage?.credits_reserved || null,
-                imageCount: 1,
-                usage_pending: false,
-            });
+        if (requests.length === 0) {
+            const firstError = taskResults.find((result) => result.error)?.error;
+            return res.status(firstError?.status || 502).json(firstError?.payload || { error: 'Failed to start Evolink image generation' });
         }
 
-        return res.status(200).json({
-            images: allResults.map((url) => toEvolinkImage(url, model, costPerImage)),
+        const response = {
+            status: 'pending',
+            provider: 'evolink',
+            model,
+            media_type: 'image',
+            requests,
             meta: {
-                total_usage: requestMeta.reduce((sum, req) => sum + (req.usage || 0), 0),
-                requests: requestMeta,
-                usage_pending: false,
+                total_usage: requests.reduce((sum, request) => sum + request.estimated_cost, 0),
+                usage_pending: true,
+                requests: requests.map((request) => ({
+                    model,
+                    provider_name: 'evolink',
+                    generation_id: request.request_id,
+                    usage: request.estimated_cost,
+                    imageCount: 0,
+                    delivered_count: 0,
+                    usage_pending: true,
+                    usage_estimated: false,
+                    media_type: 'image',
+                })),
             },
-        });
+            ...(errors.length > 0 ? { errors } : {}),
+        };
+        if (requests.length === 1 && errors.length === 0) {
+            response.request_id = requests[0].request_id;
+            response.estimated_cost = requests[0].estimated_cost;
+        }
+        return res.status(202).json(response);
     } catch (error) {
         if (error?.payload) {
             return res.status(error.status || 502).json(error.payload);

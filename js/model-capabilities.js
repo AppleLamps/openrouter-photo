@@ -93,6 +93,14 @@ export function getInputConstraints(modelId) {
     return resolveCapabilities(modelId).input || {};
 }
 
+export function getOutputConstraints(modelId) {
+    const output = resolveCapabilities(modelId).output || {};
+    return {
+        maxImages: Number.isInteger(output.maxImages) ? output.maxImages : 4,
+        defaultImages: Number.isInteger(output.defaultImages) ? output.defaultImages : 2,
+    };
+}
+
 export function isAsyncModel(modelId) {
     return Boolean(resolveCapabilities(modelId).async);
 }

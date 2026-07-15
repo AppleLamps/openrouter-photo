@@ -99,10 +99,21 @@ describe('frontend hardening', () => {
     it('replaces the composer with a safe mobile selection toolbar in edit mode', () => {
         const gallery = read('js/gallery.js');
         const styles = read('css/gallery.css');
+        const actionBar = gallery.slice(
+            gallery.indexOf('function updateEditModeActionBar()'),
+            gallery.indexOf('function initGallery'),
+        );
 
         assert.match(gallery, /classList\.toggle\('is-gallery-edit-mode', state\.editMode\)/);
         assert.match(styles, /body\.is-gallery-edit-mode \.input-bar\s*\{[^}]*visibility: hidden;/s);
         assert.match(styles, /\.edit-mode-action-bar\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/s);
+        assert.doesNotMatch(actionBar, /\bfailures\b|\bfiles\.length\b/);
+    });
+
+    it('preserves model-specific switches during same-model UI refreshes', () => {
+        const picker = read('js/model-picker.js');
+        assert.match(picker, /if \(activeSettingsModel\) \{\s*modelSettings\.set\(activeSettingsModel,/);
+        assert.doesNotMatch(picker, /activeSettingsModel && activeSettingsModel !== model/);
     });
 
     it('uses a focus-managed full-screen settings sheet on mobile', () => {
@@ -114,8 +125,9 @@ describe('frontend hardening', () => {
         assert.match(html, /aria-controls="settings-panel" aria-expanded="false"/);
         assert.match(app, /panel\.setAttribute\('aria-modal', 'true'\)/);
         assert.match(app, /event\.key !== 'Tab' \|\| !SETTINGS_MOBILE_MQ\.matches/);
-        assert.match(app, /function prioritizeMobileSettings\(panel\)/);
-        assert.match(app, /heading\.textContent = 'Provider Keys'/);
+        assert.match(app, /function initSettingsTabs\(panel\)/);
+        assert.match(app, /\['generation', 'Generation'\], \['storage', 'Storage'\], \['keys', 'Keys'\]/);
+        assert.match(app, /setAttribute\('role', 'tabpanel'\)/);
         assert.match(styles, /\.settings-panel\s*\{[^}]*height: 100dvh;[^}]*max-height: none;/s);
     });
 

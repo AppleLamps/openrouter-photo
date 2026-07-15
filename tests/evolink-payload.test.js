@@ -237,15 +237,7 @@ describe('evolink payload builders', () => {
 
     it('runs requested Seedream image tasks concurrently', async () => {
         const createBodies = [];
-        const taskUrls = [
-            'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream/a.jpeg',
-            'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream/b.jpeg',
-        ];
         let createCount = 0;
-        let releaseTaskPolls;
-        const taskPollBarrier = new Promise((resolve) => {
-            releaseTaskPolls = resolve;
-        });
 
         global.fetch = async (url, options = {}) => {
             if (url === 'https://api.evolink.ai/v1/images/generations') {
@@ -258,23 +250,11 @@ describe('evolink payload builders', () => {
                 };
             }
 
-            if (String(url).startsWith('https://api.evolink.ai/v1/tasks/task-')) {
-                const taskIndex = Number(String(url).split('task-')[1]) - 1;
-                await taskPollBarrier;
-                return {
-                    ok: true,
-                    json: async () => ({
-                        status: 'completed',
-                        data: { images: [taskUrls[taskIndex]] },
-                    }),
-                };
-            }
-
             throw new Error(`Unexpected fetch: ${url}`);
         };
 
         const res = makeRes();
-        const request = handleEvolink({
+        await handleEvolink({
             res,
             model: 'evolink/doubao-seedream-4.5',
             prompt: 'a city at night',
@@ -284,19 +264,12 @@ describe('evolink payload builders', () => {
             normalizedInputImages: [],
             evolinkKey: 'evolink-test-key',
         });
-        await new Promise((resolve) => setImmediate(resolve));
-        const tasksStartedBeforeAnyCompleted = createBodies.length;
-        releaseTaskPolls();
-        await request;
-
-        assert.equal(res.statusCode, 200);
-        assert.equal(tasksStartedBeforeAnyCompleted, 2);
+        assert.equal(res.statusCode, 202);
         assert.equal(createBodies.length, 2);
         assert.deepEqual(createBodies.map((body) => body.n), [1, 1]);
-        assert.equal(res.body.images.length, 2);
-        assert.deepEqual(res.body.images.map((image) => image.source_url), taskUrls);
-        assert.ok(res.body.images.every((image) => image.url.startsWith('/api/image-proxy?url=')));
-        assert.equal(res.body.meta.requests.length, 2);
+        assert.deepEqual(res.body.requests.map((request) => request.request_id), ['task-1', 'task-2']);
+        assert.equal(res.body.status, 'pending');
+        assert.equal(res.body.media_type, 'image');
     });
 
     it('runs Seedream 5 Lite through the documented async task contract', async () => {
@@ -305,8 +278,6 @@ describe('evolink payload builders', () => {
             'https://files-api.evolink.ai/files/ref-a.png',
             'https://files-api.evolink.ai/files/ref-b.png',
         ];
-        const resultUrl = 'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream5/out.jpeg';
-        const polledTaskUrls = [];
         let uploadCount = 0;
 
         global.fetch = async (url, options = {}) => {
@@ -337,22 +308,6 @@ describe('evolink payload builders', () => {
                 };
             }
 
-            if (String(url).startsWith('https://api.evolink.ai/v1/tasks/')) {
-                polledTaskUrls.push(String(url));
-                return {
-                    ok: true,
-                    json: async () => ({
-                        id: 'task-unified-1757165031-seedream5lite',
-                        model: 'doubao-seedream-5.0-lite',
-                        object: 'image.generation.task',
-                        progress: 100,
-                        results: [resultUrl],
-                        status: 'completed',
-                        type: 'image',
-                    }),
-                };
-            }
-
             throw new Error(`Unexpected fetch: ${url}`);
         };
 
@@ -372,7 +327,7 @@ describe('evolink payload builders', () => {
             evolinkKey: 'evolink-test-key',
         });
 
-        assert.equal(res.statusCode, 200);
+        assert.equal(res.statusCode, 202);
         assert.equal(uploadCount, 2);
         assert.deepEqual(createBodies, [{
             model: 'doubao-seedream-5.0-lite',
@@ -386,11 +341,7 @@ describe('evolink payload builders', () => {
                 tools: [{ type: 'web_search' }],
             },
         }]);
-        assert.deepEqual(polledTaskUrls, [
-            'https://api.evolink.ai/v1/tasks/task-unified-1757165031-seedream5lite',
-        ]);
-        assert.equal(res.body.images.length, 1);
-        assert.equal(res.body.images[0].source_url, resultUrl);
-        assert.equal(res.body.meta.requests[0].generation_id, 'task-unified-1757165031-seedream5lite');
+        assert.equal(res.body.request_id, 'task-unified-1757165031-seedream5lite');
+        assert.equal(res.body.requests[0].request_id, 'task-unified-1757165031-seedream5lite');
     });
 });

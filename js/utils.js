@@ -109,7 +109,7 @@ export function formatDate(timestamp) {
 export async function downloadImage(url, filename) {
     try {
         const response = await fetch(url);
-        const blob = await response.blob();
+        const blob = await responseToMediaBlob(response);
         const blobUrl = URL.createObjectURL(blob);
 
         const link = document.createElement('a');
@@ -120,11 +120,24 @@ export async function downloadImage(url, filename) {
         document.body.removeChild(link);
 
         URL.revokeObjectURL(blobUrl);
+        return true;
     } catch (error) {
         console.error('Failed to download image:', error);
         // Fallback: open in new tab
         window.open(url, '_blank');
+        return false;
     }
+}
+
+export async function responseToMediaBlob(response) {
+    if (!response?.ok) throw new Error(`Download failed with HTTP ${response?.status || 'unknown'}.`);
+    const contentType = (response.headers?.get('content-type') || '').toLowerCase();
+    if (contentType.includes('application/json') || contentType.startsWith('text/')) {
+        throw new Error('The source returned an error document instead of media.');
+    }
+    const blob = await response.blob();
+    if (!blob.size) throw new Error('The downloaded media was empty.');
+    return blob;
 }
 
 /**

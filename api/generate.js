@@ -10,6 +10,7 @@ const {
     getMaxInputImages,
     getApiKey,
     getInputConstraints,
+    getOutputConstraints,
 } = require('./model-catalog');
 const {
     normalizeInputImages,
@@ -97,8 +98,9 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     const parsedNumImages = parseInt(num_images, 10);
-    if (!Number.isInteger(parsedNumImages) || parsedNumImages < 1 || parsedNumImages > 4) {
-        return res.status(400).json({ error: '`num_images` must be an integer between 1 and 4' });
+    const maxOutputImages = getOutputConstraints(model).maxImages;
+    if (!Number.isInteger(parsedNumImages) || parsedNumImages < 1 || parsedNumImages > maxOutputImages) {
+        return res.status(400).json({ error: `\`num_images\` must be an integer between 1 and ${maxOutputImages}` });
     }
 
     const exactSizeResult = normalizeExactImageSize(model, image_size);

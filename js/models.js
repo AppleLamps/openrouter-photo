@@ -20,6 +20,7 @@ export {
     getMaxInputImages,
     requiresInputImage,
     getInputConstraints,
+    getOutputConstraints,
     isAsyncModel,
     getOpenRouterConfig,
     getModelPricing,

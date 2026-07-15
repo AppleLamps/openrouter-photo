@@ -81,6 +81,14 @@ function getInputConstraints(modelId) {
     return resolveCapabilities(modelId).input || {};
 }
 
+function getOutputConstraints(modelId) {
+    const output = resolveCapabilities(modelId).output || {};
+    return {
+        maxImages: Number.isInteger(output.maxImages) ? output.maxImages : 4,
+        defaultImages: Number.isInteger(output.defaultImages) ? output.defaultImages : 2,
+    };
+}
+
 function isXaiModel(modelId) {
     return getBackend(modelId) === 'xai';
 }
@@ -147,6 +155,7 @@ module.exports = {
     getMaxInputImages,
     requiresInputImage,
     getInputConstraints,
+    getOutputConstraints,
     isXaiModel,
     isEvolinkModel,
     isEvolinkVideoModel,

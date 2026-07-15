@@ -14,6 +14,7 @@ import {
     normalizeModelId,
     getUiCapabilities,
     getInputConstraints,
+    getOutputConstraints,
 } from './models.js';
 
 /**
@@ -150,6 +151,8 @@ function createDropdown(config) {
 
 let modelDropdown = null;
 let numImagesDropdown = null;
+const modelSettings = new Map();
+let activeSettingsModel = null;
 
 export function syncNumImagesDropdownUI() {
     if (numImagesDropdown) {
@@ -185,7 +188,12 @@ function createModelPicker() {
 
     const syncTriggerLabel = () => {
         trigger.textContent = getTriggerLabel(hidden.value);
-        trigger.title = hidden.value || 'Select model';
+        const selected = PICKER_MODELS.find((model) => model.id === hidden.value);
+        const fullLabel = selected
+            ? `${selected.name}, ${selected.provider}${selected.via ? ` via ${selected.via}` : ''}`
+            : hidden.value || 'Select model';
+        trigger.title = fullLabel;
+        trigger.setAttribute('aria-label', fullLabel);
     };
 
     tabsEl.innerHTML = '';
@@ -195,12 +203,14 @@ function createModelPicker() {
         btn.className = 'model-picker__tab';
         btn.dataset.tab = tab.id;
         btn.setAttribute('role', 'tab');
+        btn.tabIndex = tab.id === activeTab ? 0 : -1;
         btn.textContent = tab.label;
         if (tab.id === activeTab) btn.setAttribute('aria-selected', 'true');
         btn.addEventListener('click', () => {
             activeTab = tab.id;
             tabsEl.querySelectorAll('.model-picker__tab').forEach(t => {
                 t.setAttribute('aria-selected', t === btn ? 'true' : 'false');
+                t.tabIndex = t === btn ? 0 : -1;
             });
             renderList();
         });
@@ -312,6 +322,7 @@ function createModelPicker() {
     };
 
     const close = () => {
+        const wasOpen = dropdown.classList.contains('is-open');
         dropdown.classList.remove('is-open');
         document.body.classList.remove('model-picker-open');
         trigger.setAttribute('aria-expanded', 'false');
@@ -319,6 +330,7 @@ function createModelPicker() {
             menu.classList.remove('model-picker--open');
             dropdown.appendChild(menu);
         }
+        if (wasOpen) trigger.focus({ preventScroll: true });
     };
 
     const open = () => {
@@ -355,8 +367,49 @@ function createModelPicker() {
         if (e.key === 'Enter') {
             const first = listEl.querySelector('.model-picker__row');
             if (first instanceof HTMLElement) first.click();
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            listEl.querySelector('.model-picker__row')?.focus();
         } else if (e.key === 'Escape') {
             close();
+        }
+    });
+
+    tabsEl.addEventListener('keydown', (e) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+        const tabs = Array.from(tabsEl.querySelectorAll('.model-picker__tab'));
+        const current = tabs.indexOf(document.activeElement);
+        if (current < 0) return;
+        e.preventDefault();
+        const next = e.key === 'Home' ? 0
+            : e.key === 'End' ? tabs.length - 1
+                : (current + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        tabs[next].click();
+        tabs[next].focus();
+    });
+
+    listEl.addEventListener('keydown', (e) => {
+        if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) return;
+        const rows = Array.from(listEl.querySelectorAll('.model-picker__row'));
+        const current = rows.indexOf(document.activeElement);
+        if (current < 0) return;
+        e.preventDefault();
+        if (e.key === 'Enter') rows[current].click();
+        else rows[(current + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length]?.focus();
+    });
+
+    menu.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab' || menu.parentElement !== document.body) return;
+        const focusable = Array.from(menu.querySelectorAll('button:not([disabled]), input:not([disabled])'));
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
         }
     });
 
@@ -645,7 +698,26 @@ export function updateSettingsForModel(model) {
     const promptInput = document.getElementById('prompt-input');
     const attachmentButton = document.getElementById('prompt-image-btn');
 
+    if (activeSettingsModel) {
+        modelSettings.set(activeSettingsModel, {
+            generateAudio: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
+            webSearch: webSearchSwitch instanceof HTMLInputElement ? webSearchSwitch.checked : true,
+        });
+    }
+
     const ui = getUiCapabilities(model);
+    const output = getOutputConstraints(model);
+    const numImagesDropdownEl = document.getElementById('num-images-dropdown');
+    const numImagesInput = document.getElementById('setting-num-images');
+
+    numImagesDropdownEl?.classList.toggle('settings-group--hidden', output.maxImages === 1);
+    if (numImagesInput instanceof HTMLInputElement) {
+        const current = Number.parseInt(numImagesInput.value, 10);
+        numImagesInput.value = String(output.maxImages === 1
+            ? 1
+            : Math.min(Math.max(Number.isInteger(current) ? current : output.defaultImages, 1), output.maxImages));
+        syncNumImagesDropdownUI();
+    }
 
     syncImageResolutionOptions(model);
     syncAspectRatioOptions(model);
@@ -681,12 +753,14 @@ export function updateSettingsForModel(model) {
     }
     updateExactSizeVisibility();
 
+    const remembered = modelSettings.get(model);
     if (ui.generateAudio && generateAudioSwitch instanceof HTMLInputElement) {
-        generateAudioSwitch.checked = true;
+        generateAudioSwitch.checked = remembered?.generateAudio ?? true;
     }
     if (ui.webSearch && webSearchSwitch instanceof HTMLInputElement) {
-        webSearchSwitch.checked = true;
+        webSearchSwitch.checked = remembered?.webSearch ?? true;
     }
+    activeSettingsModel = model;
 }
 
 export function initModelPicker() {

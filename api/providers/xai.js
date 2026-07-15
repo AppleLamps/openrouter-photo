@@ -123,7 +123,17 @@ async function handleXai(ctx) {
                 })),
                 meta: {
                     total_usage: totalCost,
-                    requests: [],
+                    requests: [{
+                        model,
+                        provider_name: 'xai',
+                        generation_id: data?.id || data?.request_id || null,
+                        usage: totalCost,
+                        imageCount: actualCount,
+                        delivered_count: actualCount,
+                        usage_pending: false,
+                        usage_estimated: false,
+                        media_type: 'image',
+                    }],
                     usage_pending: false,
                 },
             });
@@ -188,11 +198,35 @@ async function handleXai(ctx) {
             const outputVideoCost = normalizedDuration * (pricing.perSecondOutput || 0.05);
             const videoCost = outputVideoCost + inputImageCost;
 
+            const request = {
+                index: 0,
+                request_id: requestId,
+                estimated_cost: videoCost,
+                usage_estimated: true,
+            };
             return res.status(202).json({
                 status: 'pending',
                 request_id: requestId,
+                provider: 'xai',
                 model,
+                media_type: 'video',
                 estimated_cost: videoCost,
+                requests: [request],
+                meta: {
+                    total_usage: videoCost,
+                    usage_pending: true,
+                    requests: [{
+                        model,
+                        provider_name: 'xai',
+                        generation_id: requestId,
+                        usage: videoCost,
+                        imageCount: 0,
+                        delivered_count: 0,
+                        usage_pending: true,
+                        usage_estimated: true,
+                        media_type: 'video',
+                    }],
+                },
             });
         }
     } catch (error) {

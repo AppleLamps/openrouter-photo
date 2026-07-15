@@ -31,3 +31,6 @@ node_modules/
 # Playwright browser artifacts
 .playwright-cli/
 .playwright-mcp/
+
+# Local CodeGraph index
+.codegraph/

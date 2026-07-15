@@ -27,7 +27,7 @@ describe('vercel config', () => {
         assert.equal(config.framework, null);
         assert.equal(config.builds, undefined);
         assert.equal(config.fluid, true);
-        assert.ok(config.functions['api/generate.js'].maxDuration >= 120);
+        assert.equal(config.functions['api/generate.js'].maxDuration, 120);
     });
 
     it('has the social share image referenced by index.html', () => {

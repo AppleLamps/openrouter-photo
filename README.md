@@ -1,6 +1,6 @@
 # AI Image & Video Generator
 
-A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports **17 models** across OpenRouter, xAI, and Evolink.
+A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports **19 models** across OpenRouter, xAI, and Evolink.
 
 ![No Build Tools](https://img.shields.io/badge/Build-None%20Required-green)
 ![Vercel Ready](https://img.shields.io/badge/Deploy-Vercel-black)
@@ -12,16 +12,17 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 ### Image & Video Generation
 
-- **Multi-Model Support** — 17 catalog-driven models (13 image, 1 edit, 3 video)
+- **Multi-Model Support** — 19 catalog-driven models (14 image, 1 edit, 4 video)
 - **Batch Generation** — Create 1–4 images per request (video models produce 1)
 - **Configurable Output** — Aspect ratio, resolution, video length/quality, and model-specific options from the catalog
-- **Video Generation** — Text-to-video via xAI Grok and Evolink Seedance 2.0; image-to-video via Evolink Seedance 2.0
+- **Video Generation** — Text-to-video via xAI Grok and Evolink Seedance 2.0; image-to-video via Evolink Seedance 2.0 and HappyHorse 1.0
 - **Audio in Videos** — Evolink Seedance 2.0 supports generated audio
+- **Resilient Async Tasks** — Evolink images and all videos poll independently, preserve partial successes, and allow per-task retry
 
 ### Image Editing
 
-- **Reference Images** — Attach up to 4 images for editing, variations, or video start/end frames
-- **Auto Compression** — Large uploads automatically compressed (1024px max, JPEG 85%)
+- **Reference Images** — Attach up to 10 images, subject to the selected model's catalog limit
+- **Auto Compression** — Accepted uploads are processed sequentially and re-encoded at up to 768px, JPEG 75%
 - **Model Interpretation** — Describe changes and let compatible edit models apply them
 - **Image-to-Video** — Use attached images as start frame (and optional end frame) for I2V models
 
@@ -48,7 +49,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 - **Keyboard Shortcuts** — Quick actions without mouse
 - **Touch Gestures** — Swipe-to-close lightbox on mobile
-- **PWA Support** — Install as standalone app on any device
+- **PWA Support** — Install as a standalone app and reload the cached application shell offline
 - **Persistent Storage** — IndexedDB with localStorage fallback
 - **Zero Build** — No bundlers, transpilers, or build steps required
 
@@ -63,11 +64,12 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 | **Black Forest Labs** | Flux 2 Pro / Max / Flex | Image | OpenRouter |
 | **Google** | Gemini 3 Pro Image, Gemini 2.5 Flash Image | Image | OpenRouter |
 | **OpenAI** | GPT-5 Image, GPT-5 Image Mini | Image | OpenRouter |
-| **ByteDance** | Seedream 4.5 (OpenRouter + Evolink), Seedream 4.5 Edit, Seedream 5 Lite, Seedance 2.0 (T2V + I2V) | Image, Edit, Video | OpenRouter / Evolink |
+| **ByteDance** | Seedream 4.5 (OpenRouter + Evolink), Seedream 4.5 Edit, Seedream 5 Lite, Seedream 5.0 Pro, Seedance 2.0 (T2V + I2V) | Image, Edit, Video | OpenRouter / Evolink |
 | **Tongyi** | Z Image Turbo | Image | Evolink |
+| **HappyHorse** | HappyHorse 1.0 | Image-to-Video | Evolink |
 | **xAI** | Grok Image, Grok Image Quality, Grok Video | Image, Video | xAI |
 
-**Totals:** 17 models — 8 OpenRouter, 6 Evolink (4 image + 2 video), 3 xAI. By type: 13 image, 1 edit, 3 video (2 text-to-video, 1 image-to-video).
+**Totals:** 19 models — 8 OpenRouter, 8 Evolink (5 image + 3 video), 3 xAI. By type: 14 image, 1 edit, 4 video (2 text-to-video, 2 image-to-video).
 
 ---
 
@@ -90,19 +92,22 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 │   ├── model-catalog.js      # Backend catalog mirror (CJS)
 │   ├── enhance.js            # Prompt enhancement (xAI)
 │   ├── random-prompt.js      # AI random prompt generation
-│   ├── video-status.js       # Async video job polling (xAI + Evolink)
+│   ├── generation-status.js  # Generic async image/video task status
+│   ├── video-status.js       # Backward-compatible status alias
 │   ├── test-key.js           # API key validation endpoints
 │   └── providers/            # Provider-specific handlers
 │       ├── openrouter.js
 │       ├── xai.js
 │       ├── evolink.js        # Evolink image (Seedream, Z Image Turbo)
 │       ├── evolink-video.js  # Evolink Seedance 2.0 video (T2V + I2V)
+│       ├── evolink-task.js   # Shared Evolink task-result helpers
 │       └── format-errors.js
 ├── shared/
 │   └── model-catalog.json    # Single source of truth for all models
 ├── js/
 │   ├── app.js                # Main entry — orchestration & wiring
 │   ├── generation-controller.js
+│   ├── generation-polling.js # Adaptive multi-task polling and accounting metadata
 │   ├── model-picker.js
 │   ├── spend-tracker.js
 │   ├── model-capabilities.js # Frontend catalog resolver
@@ -117,6 +122,9 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 │   ├── model-catalog.test.js
 │   ├── generate-routing.test.js
 │   ├── evolink-payload.test.js
+│   ├── generation-status.test.js
+│   ├── generation-polling.test.js
+│   ├── pwa-assets.test.js
 │   └── ui-capabilities.test.js
 ├── css/                      # base, layout, components, gallery
 ├── index.html
@@ -134,7 +142,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 - API key for at least one provider:
   - [OpenRouter](https://openrouter.ai/keys) — FLUX, Gemini, GPT-5, Seedream (OR)
   - [xAI](https://console.x.ai) — Grok image and video models
-  - [Evolink](https://evolink.ai/dashboard/keys) — Seedream 4.5/5 Lite, Z Image Turbo, and Seedance 2.0 video
+  - [Evolink](https://evolink.ai/dashboard/keys) — Seedream, Z Image Turbo, Seedance 2.0, and HappyHorse models
 
 ### Local Development
 
@@ -174,7 +182,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 npm test
 ```
 
-Tests cover catalog integrity, provider routing, Evolink payload shapes, and UI capability flags. CI runs on every push via GitHub Actions.
+Tests cover catalog integrity, provider routing and payloads, async status/polling, download validation, PWA startup assets, accounting, and UI capabilities. CI runs on every push via GitHub Actions.
 
 ### Deploy to Vercel
 
@@ -199,13 +207,14 @@ npx vercel --prod
 3. Select a model from the dropdown (search and filter by Image / Edit / Video tabs)
 4. Choose the number of images (1–4; video models always produce 1)
 5. Click the send button or press **Enter** to generate
-6. Click any thumbnail to view full-size with download option; videos play inline
+6. Async cards update independently; completed media is kept if another task fails or is cancelled
+7. Click any thumbnail to view full-size with download option; videos play inline
 
 ### Image Attachments
 
 1. Click the attachment button or drag-and-drop images onto the input
-2. Attach up to 4 reference images (8 MB max each)
-3. Images are automatically compressed if too large
+2. Attach up to 10 reference images (8 MB max each); the selected model may allow fewer
+3. Accepted images are compressed sequentially before upload; progress is announced in the composer
 4. Describe the changes you want applied
 5. Generate with a compatible edit model (Seedream 4.5 Edit, GPT-5, Gemini, etc.)
 
@@ -236,18 +245,18 @@ npx vercel --prod
 
 ## Settings Reference
 
-| Setting | Description | Options |
-| --- | --- | --- |
-| **OpenRouter API Key** | Key for OpenRouter-backed models | Text input with show/hide toggle |
-| **xAI API Key** | Key for Grok image/video models | Text input with show/hide toggle |
-| **Evolink API Key** | Key for Evolink-hosted models (Seedream, Z Image Turbo, Seedance 2.0 video) | Text input with show/hide toggle |
-| **Aspect Ratio** | Output dimensions (where supported) | 1:1, 4:3, 3:4, 16:9, 9:16, 3:2, 2:3, 21:9, 9:21 |
-| **Resolution** | Output resolution (Gemini, Evolink Seedream, xAI) | 1K, 2K, 3K, 4K (model-dependent) |
-| **Video Length** | Duration for video models | Model-dependent (e.g. 4–15 s Seedance, 1–15 s xAI) |
-| **Video Quality** | Resolution for video models | 480p, 720p, 1080p |
-| **Photo Visibility** | Controls "All Photos" gallery behavior | Show all photos / Folder-only view |
+Settings are organized into keyboard-accessible **Generation**, **Storage**, and **Keys** tabs. API-key prompts open the Keys tab and focus the relevant provider field.
 
-Available settings depend on the selected model — the UI reads capability flags from the catalog.
+| Tab | Setting | Description |
+| --- | --- | --- |
+| **Generation** | Aspect ratio, resolution, exact size, output format | Catalog-driven image controls shown only for compatible models |
+| **Generation** | Video length and quality | Model-specific duration and resolution controls |
+| **Generation** | Web Search and Generate Audio | Remembered independently for each compatible model during the session |
+| **Generation** | Photo Visibility | Show all media in the main gallery or only within its folder |
+| **Storage** | Storage usage, download all, clear all | Keeps storage actions separate from provider credentials |
+| **Keys** | OpenRouter, xAI, and Evolink API keys | Local browser storage with show/hide, save, and test actions |
+
+Output counts are also catalog-driven: image models currently allow up to four outputs, while video models force one and hide the count selector.
 
 ---
 
@@ -266,12 +275,13 @@ Available settings depend on the selected model — the UI reads capability flag
 
 | Constraint | Limit |
 | --- | --- |
-| **Request/Response Body** | 4.5 MB (Vercel limit) |
-| **Image Attachments** | 4 images max per generation |
+| **Request/Response Body** | 4 MB application cap (below Vercel's platform limit) |
+| **Image Attachments** | 10 images max in the composer; lower per-model limits are enforced from the catalog |
 | **Attachment Size** | 8 MB max per image |
-| **Upload Compression** | Attachments over limits compressed to 1024px, JPEG 85% |
+| **Upload Compression** | Accepted attachments re-encoded to at most 768px, JPEG 75% |
 | **Storage Compression** | Full-res images re-encoded to WebP/JPEG (92% quality) before IndexedDB storage |
-| **Batch Size** | 1–4 images per generation |
+| **Batch Size** | Catalog-driven; currently 1–4 images or exactly 1 video |
+| **Async Polling** | Adaptive 3–15 second delay, 6-minute ceiling, transient retries, shared cancellation |
 
 ---
 
@@ -282,7 +292,7 @@ Available settings depend on the selected model — the UI reads capability flag
 - Open Settings and enter the key for your selected model's provider
 - OpenRouter — FLUX, Gemini, GPT-5, Seedream (OR)
 - xAI — Grok image and video models
-- Evolink — Seedream 4.5/5 Lite, Z Image Turbo, and Seedance 2.0 video
+- Evolink — Seedream, Z Image Turbo, Seedance 2.0, and HappyHorse models
 - Ensure the key is saved (click Save)
 
 ### Images not generating
@@ -292,10 +302,11 @@ Available settings depend on the selected model — the UI reads capability flag
 - Edit models require at least one attached image
 - Image-to-video models require at least one image attachment
 
-### Video generation stuck on pending
+### Generation stuck on pending
 
-- Video generation typically takes 30–180 seconds; polling runs every 3 s up to a 6-minute timeout
-- If it times out, try again — async video jobs can occasionally stall
+- Evolink images and all videos use async tasks; polling backs off from 3 to 15 seconds with a 6-minute ceiling
+- If one task fails, completed results are retained and only failed cards need retrying
+- If it times out, retry the failed card — async provider jobs can occasionally stall
 - Verify your Evolink/xAI API key has credits
 
 ### Storage full warning
@@ -307,7 +318,7 @@ Available settings depend on the selected model — the UI reads capability flag
 ### Attachments not working
 
 - Ensure images are under 8 MB each
-- Maximum 4 images per generation
+- Maximum 10 attachments in the composer; the selected model may enforce a lower limit
 - Try a different image format (PNG, JPEG, WebP supported)
 
 ### PWA not installing
@@ -321,6 +332,8 @@ Available settings depend on the selected model — the UI reads capability flag
 ## For Contributors
 
 Models are defined in [`shared/model-catalog.json`](shared/model-catalog.json) — one catalog entry drives the picker, settings UI, backend routing, and pricing hints. No hardcoded model lists elsewhere.
+
+Capability profiles also define `output.maxImages` and `output.defaultImages`; keep frontend controls and API validation catalog-driven rather than adding model-ID checks.
 
 **→ [Adding a model](docs/adding-a-model.md)** — decision tree, profile reference, JSON examples, and test checklist.
 

@@ -152,12 +152,36 @@ async function handleEvolinkVideo(ctx) {
             return res.status(502).json({ error: 'Evolink video request did not return a task ID' });
         }
 
+        const estimatedCost = estimateVideoCost(model, duration);
+        const request = {
+            index: 0,
+            request_id: taskId,
+            estimated_cost: estimatedCost,
+            usage_estimated: true,
+        };
         return res.status(202).json({
             status: 'pending',
             request_id: taskId,
             provider: 'evolink',
             model,
-            estimated_cost: estimateVideoCost(model, duration),
+            media_type: 'video',
+            estimated_cost: estimatedCost,
+            requests: [request],
+            meta: {
+                total_usage: estimatedCost,
+                usage_pending: true,
+                requests: [{
+                    model,
+                    provider_name: 'evolink',
+                    generation_id: taskId,
+                    usage: estimatedCost,
+                    imageCount: 0,
+                    delivered_count: 0,
+                    usage_pending: true,
+                    usage_estimated: true,
+                    media_type: 'video',
+                }],
+            },
         });
     } catch (error) {
         if (error?.payload) {
