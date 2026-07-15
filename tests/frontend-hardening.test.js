@@ -116,19 +116,49 @@ describe('frontend hardening', () => {
         assert.doesNotMatch(picker, /activeSettingsModel && activeSettingsModel !== model/);
     });
 
-    it('uses a focus-managed full-screen settings sheet on mobile', () => {
+    it('uses a focus-managed settings dialog with a mobile bottom sheet', () => {
         const html = read('index.html');
         const app = read('js/app.js');
         const styles = read('css/components.css');
 
         assert.match(html, /id="settings-panel"[^>]+role="dialog"[^>]+aria-hidden="true"/);
+        assert.match(html, /id="settings-backdrop"[^>]+aria-hidden="true"/);
         assert.match(html, /aria-controls="settings-panel" aria-expanded="false"/);
         assert.match(app, /panel\.setAttribute\('aria-modal', 'true'\)/);
-        assert.match(app, /event\.key !== 'Tab' \|\| !SETTINGS_MOBILE_MQ\.matches/);
+        assert.match(app, /function trapFocusWithin\(event, container\)/);
+        assert.match(app, /settingsBackdrop\?\.addEventListener\('click'/);
         assert.match(app, /function initSettingsTabs\(panel\)/);
         assert.match(app, /\['generation', 'Generation'\], \['storage', 'Storage'\], \['keys', 'Keys'\]/);
         assert.match(app, /setAttribute\('role', 'tabpanel'\)/);
-        assert.match(styles, /\.settings-panel\s*\{[^}]*height: 100dvh;[^}]*max-height: none;/s);
+        assert.match(styles, /body\.is-settings-open \.settings-backdrop\s*\{[^}]*visibility: visible;/s);
+        assert.match(styles, /@media \(max-width: 768px\)[\s\S]*?\.settings-panel\s*\{[^}]*transform: translateY\(100%\);/s);
+    });
+
+    it('keeps modal focus visible and restores folder-dialog focus without inline danger styles', () => {
+        const app = read('js/app.js');
+        const sidebar = read('js/sidebar.js');
+        const keySettings = read('js/settings-keys.js');
+
+        assert.match(app, /trapFocusWithin\(event, modal\)/);
+        assert.match(app, /button\[data-confirm-cancel\]/);
+        assert.match(app, /higherPriorityModal[\s\S]*?openrouter-key-modal--active[\s\S]*?if \(higherPriorityModal\) return;/);
+        assert.match(sidebar, /folderModalLastFocused\?\.focus/);
+        assert.match(sidebar, /menu\.remove\(\);\s*anchor\.focus\(\{ preventScroll: true \}\);\s*showRenameFolderModal/);
+        assert.match(sidebar, /menu\.remove\(\);\s*anchor\.focus\(\{ preventScroll: true \}\);\s*showDeleteFolderConfirm/);
+        assert.match(sidebar, /openrouter-key-modal__link--danger/);
+        assert.doesNotMatch(sidebar, /style\.backgroundColor = '#ef4444'/);
+        assert.match(keySettings, /trapPopupFocus\(event, overlay\)/);
+    });
+
+    it('uses shared toast styling and an ellipsizing model trigger label', () => {
+        const app = read('js/app.js');
+        const picker = read('js/model-picker.js');
+        const styles = read('css/components.css');
+
+        assert.match(app, /function showToast\(message, type, duration\)/);
+        assert.doesNotMatch(app, /toast\.style\.cssText/);
+        assert.match(picker, /label\.className = 'model-trigger__label'/);
+        assert.match(styles, /\.model-trigger__label\s*\{[^}]*text-overflow: ellipsis;/s);
     });
 
     it('renders the model picker from picker-visible catalog models', () => {

@@ -4,8 +4,8 @@
     "description": "Transform your imagination into stunning visuals with AI-powered image generation",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#1a1a1a",
+    "background_color": "#f7f8fc",
+    "theme_color": "#5b50e6",
     "orientation": "any",
     "icons": [
         {

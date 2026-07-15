@@ -36,7 +36,24 @@ let storageIndicatorQueued = false;
 let storageIndicatorInFlight = false;
 let storageIndicatorNeedsRerun = false;
 let settingsLastFocusedElement = null;
-const SETTINGS_MOBILE_MQ = window.matchMedia('(max-width: 768px)');
+
+function trapFocusWithin(event, container) {
+    if (event.key !== 'Tab') return;
+    const focusable = [...container.querySelectorAll(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )].filter((element) => element instanceof HTMLElement && element.offsetParent !== null);
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
 
 const API_KEY_EMPTY_STATE = {
     openrouter: {
@@ -136,6 +153,7 @@ async function init() {
     const customEnhanceBtn = document.getElementById('custom-enhance-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const settingsPanel = document.getElementById('settings-panel');
+    const settingsBackdrop = document.getElementById('settings-backdrop');
     const settingsClose = document.getElementById('settings-close');
     const surpriseBtn = document.getElementById('surprise-btn');
     const clearAllBtn = document.getElementById('clear-all-btn');
@@ -194,39 +212,21 @@ async function init() {
             settingsClose.addEventListener('click', () => closeSettings(settingsBtn, settingsPanel));
         }
 
-        // Close on click outside
-        document.addEventListener('click', (e) => {
-            if (settingsPanel.classList.contains('settings-panel--active') &&
-                !settingsPanel.contains(e.target) &&
-                !settingsBtn.contains(e.target)) {
-                closeSettings(settingsBtn, settingsPanel, false);
-            }
-        });
+        settingsBackdrop?.addEventListener('click', () => closeSettings(settingsBtn, settingsPanel));
 
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && settingsPanel.classList.contains('settings-panel--active')) {
+                const higherPriorityModal = document.querySelector(
+                    '.openrouter-key-modal--active, .custom-enhance-modal--active, .confirm-modal--active'
+                );
+                if (higherPriorityModal) return;
                 event.preventDefault();
                 closeSettings(settingsBtn, settingsPanel);
             }
         });
 
         settingsPanel.addEventListener('keydown', (event) => {
-            if (event.key !== 'Tab' || !SETTINGS_MOBILE_MQ.matches) return;
-
-            const focusable = [...settingsPanel.querySelectorAll(
-                'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            )].filter((element) => element instanceof HTMLElement && element.offsetParent !== null);
-            if (focusable.length === 0) return;
-
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-            }
+            trapFocusWithin(event, settingsPanel);
         });
     }
 
@@ -386,7 +386,9 @@ function showClearAllConfirm(imageTotal) {
             if (event.key === 'Escape') {
                 event.preventDefault();
                 close(false);
+                return;
             }
+            trapFocusWithin(event, modal);
         };
 
         modal.querySelectorAll('[data-confirm-cancel]').forEach((element) => {
@@ -396,7 +398,7 @@ function showClearAllConfirm(imageTotal) {
         document.addEventListener('keydown', handleKeydown);
         document.body.appendChild(modal);
         document.body.classList.add('is-modal-open');
-        modal.querySelector('[data-confirm-cancel]')?.focus();
+        modal.querySelector('button[data-confirm-cancel]')?.focus();
     });
 }
 
@@ -521,20 +523,16 @@ function openSettings(button, panel, tabId = 'generation') {
         : button;
     panel.classList.add('settings-panel--active');
     panel.setAttribute('aria-hidden', 'false');
-    if (SETTINGS_MOBILE_MQ.matches) {
-        panel.setAttribute('aria-modal', 'true');
-    } else {
-        panel.removeAttribute('aria-modal');
-    }
+    panel.setAttribute('aria-modal', 'true');
     button.classList.add('input-bar__icon-btn--active');
     button.setAttribute('aria-expanded', 'true');
     document.body.classList.add('is-settings-open');
 
-    if (SETTINGS_MOBILE_MQ.matches) {
+    if (!panel.contains(document.activeElement)) {
         requestAnimationFrame(() => {
-            const closeButton = panel.querySelector('.settings-panel__close');
-            if (closeButton instanceof HTMLElement) {
-                closeButton.focus({ preventScroll: true });
+            const selectedTab = panel.querySelector('[role="tab"][aria-selected="true"]');
+            if (selectedTab instanceof HTMLElement) {
+                selectedTab.focus({ preventScroll: true });
             }
         });
     }
@@ -693,6 +691,10 @@ function setupCustomEnhanceModal(input, button) {
         if (event.key === 'Escape' && modal.classList.contains('custom-enhance-modal--active')) {
             event.preventDefault();
             close();
+            return;
+        }
+        if (modal.classList.contains('custom-enhance-modal--active')) {
+            trapFocusWithin(event, modal);
         }
     });
 }
@@ -971,6 +973,7 @@ function autoResizeTextarea(textarea) {
  * @param {HTMLElement} element
  */
 function shakeElement(element) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     element.style.animation = 'none';
     element.offsetHeight; // Trigger reflow
     element.style.animation = 'shake 0.5s ease';
@@ -985,30 +988,7 @@ function shakeElement(element) {
  * @param {string} message
  */
 function showError(message) {
-    // Create toast notification
-    const toast = document.createElement('div');
-    toast.className = 'toast toast--error';
-    toast.textContent = message;
-    toast.style.cssText = `
-    position: fixed;
-    bottom: 100px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #ef4444;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 14px;
-    z-index: 9999;
-    animation: fadeInUp 0.3s ease;
-  `;
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'fadeOut 0.3s ease forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    showToast(message, 'error', 4000);
 }
 
 /**
@@ -1016,59 +996,29 @@ function showError(message) {
  * @param {string} message
  */
 function showSuccess(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast toast--success';
-    toast.textContent = message;
-    toast.style.cssText = `
-    position: fixed;
-    bottom: 100px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #22c55e;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 14px;
-    z-index: 9999;
-    animation: fadeInUp 0.3s ease;
-  `;
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'fadeOut 0.3s ease forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 2500);
+    showToast(message, 'success', 2500);
 }
 
-// Add shake animation styles
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-8px); }
-    40% { transform: translateX(8px); }
-    60% { transform: translateX(-4px); }
-    80% { transform: translateX(4px); }
-  }
-  
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translate(-50%, 10px);
-    }
-    to {
-      opacity: 1;
-      transform: translate(-50%, 0);
-    }
-  }
-  
-  @keyframes fadeOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
-  }
-`;
-document.head.appendChild(style);
+function showToast(message, type, duration) {
+    const container = document.getElementById('toast-container') || document.body;
+    const toast = document.createElement('div');
+    toast.className = `toast toast--${type}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    const icon = document.createElement('span');
+    icon.className = 'toast__icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = type === 'error' ? '!' : '✓';
+    const text = document.createElement('span');
+    text.className = 'toast__message';
+    text.textContent = message;
+    toast.append(icon, text);
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('toast--leaving');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {

@@ -187,7 +187,10 @@ function createModelPicker() {
     hidden.value = normalizeModelId(hidden.value || DEFAULT_MODEL_ID);
 
     const syncTriggerLabel = () => {
-        trigger.textContent = getTriggerLabel(hidden.value);
+        const label = document.createElement('span');
+        label.className = 'model-trigger__label';
+        label.textContent = getTriggerLabel(hidden.value);
+        trigger.replaceChildren(label);
         const selected = PICKER_MODELS.find((model) => model.id === hidden.value);
         const fullLabel = selected
             ? `${selected.name}, ${selected.provider}${selected.via ? ` via ${selected.via}` : ''}`

@@ -11,6 +11,22 @@ import {
 /** @type {((inputId?: string) => void) | null} */
 let openSettingsPanel = null;
 
+function trapPopupFocus(event, container) {
+    if (event.key !== 'Tab') return;
+    const focusable = [...container.querySelectorAll('button:not([disabled]), a[href], input:not([disabled])')]
+        .filter((element) => element instanceof HTMLElement && element.offsetParent !== null);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
 const API_KEY_FIELDS = [
     {
         id: 'openrouter',
@@ -122,7 +138,11 @@ export function showApiKeyPopup(config, help) {
         existing.querySelector('.openrouter-key-modal__message').textContent = message;
         existing.querySelector('.openrouter-key-modal__link').href = url;
         existing.classList.add('openrouter-key-modal--active');
-        keyInput?.focus();
+        existing.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('is-modal-open');
+        const focusPrimaryAction = () => existing.querySelector('.openrouter-key-modal__link')?.focus();
+        requestAnimationFrame(focusPrimaryAction);
+        setTimeout(focusPrimaryAction, 80);
         return;
     }
 
@@ -152,14 +172,26 @@ export function showApiKeyPopup(config, help) {
 
     const close = () => {
         overlay.classList.remove('openrouter-key-modal--active');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('is-modal-open');
         keyInput?.focus();
     };
     overlay.querySelector('.openrouter-key-modal__close').addEventListener('click', close);
     overlay.querySelector('.openrouter-key-modal__backdrop').addEventListener('click', close);
     overlay.querySelector('.openrouter-key-modal__ok').addEventListener('click', close);
+    overlay.addEventListener('keydown', (event) => trapPopupFocus(event, overlay));
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && overlay.classList.contains('openrouter-key-modal--active')) {
+            event.preventDefault();
+            close();
+        }
+    });
 
     document.body.appendChild(overlay);
-    keyInput?.focus();
+    document.body.classList.add('is-modal-open');
+    const focusPrimaryAction = () => overlay.querySelector('.openrouter-key-modal__link')?.focus();
+    focusPrimaryAction();
+    setTimeout(focusPrimaryAction, 80);
 }
 
 /** @param {{ message?: string, url?: string } | undefined} help */

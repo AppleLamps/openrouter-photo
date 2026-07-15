@@ -27,6 +27,23 @@ let folderModalClose = null;
 let currentFolderAction = null; // 'create' or 'rename'
 let currentFolderTarget = null; // folder object being renamed
 let currentFolderComplete = null;
+let folderModalLastFocused = null;
+
+function trapFolderModalFocus(event) {
+    if (event.key !== 'Tab' || !folderModal) return;
+    const focusable = [...folderModal.querySelectorAll('button:not([disabled]), input:not([disabled])')]
+        .filter((element) => element instanceof HTMLElement && element.offsetParent !== null);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
 
 function syncSidebarDocumentState(isOpen) {
     const isMobileOverlay = MOBILE_MQ.matches;
@@ -365,6 +382,15 @@ function initFolderModal() {
             closeFolderModal();
         }
     });
+
+    folderModal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeFolderModal();
+            return;
+        }
+        trapFolderModalFocus(event);
+    });
 }
 
 /**
@@ -379,13 +405,14 @@ function openFolderModal(action, folder = null, onComplete = null) {
     currentFolderAction = action;
     currentFolderTarget = folder;
     currentFolderComplete = typeof onComplete === 'function' ? onComplete : null;
+    folderModalLastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
     // Reset UI state
     folderModalInput.value = '';
     folderModalInput.classList.remove('input-error');
     folderModalInput.parentElement.style.display = 'block'; // Show input by default
     folderModalSave.className = 'openrouter-key-modal__link'; // Reset button style
-    folderModalSave.style.backgroundColor = ''; // Reset inline style if any
+    folderModalSave.classList.remove('openrouter-key-modal__link--danger');
 
     // Update UI based on action
     if (action === 'create') {
@@ -408,13 +435,14 @@ function openFolderModal(action, folder = null, onComplete = null) {
         
         folderModalInput.parentElement.style.display = 'none'; // Hide input
         folderModalSave.textContent = 'Delete';
-        folderModalSave.style.backgroundColor = '#ef4444'; // Red for danger
-        folderModalSave.style.color = 'white';
+        folderModalSave.classList.add('openrouter-key-modal__link--danger');
     }
 
     // Show modal
     folderModal.classList.add('openrouter-key-modal--active');
+    folderModal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('is-modal-open');
+    if (action === 'delete') requestAnimationFrame(() => folderModalCancel.focus());
 }
 
 /**
@@ -424,14 +452,16 @@ function closeFolderModal() {
     if (!folderModal) return;
 
     folderModal.classList.remove('openrouter-key-modal--active');
+    folderModal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('is-modal-open');
     currentFolderAction = null;
     currentFolderTarget = null;
     currentFolderComplete = null;
     
     // Clean up inline styles
-    folderModalSave.style.backgroundColor = '';
-    folderModalSave.style.color = '';
+    folderModalSave.classList.remove('openrouter-key-modal__link--danger');
+    folderModalLastFocused?.focus({ preventScroll: true });
+    folderModalLastFocused = null;
 }
 
 /**
@@ -496,6 +526,7 @@ function showFolderContextMenu(folder, anchor) {
         type: 'button',
         onClick: () => {
             menu.remove();
+            anchor.focus({ preventScroll: true });
             showRenameFolderModal(folder);
         }
     }, 'Rename');
@@ -505,6 +536,7 @@ function showFolderContextMenu(folder, anchor) {
         type: 'button',
         onClick: () => {
             menu.remove();
+            anchor.focus({ preventScroll: true });
             showDeleteFolderConfirm(folder);
         }
     }, 'Delete');

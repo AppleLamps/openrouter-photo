@@ -47,6 +47,8 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 ### User Experience
 
+- **Adaptive Settings** — Focus-managed side drawer on desktop and bottom sheet on mobile, with Generation, Storage, and Keys tabs
+- **Consistent Dialogs** — Shared visual treatment and keyboard focus behavior for confirmations, API-key prompts, folders, and prompt enhancement
 - **Keyboard Shortcuts** — Quick actions without mouse
 - **Touch Gestures** — Swipe-to-close lightbox on mobile
 - **PWA Support** — Install as a standalone app and reload the cached application shell offline
@@ -245,7 +247,7 @@ npx vercel --prod
 
 ## Settings Reference
 
-Settings are organized into keyboard-accessible **Generation**, **Storage**, and **Keys** tabs. API-key prompts open the Keys tab and focus the relevant provider field.
+Settings use a modal side drawer on desktop and a bottom sheet on mobile. They are organized into keyboard-accessible **Generation**, **Storage**, and **Keys** tabs; API-key prompts open Keys, focus their visible action, then return focus to the relevant provider field when dismissed.
 
 | Tab | Setting | Description |
 | --- | --- | --- |
