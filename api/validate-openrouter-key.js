@@ -17,7 +17,7 @@ module.exports = withMiddleware(async function handler(req, res) {
     try {
         // Dedicated key validation endpoint. This is more reliable than listing models,
         // which can be public/cacheable and is not specifically an auth check.
-        const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        const response = await fetch('https://openrouter.ai/api/v1/key', {
             method: 'GET',
             headers: {
                 Authorization: `Bearer ${OPENROUTER_API_KEY}`,

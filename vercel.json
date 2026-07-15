@@ -23,15 +23,15 @@
         },
         {
             "src": "/api/test-key",
-            "dest": "/api/test-key.js"
+            "dest": "/api/validate-openrouter-key.js"
         },
         {
             "src": "/api/test-xai-key",
-            "dest": "/api/test-xai-key.js"
+            "dest": "/api/validate-xai-key.js"
         },
         {
             "src": "/api/test-evolink-key",
-            "dest": "/api/test-evolink-key.js"
+            "dest": "/api/validate-evolink-key.js"
         },
         {
             "src": "/api/generation-status",

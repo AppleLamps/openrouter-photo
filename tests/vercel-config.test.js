@@ -11,9 +11,9 @@ function getRouteDest(src) {
 
 describe('vercel config', () => {
     it('routes every settings API key test endpoint before the SPA catch-all', () => {
-        assert.equal(getRouteDest('/api/test-key'), '/api/test-key.js');
-        assert.equal(getRouteDest('/api/test-xai-key'), '/api/test-xai-key.js');
-        assert.equal(getRouteDest('/api/test-evolink-key'), '/api/test-evolink-key.js');
+        assert.equal(getRouteDest('/api/test-key'), '/api/validate-openrouter-key.js');
+        assert.equal(getRouteDest('/api/test-xai-key'), '/api/validate-xai-key.js');
+        assert.equal(getRouteDest('/api/test-evolink-key'), '/api/validate-evolink-key.js');
         assert.equal(getRouteDest('/api/image-proxy'), '/api/image-proxy.js');
 
         const catchAllIndex = config.routes.findIndex((route) => route.src === '/(.*)');

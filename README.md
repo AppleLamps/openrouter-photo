@@ -96,7 +96,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 │   ├── random-prompt.js      # AI random prompt generation
 │   ├── generation-status.js  # Generic async image/video task status
 │   ├── video-status.js       # Backward-compatible status alias
-│   ├── test-key.js           # API key validation endpoints
+│   ├── validate-*-key.js     # API key validation handlers
 │   └── providers/            # Provider-specific handlers
 │       ├── openrouter.js
 │       ├── xai.js
@@ -184,7 +184,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 npm test
 ```
 
-Tests cover catalog integrity, provider routing and payloads, async status/polling, download validation, PWA startup assets, accounting, and UI capabilities. CI runs on every push via GitHub Actions.
+Tests cover catalog integrity, provider routing and payloads, API-key validation, async status/polling, download validation, PWA startup assets, accounting, and UI capabilities. CI runs on every push via GitHub Actions.
 
 ### Deploy to Vercel
 

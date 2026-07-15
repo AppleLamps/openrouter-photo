@@ -18,6 +18,45 @@ const APP_ACCESS_TOKEN_STORAGE_KEY = 'app_access_token';
 
 const encoder = new TextEncoder();
 
+/**
+ * Build a useful API-key validation error from the redacted provider details
+ * returned by the server.
+ * @param {Record<string, unknown>} errorData
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function formatApiTestErrorMessage(errorData, fallback) {
+    const summary = typeof errorData?.error === 'string' && errorData.error.trim()
+        ? errorData.error.trim()
+        : fallback;
+    let details = errorData?.details;
+
+    if (typeof details === 'string') {
+        const trimmed = details.trim();
+        try {
+            details = JSON.parse(trimmed);
+        } catch {
+            details = trimmed.startsWith('<') ? '' : trimmed;
+        }
+    }
+
+    const detail = typeof details === 'string'
+        ? details
+        : typeof details?.error?.message === 'string'
+            ? details.error.message
+            : typeof details?.error === 'string'
+                ? details.error
+                : typeof details?.message === 'string'
+                    ? details.message
+                    : '';
+    const normalizedDetail = detail.replace(/\s+/g, ' ').trim().slice(0, 240);
+
+    if (!normalizedDetail || normalizedDetail.toLowerCase() === summary.toLowerCase()) {
+        return summary;
+    }
+    return `${summary}: ${normalizedDetail}`;
+}
+
 function getUtf8ByteLength(value) {
     return encoder.encode(value).length;
 }
@@ -331,7 +370,10 @@ export async function testOpenRouterKey() {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const err = new Error(formatApiTestErrorMessage(
+            errorData,
+            `OpenRouter key test returned HTTP ${response.status}`
+        ));
         if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
             err.code = errorData.code;
             err.help = errorData.help;
@@ -364,7 +406,10 @@ export async function testXaiKey() {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const err = new Error(formatApiTestErrorMessage(
+            errorData,
+            `xAI key test returned HTTP ${response.status}`
+        ));
         if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
             err.code = errorData.code;
             err.help = errorData.help;
@@ -397,7 +442,10 @@ export async function testEvolinkKey() {
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const err = new Error(formatApiTestErrorMessage(
+            errorData,
+            `Evolink key test returned HTTP ${response.status}`
+        ));
         if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
             err.code = errorData.code;
             err.help = errorData.help;
