@@ -364,18 +364,18 @@ export class ImageStorage {
         const tx = this.db.transaction(IMAGES_STORE, 'readwrite');
         const store = tx.objectStore(IMAGES_STORE);
 
+        // Queue all gets up front rather than awaiting each one before issuing
+        // the next. IndexedDB processes requests within a transaction in order,
+        // and the transaction stays open until every put queued in an onsuccess
+        // handler completes — so a single await on tx.oncomplete covers them all.
         for (const id of ids) {
             const request = store.get(id);
-            await new Promise((resolve, reject) => {
-                request.onsuccess = () => {
-                    const image = request.result;
-                    if (image) {
-                        store.put({ ...image, ...updates });
-                    }
-                    resolve();
-                };
-                request.onerror = () => reject(request.error);
-            });
+            request.onsuccess = () => {
+                const image = request.result;
+                if (image) {
+                    store.put({ ...image, ...updates });
+                }
+            };
         }
 
         return new Promise((resolve, reject) => {

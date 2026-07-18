@@ -247,8 +247,9 @@ function handleStateChange(action, data) {
             renderGallery();
             break;
         case 'edit-mode-changed':
-            // Re-render gallery to show/hide checkboxes
-            renderGallery();
+            // Toggle checkbox/delete visibility via a container class instead of
+            // rebuilding every card (checkboxes already live in the DOM).
+            applyEditModeUI();
             updateEditModeActionBar();
             break;
         case 'selection-changed':
@@ -346,10 +347,50 @@ function renderGallery() {
     });
     galleryElement.appendChild(fragment);
 
+    // Keep the container's edit-mode class in sync with state (e.g. after a
+    // folder switch while multi-select is active).
+    galleryElement.classList.toggle('gallery--edit-mode', state.editMode);
+
     updateEmptyState();
 
     // Add edit mode action bar if in edit mode
     updateEditModeActionBar();
+}
+
+/**
+ * Reflect edit-mode state on the existing gallery DOM without rebuilding cards.
+ * Flips the container class (which drives checkbox/delete visibility via CSS)
+ * and syncs each card's selection visual, checkbox state, and ARIA attributes.
+ */
+function applyEditModeUI() {
+    if (!galleryElement) return;
+
+    const isEditMode = state.editMode;
+    galleryElement.classList.toggle('gallery--edit-mode', isEditMode);
+
+    const cards = galleryElement.querySelectorAll('.gallery__card');
+    cards.forEach((card) => {
+        const id = card.dataset.id;
+        const selected = isEditMode && !!id && state.selectedImageIds.has(id);
+
+        card.classList.toggle('gallery__card--selected', selected);
+
+        const checkbox = card.querySelector('.gallery__checkbox');
+        if (checkbox instanceof HTMLInputElement) checkbox.checked = selected;
+
+        const openBtn = card.querySelector('.gallery__open-btn');
+        if (openBtn) {
+            const media = card.querySelector('.gallery__image');
+            const isVideo = media instanceof HTMLVideoElement;
+            const label = media?.getAttribute('alt') || media?.getAttribute('aria-label') || 'Generated media';
+            openBtn.setAttribute('aria-label', `${isEditMode ? 'Select' : 'Open'} ${isVideo ? 'video' : 'image'}: ${label}`);
+            if (isEditMode) {
+                openBtn.setAttribute('aria-pressed', String(selected));
+            } else {
+                openBtn.removeAttribute('aria-pressed');
+            }
+        }
+    });
 }
 
 function getExtensionFromType(mimeType) {
@@ -688,37 +729,37 @@ function createImageCard(image, preloaded = false) {
     const isVideo = image.mediaType === 'video';
 
     const card = createElement('div', {
-        className: `gallery__card${isEditMode ? ' gallery__card--edit-mode' : ''}${isSelected ? ' gallery__card--selected' : ''}`,
+        className: `gallery__card${isEditMode && isSelected ? ' gallery__card--selected' : ''}`,
         dataset: { id: image.id }
     });
 
-    // Checkbox for edit mode
-    if (isEditMode) {
-        const checkboxWrapper = createElement('label', {
-            className: 'gallery__checkbox-wrapper',
-            onClick: (e) => e.stopPropagation()
-        });
+    // Checkbox is always in the DOM; its visibility (and the delete button's) is
+    // gated by the `.gallery--edit-mode` class on the gallery container so that
+    // toggling edit mode is a single class flip rather than a full re-render.
+    const checkboxWrapper = createElement('label', {
+        className: 'gallery__checkbox-wrapper',
+        onClick: (e) => e.stopPropagation()
+    });
 
-        const checkbox = createElement('input', {
-            type: 'checkbox',
-            className: 'gallery__checkbox',
-            checked: isSelected,
-            'aria-label': `Select ${isVideo ? 'video' : 'image'}: ${image.prompt || 'Generated media'}`,
-            onChange: () => {
-                state.toggleImageSelection(image.id);
-                // Update card's selected state
-                const selected = state.selectedImageIds.has(image.id);
-                card.classList.toggle('gallery__card--selected', selected);
-                openButton.setAttribute('aria-pressed', String(selected));
-            }
-        });
+    const checkbox = createElement('input', {
+        type: 'checkbox',
+        className: 'gallery__checkbox',
+        checked: isSelected,
+        'aria-label': `Select ${isVideo ? 'video' : 'image'}: ${image.prompt || 'Generated media'}`,
+        onChange: () => {
+            state.toggleImageSelection(image.id);
+            // Update card's selected state
+            const selected = state.selectedImageIds.has(image.id);
+            card.classList.toggle('gallery__card--selected', selected);
+            openButton.setAttribute('aria-pressed', String(selected));
+        }
+    });
 
-        const checkmark = createElement('span', { className: 'gallery__checkmark' });
+    const checkmark = createElement('span', { className: 'gallery__checkmark' });
 
-        checkboxWrapper.appendChild(checkbox);
-        checkboxWrapper.appendChild(checkmark);
-        card.appendChild(checkboxWrapper);
-    }
+    checkboxWrapper.appendChild(checkbox);
+    checkboxWrapper.appendChild(checkmark);
+    card.appendChild(checkboxWrapper);
 
     // Delete button (hidden in edit mode)
     const deleteBtn = createElement('button', {
@@ -767,6 +808,7 @@ function createImageCard(image, preloaded = false) {
             className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
             src: resolvedSrc,
             alt: image.prompt,
+            decoding: 'async',
             ...(needsLazy ? {} : { loading: 'lazy' })
         });
 

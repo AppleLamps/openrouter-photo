@@ -140,7 +140,7 @@ body.is-modal-open .spend-tracker {
     position: absolute;
     inset: 0 18% auto;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(91, 80, 230, 0.45), transparent);
+    background: linear-gradient(90deg, transparent, rgba(23, 25, 39, 0.45), transparent);
 }
 
 .input-bar__input-row {
@@ -299,7 +299,7 @@ body.is-modal-open .spend-tracker {
 }
 
 .input-bar__inline-select:hover {
-    border-color: rgba(91, 80, 230, 0.3);
+    border-color: rgba(23, 25, 39, 0.3);
     color: var(--accent-secondary);
     background: var(--accent-soft);
 }
@@ -404,7 +404,7 @@ body.is-modal-open .spend-tracker {
 
 .input-bar__dropdown-item[aria-selected="true"] {
     background: var(--accent-soft);
-    border-color: rgba(91, 80, 230, 0.2);
+    border-color: rgba(23, 25, 39, 0.2);
     color: var(--accent-secondary);
 }
 
@@ -489,7 +489,7 @@ body.is-modal-open .spend-tracker {
 .input-bar__button:hover:not(:disabled) {
     transform: scale(1.05);
     background: var(--accent-secondary);
-    box-shadow: 0 10px 24px rgba(91, 80, 230, 0.32);
+    box-shadow: 0 10px 24px rgba(23, 25, 39, 0.32);
 }
 
 .input-bar__button:active:not(:disabled) {
@@ -1400,7 +1400,7 @@ body.is-settings-open {
 
 .settings-panel__close:hover {
     background: var(--accent-soft);
-    border-color: rgba(91, 80, 230, 0.24);
+    border-color: rgba(23, 25, 39, 0.24);
     color: var(--accent-secondary);
 }
 
@@ -1445,7 +1445,7 @@ body.is-settings-open {
 .settings-tabs__tab[aria-selected="true"] {
     color: var(--accent-secondary);
     background: var(--accent-soft);
-    border-color: rgba(91, 80, 230, 0.16);
+    border-color: rgba(23, 25, 39, 0.16);
     box-shadow: inset 0 -2px 0 var(--accent-primary);
 }
 
@@ -1465,7 +1465,7 @@ body.is-settings-open {
 
 .settings-tab-panel[data-settings-panel="generation"] .settings-group:first-child {
     padding: 14px 15px;
-    border: 1px solid rgba(91, 80, 230, 0.14);
+    border: 1px solid rgba(23, 25, 39, 0.14);
     border-radius: 14px;
     background: linear-gradient(135deg, var(--accent-soft), rgba(255, 255, 255, 0.7));
 }
@@ -1529,7 +1529,7 @@ body.is-settings-open {
 .settings-select:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(91, 80, 230, 0.12);
+    box-shadow: 0 0 0 3px rgba(23, 25, 39, 0.12);
 }
 
 .settings-input {
@@ -1552,7 +1552,7 @@ body.is-settings-open {
 .settings-input:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(91, 80, 230, 0.12);
+    box-shadow: 0 0 0 3px rgba(23, 25, 39, 0.12);
 }
 
 .settings-input::placeholder {
@@ -1580,7 +1580,7 @@ body.is-settings-open {
 .settings-textarea:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(91, 80, 230, 0.12);
+    box-shadow: 0 0 0 3px rgba(23, 25, 39, 0.12);
 }
 
 .settings-textarea::placeholder {
@@ -1888,7 +1888,7 @@ body.is-settings-open {
 
 .settings-btn:hover {
     background: var(--accent-soft);
-    border-color: rgba(91, 80, 230, 0.26);
+    border-color: rgba(23, 25, 39, 0.26);
     color: var(--accent-secondary);
 }
 
@@ -1971,7 +1971,7 @@ body.is-settings-open {
     position: absolute;
     inset: 0 0 auto 0;
     height: 4px;
-    background: linear-gradient(90deg, var(--accent-primary), #8b82f2, rgba(91, 80, 230, 0.18));
+    background: linear-gradient(90deg, var(--accent-primary), #4a4d5e, rgba(23, 25, 39, 0.18));
 }
 
 .openrouter-key-modal__header {
@@ -2007,7 +2007,7 @@ body.is-settings-open {
 
 .openrouter-key-modal__close:hover {
     background: var(--accent-soft);
-    border-color: rgba(91, 80, 230, 0.24);
+    border-color: rgba(23, 25, 39, 0.24);
     color: var(--accent-secondary);
 }
 
@@ -2175,7 +2175,7 @@ body.is-settings-open {
 .custom-enhance-modal__close:hover {
     background: var(--accent-soft);
     color: var(--accent-secondary);
-    border-color: rgba(91, 80, 230, 0.24);
+    border-color: rgba(23, 25, 39, 0.24);
 }
 
 .custom-enhance-modal__body {
@@ -2885,8 +2885,8 @@ body.is-settings-open {
 .model-picker__search:focus {
     outline: none;
     background: rgba(0, 0, 0, 0.02);
-    border-color: rgba(91, 80, 230, 0.32);
-    box-shadow: 0 0 0 3px rgba(91, 80, 230, 0.1);
+    border-color: rgba(23, 25, 39, 0.32);
+    box-shadow: 0 0 0 3px rgba(23, 25, 39, 0.1);
 }
 
 .model-picker__search::placeholder {
@@ -2969,7 +2969,7 @@ body.is-settings-open {
 
 .model-picker__row[aria-selected="true"] {
     background: var(--accent-soft);
-    border-color: rgba(91, 80, 230, 0.16);
+    border-color: rgba(23, 25, 39, 0.16);
 }
 
 .model-picker__row-main {

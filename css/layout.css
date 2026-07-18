@@ -131,10 +131,10 @@
     display: grid;
     place-items: center;
     margin-bottom: 18px;
-    border: 1px solid rgba(91, 80, 230, 0.16);
+    border: 1px solid rgba(23, 25, 39, 0.16);
     border-radius: 18px;
     background: linear-gradient(145deg, #fff, var(--accent-soft));
-    box-shadow: 0 14px 34px rgba(91, 80, 230, 0.14);
+    box-shadow: 0 14px 34px rgba(23, 25, 39, 0.14);
     color: var(--accent-primary);
 }
 
@@ -194,7 +194,7 @@
 .empty-state__chip:hover {
     color: var(--accent-secondary);
     background: var(--accent-soft);
-    border-color: rgba(91, 80, 230, 0.2);
+    border-color: rgba(23, 25, 39, 0.2);
     transform: translateY(-2px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
@@ -513,7 +513,7 @@
 
 .sidebar__expand-btn:hover {
     background: var(--accent-soft);
-    border-color: rgba(91, 80, 230, 0.22);
+    border-color: rgba(23, 25, 39, 0.22);
     color: var(--accent-secondary);
     box-shadow: var(--shadow-lg);
 }

@@ -513,11 +513,11 @@
 
 /* ========== Edit Mode Styles ========== */
 
-.gallery__card--edit-mode {
+.gallery--edit-mode .gallery__card {
     cursor: pointer;
 }
 
-.gallery__card--edit-mode .gallery__delete-btn {
+.gallery--edit-mode .gallery__delete-btn {
     display: none;
 }
 
@@ -534,8 +534,9 @@
     pointer-events: none;
 }
 
-/* Checkbox wrapper */
+/* Checkbox wrapper - hidden until edit mode is active on the container */
 .gallery__checkbox-wrapper {
+    display: none;
     position: absolute;
     top: 10px;
     left: 10px;
@@ -543,6 +544,10 @@
     width: 24px;
     height: 24px;
     cursor: pointer;
+}
+
+.gallery--edit-mode .gallery__checkbox-wrapper {
+    display: block;
 }
 
 .gallery__checkbox {
@@ -711,7 +716,7 @@
         padding: 10px 12px;
     }
 
-    .gallery__checkbox-wrapper {
+    .gallery--edit-mode .gallery__checkbox-wrapper {
         top: 0;
         left: 0;
         width: 44px;
