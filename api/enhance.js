@@ -47,7 +47,7 @@ function extractEnhancedPrompt(data) {
     const raw = extractRawContent(data);
     if (!raw) return '';
 
-    const imagePromptMatch = raw.match(/IMAGE PROMPT:\s*([\s\S]*?)(?:\n\s*NEGATIVE PROMPT:|$)/i);
+    const imagePromptMatch = raw.match(/IMAGE PROMPT:\s*([\s\S]*?)(?:\s*NEGATIVE PROMPT:|$)/i);
     if (imagePromptMatch) {
         return imagePromptMatch[1].trim();
     }
