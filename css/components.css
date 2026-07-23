@@ -25,8 +25,8 @@
     border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 14px;
     color: #fff;
-    background: rgba(23, 25, 39, 0.94);
-    box-shadow: 0 16px 40px rgba(23, 25, 39, 0.24);
+    background: rgba(17, 17, 17, 0.94);
+    box-shadow: 0 16px 40px rgba(17, 17, 17, 0.24);
     -webkit-backdrop-filter: blur(18px) saturate(1.2);
     backdrop-filter: blur(18px) saturate(1.2);
     animation: toastEnter 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -92,19 +92,19 @@ body.is-modal-open .spend-tracker {
     padding: 8px 10px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(23, 25, 39, 0.84);
+    background: rgba(17, 17, 17, 0.84);
     color: rgba(255, 255, 255, 0.95);
     font-size: 0.875rem;
     font-weight: 650;
     cursor: pointer;
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
     backdrop-filter: blur(16px) saturate(1.2);
-    box-shadow: 0 8px 24px rgba(23, 25, 39, 0.16);
+    box-shadow: 0 8px 24px rgba(17, 17, 17, 0.16);
     -webkit-tap-highlight-color: transparent;
 }
 
 .spend-tracker:hover {
-    background: rgba(23, 25, 39, 0.96);
+    background: rgba(17, 17, 17, 0.96);
     transform: translateY(-1px);
 }
 
@@ -128,8 +128,8 @@ body.is-modal-open .spend-tracker {
     border-radius: 24px;
     padding: 16px 18px 13px;
     box-shadow:
-        0 24px 64px rgba(25, 28, 45, 0.15),
-        0 4px 14px rgba(25, 28, 45, 0.08),
+        0 24px 64px rgba(17, 17, 17, 0.15),
+        0 4px 14px rgba(17, 17, 17, 0.08),
         inset 0 0 0 1px rgba(205, 209, 221, 0.75);
     -webkit-backdrop-filter: blur(24px) saturate(1.25);
     backdrop-filter: blur(24px) saturate(1.25);
@@ -140,7 +140,7 @@ body.is-modal-open .spend-tracker {
     position: absolute;
     inset: 0 18% auto;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(23, 25, 39, 0.45), transparent);
+    background: linear-gradient(90deg, transparent, rgba(17, 17, 17, 0.45), transparent);
 }
 
 .input-bar__input-row {
@@ -299,7 +299,7 @@ body.is-modal-open .spend-tracker {
 }
 
 .input-bar__inline-select:hover {
-    border-color: rgba(23, 25, 39, 0.3);
+    border-color: rgba(17, 17, 17, 0.3);
     color: var(--accent-secondary);
     background: var(--accent-soft);
 }
@@ -327,7 +327,7 @@ body.is-modal-open .spend-tracker {
     background: rgba(255, 255, 255, 0.96);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
-    box-shadow: 0 20px 54px rgba(25, 28, 45, 0.2);
+    box-shadow: 0 20px 54px rgba(17, 17, 17, 0.2);
     z-index: calc(var(--z-input-bar) + 20);
     display: none;
 }
@@ -404,7 +404,7 @@ body.is-modal-open .spend-tracker {
 
 .input-bar__dropdown-item[aria-selected="true"] {
     background: var(--accent-soft);
-    border-color: rgba(23, 25, 39, 0.2);
+    border-color: rgba(17, 17, 17, 0.2);
     color: var(--accent-secondary);
 }
 
@@ -489,7 +489,7 @@ body.is-modal-open .spend-tracker {
 .input-bar__button:hover:not(:disabled) {
     transform: scale(1.05);
     background: var(--accent-secondary);
-    box-shadow: 0 10px 24px rgba(23, 25, 39, 0.32);
+    box-shadow: 0 10px 24px rgba(17, 17, 17, 0.32);
 }
 
 .input-bar__button:active:not(:disabled) {
@@ -1400,7 +1400,7 @@ body.is-settings-open {
 
 .settings-panel__close:hover {
     background: var(--accent-soft);
-    border-color: rgba(23, 25, 39, 0.24);
+    border-color: rgba(17, 17, 17, 0.24);
     color: var(--accent-secondary);
 }
 
@@ -1445,7 +1445,7 @@ body.is-settings-open {
 .settings-tabs__tab[aria-selected="true"] {
     color: var(--accent-secondary);
     background: var(--accent-soft);
-    border-color: rgba(23, 25, 39, 0.16);
+    border-color: rgba(17, 17, 17, 0.16);
     box-shadow: inset 0 -2px 0 var(--accent-primary);
 }
 
@@ -1465,7 +1465,7 @@ body.is-settings-open {
 
 .settings-tab-panel[data-settings-panel="generation"] .settings-group:first-child {
     padding: 14px 15px;
-    border: 1px solid rgba(23, 25, 39, 0.14);
+    border: 1px solid rgba(17, 17, 17, 0.14);
     border-radius: 14px;
     background: linear-gradient(135deg, var(--accent-soft), rgba(255, 255, 255, 0.7));
 }
@@ -1518,7 +1518,7 @@ body.is-settings-open {
     color: var(--text-primary);
     font-size: 0.875rem;
     cursor: pointer;
-    box-shadow: 0 1px 2px rgba(25, 28, 45, 0.03);
+    box-shadow: 0 1px 2px rgba(17, 17, 17, 0.03);
     transition: var(--transition-fast);
 }
 
@@ -1529,7 +1529,7 @@ body.is-settings-open {
 .settings-select:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(23, 25, 39, 0.12);
+    box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.12);
 }
 
 .settings-input {
@@ -1541,7 +1541,7 @@ body.is-settings-open {
     border-radius: 10px;
     color: var(--text-primary);
     font-size: 0.875rem;
-    box-shadow: 0 1px 2px rgba(25, 28, 45, 0.03);
+    box-shadow: 0 1px 2px rgba(17, 17, 17, 0.03);
     transition: var(--transition-fast);
 }
 
@@ -1552,7 +1552,7 @@ body.is-settings-open {
 .settings-input:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(23, 25, 39, 0.12);
+    box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.12);
 }
 
 .settings-input::placeholder {
@@ -1580,7 +1580,7 @@ body.is-settings-open {
 .settings-textarea:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(23, 25, 39, 0.12);
+    box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.12);
 }
 
 .settings-textarea::placeholder {
@@ -1888,7 +1888,7 @@ body.is-settings-open {
 
 .settings-btn:hover {
     background: var(--accent-soft);
-    border-color: rgba(23, 25, 39, 0.26);
+    border-color: rgba(17, 17, 17, 0.26);
     color: var(--accent-secondary);
 }
 
@@ -1971,7 +1971,7 @@ body.is-settings-open {
     position: absolute;
     inset: 0 0 auto 0;
     height: 4px;
-    background: linear-gradient(90deg, var(--accent-primary), #4a4d5e, rgba(23, 25, 39, 0.18));
+    background: linear-gradient(90deg, var(--accent-primary), #3d3d3a, rgba(17, 17, 17, 0.18));
 }
 
 .openrouter-key-modal__header {
@@ -2007,7 +2007,7 @@ body.is-settings-open {
 
 .openrouter-key-modal__close:hover {
     background: var(--accent-soft);
-    border-color: rgba(23, 25, 39, 0.24);
+    border-color: rgba(17, 17, 17, 0.24);
     color: var(--accent-secondary);
 }
 
@@ -2175,7 +2175,7 @@ body.is-settings-open {
 .custom-enhance-modal__close:hover {
     background: var(--accent-soft);
     color: var(--accent-secondary);
-    border-color: rgba(23, 25, 39, 0.24);
+    border-color: rgba(17, 17, 17, 0.24);
 }
 
 .custom-enhance-modal__body {
@@ -2837,7 +2837,7 @@ body.is-settings-open {
     background: rgba(255, 255, 255, 0.98);
     border: 1px solid rgba(205, 209, 221, 0.9);
     border-radius: 18px;
-    box-shadow: 0 24px 68px rgba(25, 28, 45, 0.22);
+    box-shadow: 0 24px 68px rgba(17, 17, 17, 0.22);
 }
 
 .input-bar__inline-dropdown.is-open .model-picker.input-bar__dropdown-menu--model {
@@ -2885,8 +2885,8 @@ body.is-settings-open {
 .model-picker__search:focus {
     outline: none;
     background: rgba(0, 0, 0, 0.02);
-    border-color: rgba(23, 25, 39, 0.32);
-    box-shadow: 0 0 0 3px rgba(23, 25, 39, 0.1);
+    border-color: rgba(17, 17, 17, 0.32);
+    box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.1);
 }
 
 .model-picker__search::placeholder {
@@ -2969,7 +2969,7 @@ body.is-settings-open {
 
 .model-picker__row[aria-selected="true"] {
     background: var(--accent-soft);
-    border-color: rgba(23, 25, 39, 0.16);
+    border-color: rgba(17, 17, 17, 0.16);
 }
 
 .model-picker__row-main {
