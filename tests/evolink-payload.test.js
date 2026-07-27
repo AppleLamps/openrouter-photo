@@ -272,6 +272,63 @@ describe('evolink payload builders', () => {
         assert.equal(res.body.media_type, 'image');
     });
 
+    it('uploads a complete independent reference set for every Seedream output task', async () => {
+        const createBodies = [];
+        let uploadCount = 0;
+        let taskCount = 0;
+
+        global.fetch = async (url, options = {}) => {
+            if (url === 'https://files-api.evolink.ai/api/v1/files/upload/base64') {
+                const body = JSON.parse(options.body);
+                uploadCount += 1;
+                return {
+                    ok: true,
+                    json: async () => ({
+                        data: {
+                            file_url: `https://files-api.evolink.ai/files/${uploadCount}-${encodeURIComponent(body.file_name)}`,
+                        },
+                    }),
+                };
+            }
+
+            if (url === 'https://api.evolink.ai/v1/images/generations') {
+                createBodies.push(JSON.parse(options.body));
+                taskCount += 1;
+                return {
+                    ok: true,
+                    json: async () => ({ id: `task-${taskCount}` }),
+                };
+            }
+
+            throw new Error(`Unexpected fetch: ${url}`);
+        };
+
+        const res = makeRes();
+        await handleEvolink({
+            res,
+            model: 'evolink/doubao-seedream-5.0-pro',
+            prompt: 'put both people together',
+            parsedNumImages: 3,
+            normalizedAspectRatio: '4:3',
+            resolution: '1K',
+            normalizedInputImages: [
+                'data:image/png;base64,first',
+                'data:image/jpeg;base64,second',
+            ],
+            evolinkKey: 'evolink-test-key',
+        });
+
+        assert.equal(res.statusCode, 202);
+        assert.equal(uploadCount, 6);
+        assert.equal(createBodies.length, 3);
+        assert.ok(createBodies.every((body) => body.n === 1 && body.image_urls.length === 2));
+        assert.equal(
+            new Set(createBodies.flatMap((body) => body.image_urls)).size,
+            6,
+            'each output task should receive unique uploaded reference URLs',
+        );
+    });
+
     it('runs Seedream 5 Lite through the documented async task contract', async () => {
         const createBodies = [];
         const uploadedUrls = [

@@ -181,11 +181,16 @@ async function handleEvolink(ctx) {
     try {
         const { variant, apiModel, qualityOptions, qualityDefault, outputFormatOptions } = evolinkConfig;
         const costPerImage = getEvolinkImageCostPerImage(model);
-        const uploadedImageUrls = normalizedInputImages.length > 0
-            ? await Promise.all(normalizedInputImages.map(uploadEvolinkReferenceImage))
-            : [];
 
-        const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, (_, index) => {
+        const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, async (_, index) => {
+            // Each output is a separate Evolink task. Upload an independent
+            // reference set for every task so concurrent edits cannot consume
+            // or otherwise interfere with a shared set of uploaded URLs.
+            const uploadedImageUrls = normalizedInputImages.length > 0
+                ? await Promise.all(normalizedInputImages.map((dataUrl, imageIndex) => (
+                    uploadEvolinkReferenceImage(dataUrl, (index * normalizedInputImages.length) + imageIndex)
+                )))
+                : [];
             const payload = variant === 'z-image-turbo'
                 ? buildZImageTurboPayload({ apiModel, prompt, normalizedAspectRatio })
                 : buildSeedreamPayload({

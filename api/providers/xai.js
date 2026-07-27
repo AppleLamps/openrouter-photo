@@ -66,53 +66,85 @@ async function handleXai(ctx) {
                     ? resolution.toLowerCase()
                     : null;
 
-            const xaiPayload = {
+            const hasInputImages = normalizedInputImages.length > 0;
+            const xaiEndpoint = hasInputImages
+                ? 'https://api.x.ai/v1/images/edits'
+                : 'https://api.x.ai/v1/images/generations';
+            const buildXaiPayload = (count) => ({
                 model,
                 prompt: xaiPrompt,
                 response_format: 'b64_json',
-                n: parsedNumImages,
+                n: count,
                 ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
                 ...(normalizedXaiResolution ? { resolution: normalizedXaiResolution } : {}),
+                ...(hasInputImages && normalizedInputImages.length === 1
+                    ? { image: { type: 'image_url', url: normalizedInputImages[0] } }
+                    : {}),
+                ...(hasInputImages && normalizedInputImages.length > 1
+                    ? {
+                        images: normalizedInputImages.map((url) => ({
+                            type: 'image_url',
+                            url,
+                        })),
+                    }
+                    : {}),
+            });
+            const requestImages = async (count) => {
+                const response = await fetch(xaiEndpoint, {
+                    method: 'POST',
+                    headers: xaiHeaders,
+                    body: JSON.stringify(buildXaiPayload(count)),
+                });
+                if (!response.ok) {
+                    return {
+                        ok: false,
+                        status: response.status,
+                        errorText: await response.text(),
+                    };
+                }
+                const data = await response.json();
+                return { ok: true, data, images: extractXaiImageUrls(data) };
             };
 
-            let xaiEndpoint = 'https://api.x.ai/v1/images/generations';
-            if (normalizedInputImages.length > 0) {
-                xaiEndpoint = 'https://api.x.ai/v1/images/edits';
-                if (normalizedInputImages.length === 1) {
-                    xaiPayload.image = { type: 'image_url', url: normalizedInputImages[0] };
-                } else {
-                    xaiPayload.images = normalizedInputImages.map((url) => ({
-                        type: 'image_url',
-                        url,
-                    }));
-                }
-            }
-
-            const response = await fetch(xaiEndpoint, {
-                method: 'POST',
-                headers: xaiHeaders,
-                body: JSON.stringify(xaiPayload),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                return res.status(response.status).json({
+            // xAI edit batches can apply the references inconsistently across
+            // outputs. Give every requested edit its own complete request so
+            // every result receives the same attached-photo context.
+            const results = hasInputImages && parsedNumImages > 1
+                ? await Promise.all(Array.from({ length: parsedNumImages }, () => requestImages(1)))
+                : [await requestImages(parsedNumImages)];
+            const successfulResults = results.filter((result) => result.ok);
+            if (successfulResults.length === 0) {
+                const firstFailure = results[0];
+                return res.status(firstFailure.status).json({
                     error: 'Failed to generate image',
-                    details: redactKey(errorText),
+                    details: redactKey(firstFailure.errorText),
                 });
             }
 
-            const data = await response.json();
-            const images = extractXaiImageUrls(data);
+            const images = successfulResults.flatMap((result) => result.images);
             if (images.length === 0) {
                 return res.status(502).json({ error: 'No images returned from xAI' });
             }
 
-            const hasInputImage = normalizedInputImages.length > 0;
-            const inputImageCost = hasInputImage ? (pricing.inputImageCost || 0) : 0;
+            const inputImageCost = hasInputImages ? (pricing.inputImageCost || 0) : 0;
             const perImageOutputCost = pricing.perImageOutput || 0.02;
             const actualCount = Math.min(images.length, parsedNumImages);
-            const totalCost = (perImageOutputCost * actualCount) + inputImageCost;
+            const totalInputCost = inputImageCost * successfulResults.length;
+            const totalCost = (perImageOutputCost * actualCount) + totalInputCost;
+            const requestMeta = successfulResults.map((result) => {
+                const deliveredCount = Math.min(result.images.length, parsedNumImages);
+                return {
+                    model,
+                    provider_name: 'xai',
+                    generation_id: result.data?.id || result.data?.request_id || null,
+                    usage: (perImageOutputCost * deliveredCount) + inputImageCost,
+                    imageCount: deliveredCount,
+                    delivered_count: deliveredCount,
+                    usage_pending: false,
+                    usage_estimated: false,
+                    media_type: 'image',
+                };
+            });
 
             return res.status(200).json({
                 images: images.slice(0, parsedNumImages).map((url) => ({
@@ -123,17 +155,7 @@ async function handleXai(ctx) {
                 })),
                 meta: {
                     total_usage: totalCost,
-                    requests: [{
-                        model,
-                        provider_name: 'xai',
-                        generation_id: data?.id || data?.request_id || null,
-                        usage: totalCost,
-                        imageCount: actualCount,
-                        delivered_count: actualCount,
-                        usage_pending: false,
-                        usage_estimated: false,
-                        media_type: 'image',
-                    }],
+                    requests: requestMeta,
                     usage_pending: false,
                 },
             });
