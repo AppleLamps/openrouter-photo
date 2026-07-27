@@ -1071,7 +1071,9 @@ async function openLightbox(image) {
     const actionsContainer = modal.querySelector('.modal__actions');
     const closeBtn = modal.querySelector('.modal__close');
 
-    lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!modal.classList.contains('modal--active')) {
+        lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
 
     // Track current image for memory cleanup on close
     currentLightboxImageId = image.id;
@@ -1115,6 +1117,8 @@ async function openLightbox(image) {
     // Populate metadata (model and cost)
     const modalModel = modal.querySelector('#modal-model');
     const modalCost = modal.querySelector('#modal-cost');
+    const modalCreated = modal.querySelector('#modal-created');
+    const modalPosition = modal.querySelector('#modal-position');
 
     if (modalModel) {
         const modelName = image.generation?.model;
@@ -1135,6 +1139,21 @@ async function openLightbox(image) {
         } else {
             modalCost.textContent = '-';
         }
+    }
+
+    if (modalCreated) {
+        const createdAt = Number(image.createdAt);
+        modalCreated.textContent = Number.isFinite(createdAt)
+            ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(createdAt)
+            : '-';
+    }
+
+    if (modalPosition) {
+        const images = state.getFilteredImages();
+        const currentIndex = images.findIndex((item) => item.id === image.id);
+        modalPosition.textContent = currentIndex >= 0
+            ? `${currentIndex + 1} of ${images.length}`
+            : `1 of ${Math.max(images.length, 1)}`;
     }
 
     if (downloadBtn) {
@@ -1240,6 +1259,12 @@ async function openLightbox(image) {
         }
     }
 
+    const modalInfo = modal.querySelector('.modal__info');
+    const infoToggle = modal.querySelector('.modal__info-toggle');
+    const shouldCollapseDetails = window.matchMedia('(max-width: 768px)').matches;
+    modalInfo?.classList.toggle('modal__info--collapsed', shouldCollapseDetails);
+    infoToggle?.setAttribute('aria-expanded', String(!shouldCollapseDetails));
+
     modal.classList.remove('modal--ui-hidden', 'modal--dragging');
     modal.classList.add('modal--active');
     modal.setAttribute('aria-hidden', 'false');
@@ -1344,6 +1369,14 @@ export function closeLightbox() {
     if (!modal) return;
 
     const modalVideo = modal.querySelector('.modal__image--video');
+    const modalInfo = modal.querySelector('.modal__info');
+    const infoToggle = modal.querySelector('.modal__info-toggle');
+
+    infoToggle?.addEventListener('click', () => {
+        if (!(modalInfo instanceof HTMLElement)) return;
+        const collapsed = modalInfo.classList.toggle('modal__info--collapsed');
+        infoToggle.setAttribute('aria-expanded', String(!collapsed));
+    });
     if (modalVideo instanceof HTMLVideoElement) {
         modalVideo.style.display = 'none';
         modalVideo.pause();

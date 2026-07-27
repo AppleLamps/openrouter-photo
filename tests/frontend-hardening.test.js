@@ -150,6 +150,20 @@ describe('frontend hardening', () => {
         assert.match(keySettings, /trapPopupFocus\(event, overlay\)/);
     });
 
+    it('keeps the lightbox media-first while exposing useful context and mobile details', () => {
+        const html = read('index.html');
+        const gallery = read('js/gallery.js');
+        const components = read('css/components.css');
+
+        assert.match(html, /id="modal-position"[^>]*aria-live="polite"/);
+        assert.match(html, /id="modal-created"/);
+        assert.match(html, /class="modal__info-toggle"[^>]*aria-expanded="true"/);
+        assert.match(html, /class="modal__keyboard-hint"/);
+        assert.match(gallery, /modalInfo\?\.classList\.toggle\('modal__info--collapsed', shouldCollapseDetails\)/);
+        assert.match(gallery, /if \(!modal\.classList\.contains\('modal--active'\)\)[\s\S]*?lastFocusedElement/);
+        assert.match(components, /\.modal__info--collapsed \.modal__details-body/);
+    });
+
     it('uses shared toast styling and an ellipsizing model trigger label', () => {
         const app = read('js/app.js');
         const picker = read('js/model-picker.js');
