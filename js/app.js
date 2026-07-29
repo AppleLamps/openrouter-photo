@@ -4,6 +4,8 @@
 
 import { enhancePrompt, getRandomPromptFromAI } from './api.js';
 import { state } from './state.js';
+import { initScrollLock } from './scroll-lock.js';
+import { initViewportTracking } from './viewport.js';
 import { initGallery, initLightbox, closeLightbox, downloadAllImages } from './gallery.js';
 import { formatBytes } from './image-utils.js';
 import { initSidebar } from './sidebar.js';
@@ -142,6 +144,11 @@ function initEmptyStateKeyPrompt() {
  * Initialize the application
  */
 async function init() {
+    // Mobile viewport plumbing first: these only read/write chrome-level state,
+    // and having them live before the UI renders avoids a first-paint jump.
+    initViewportTracking();
+    initScrollLock();
+
     // Wait for state to be ready (IndexedDB initialization)
     await state.ready;
 

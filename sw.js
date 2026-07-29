@@ -3,7 +3,7 @@
  * Caches core assets for offline loading
  */
 
-const CACHE_NAME = 'ai-image-gen-v9';
+const CACHE_NAME = 'ai-image-gen-v10';
 
 const CORE_ASSETS = [
     '/',
@@ -11,11 +11,14 @@ const CORE_ASSETS = [
     '/css/layout.css',
     '/css/components.css',
     '/css/gallery.css',
+    '/css/mobile.css',
     '/js/app.js',
     '/js/api.js',
     '/js/gallery.js',
     '/js/state.js',
     '/js/utils.js',
+    '/js/scroll-lock.js',
+    '/js/viewport.js',
     '/js/prompts.js',
     '/js/config.js',
     '/js/image-utils.js',

@@ -191,12 +191,14 @@
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.empty-state__chip:hover {
-    color: var(--accent-secondary);
-    background: var(--accent-soft);
-    border-color: rgba(17, 17, 17, 0.2);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+@media (hover: hover) {
+    .empty-state__chip:hover {
+        color: var(--accent-secondary);
+        background: var(--accent-soft);
+        border-color: rgba(17, 17, 17, 0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    }
 }
 
 .empty-state__chip:active {
@@ -230,9 +232,11 @@
     transition: all 0.15s ease;
 }
 
-.empty-state__button:hover {
-    background: var(--accent-secondary);
-    transform: translateY(-1px);
+@media (hover: hover) {
+    .empty-state__button:hover {
+        background: var(--accent-secondary);
+        transform: translateY(-1px);
+    }
 }
 
 .empty-state__button:active {
