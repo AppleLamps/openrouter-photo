@@ -11,6 +11,10 @@ const {
     getEvolinkConfig,
     getOpenRouterConfig,
     getModelPricing,
+    getImageOutputPrice,
+    getVideoPricePerSecond,
+    evolinkCreditsToUsd,
+    catalog,
     isXaiModel,
     isEvolinkModel,
     isEvolinkVideoModel,
@@ -158,9 +162,37 @@ describe('model catalog — pricing', () => {
         assert.equal(pricing.perSecondOutput, 0.05);
     });
 
-    it('exposes Evolink transaction-derived image pricing', () => {
-        assert.equal(getModelPricing('evolink/z-image-turbo').price.amount, 0.004);
-        assert.equal(getModelPricing('evolink/doubao-seedream-4.5').price.amount, 0.035569230769);
-        assert.equal(getModelPricing('evolink/doubao-seedream-4.5/edit').price.amount, 0.035569230769);
+    it('exposes Evolink published image pricing', () => {
+        assert.equal(getModelPricing('evolink/z-image-turbo').price.amount, 0.0038);
+        assert.equal(getModelPricing('evolink/doubao-seedream-4.5').price.amount, 0.03);
+        assert.equal(getModelPricing('evolink/doubao-seedream-4.5/edit').price.amount, 0.03);
+        assert.equal(getModelPricing('evolink/doubao-seedream-5.0-lite').price.amount, 0.028);
+    });
+
+    it('prices every Evolink model so spend is never silently recorded as zero', () => {
+        const evolinkModels = catalog.models.filter((model) => String(model.id).startsWith('evolink/'));
+        assert.ok(evolinkModels.length > 0);
+        for (const model of evolinkModels) {
+            const priced = model.type.endsWith('video')
+                ? getVideoPricePerSecond(model.id, undefined) > 0
+                : getImageOutputPrice(model.id, undefined) > 0;
+            assert.ok(priced, `${model.id} has no usable price in the catalog`);
+        }
+    });
+
+    it('exposes Evolink video per-second pricing by resolution', () => {
+        const seedance = 'evolink/seedance-2.0/text-to-video';
+        assert.equal(getVideoPricePerSecond(seedance, '480p'), 0.092);
+        assert.equal(getVideoPricePerSecond(seedance, '720p'), 0.199);
+        assert.equal(getVideoPricePerSecond(seedance, '1080p'), 0.496);
+        // Unknown resolution falls back to the model's default tier.
+        assert.equal(getVideoPricePerSecond(seedance, '4K'), 0.199);
+    });
+
+    it('converts Evolink credits to USD at the published credit rate', () => {
+        assert.equal(evolinkCreditsToUsd(0), 0);
+        assert.equal(evolinkCreditsToUsd(2.295).toFixed(5), '0.03374');
+        assert.equal(evolinkCreditsToUsd(null), null);
+        assert.equal(evolinkCreditsToUsd(-1), null);
     });
 });

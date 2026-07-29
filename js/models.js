@@ -41,8 +41,14 @@ const API_KEY_LABELS = {
 
 function formatUsd(amount) {
     if (!Number.isFinite(amount) || amount < 0) return null;
-    const digits = amount < 0.01 ? 3 : amount < 0.1 ? 3 : 2;
+    const digits = amount < 0.01 ? 4 : amount < 0.1 ? 3 : 2;
     return `$${amount.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '')}`;
+}
+
+function lowestTieredAmount(amounts) {
+    if (!amounts || typeof amounts !== 'object') return NaN;
+    const values = Object.values(amounts).map(Number).filter((value) => Number.isFinite(value) && value >= 0);
+    return values.length > 0 ? Math.min(...values) : NaN;
 }
 
 export function getModelCostLabel(modelId) {
@@ -50,11 +56,22 @@ export function getModelCostLabel(modelId) {
     const flat = pricing?.price?.type === 'flat' ? formatUsd(Number(pricing.price.amount)) : null;
     if (flat) return `~${flat}/output`;
 
+    // Tiered models (e.g. Seedream 5.0 Pro 1K/2K) advertise their cheapest tier.
+    if (pricing?.price?.type === 'byQuality') {
+        const from = formatUsd(lowestTieredAmount(pricing.price.amounts));
+        if (from) return `from ${from}/output`;
+    }
+
     const perImage = formatUsd(Number(pricing?.perImageOutput));
     if (perImage) return `~${perImage}/image`;
 
-    const perSecond = formatUsd(Number(pricing?.perSecondOutput));
-    if (perSecond) return `~${perSecond}/sec`;
+    const perSecondFlat = formatUsd(Number(pricing?.perSecondOutput));
+    if (perSecondFlat) return `~${perSecondFlat}/sec`;
+
+    const perSecond = pricing?.pricePerSecond;
+    if (Number.isFinite(perSecond)) return `~${formatUsd(perSecond)}/sec`;
+    const perSecondFrom = formatUsd(lowestTieredAmount(perSecond));
+    if (perSecondFrom) return `from ${perSecondFrom}/sec`;
 
     return 'Usage-priced';
 }

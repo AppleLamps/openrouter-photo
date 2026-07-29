@@ -1,6 +1,7 @@
 const { withMiddleware, redactKey, resolveXaiApiKey, resolveEvolinkApiKey } = require('./_middleware');
 const { formatEvolinkError } = require('./providers/format-errors');
 const { buildEvolinkProxyUrl, extractEvolinkResultUrls } = require('./providers/evolink-task');
+const { evolinkCreditsToUsd } = require('./model-catalog');
 
 const normalizeStringParam = (value) => {
     const candidate = Array.isArray(value) ? value[0] : value;
@@ -42,11 +43,16 @@ async function handleEvolinkStatus(req, res, requestId, mediaType) {
                     error: `Task completed but returned no ${mediaType} URL.`,
                 });
             }
+            // A completed task reports the credits Evolink actually charged, which
+            // beats the estimate the client recorded when the task was created.
+            const usage = taskData?.usage || taskData?.data?.usage || null;
+            const actualCost = evolinkCreditsToUsd(usage?.credits_used);
             return res.status(200).json({
                 status: 'completed',
                 media_type: mediaType,
                 url: mediaType === 'image' ? buildEvolinkProxyUrl(url) : url,
                 ...(mediaType === 'image' ? { source_url: url } : {}),
+                ...(actualCost !== null ? { cost: actualCost, usage_estimated: false } : {}),
             });
         }
 

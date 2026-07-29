@@ -90,7 +90,11 @@ describe('UI capabilities', () => {
     it('derives concise model-picker cost and input guidance from the catalog', async () => {
         const { getModelCostLabel, getModelInputLabel } = await import('../js/models.js');
 
-        assert.equal(getModelCostLabel('evolink/z-image-turbo'), '~$0.004/output');
+        assert.equal(getModelCostLabel('evolink/z-image-turbo'), '~$0.0038/output');
+        assert.equal(getModelCostLabel('evolink/doubao-seedream-4.5'), '~$0.03/output');
+        assert.equal(getModelCostLabel('evolink/doubao-seedream-5.0-pro'), 'from $0.034/output');
+        assert.equal(getModelCostLabel('evolink/seedance-2.0/text-to-video'), 'from $0.092/sec');
+        assert.equal(getModelCostLabel('evolink/happyhorse-1.0/image-to-video'), 'from $0.14/sec');
         assert.equal(getModelCostLabel('grok-imagine-image'), '~$0.02/image');
         assert.equal(getModelCostLabel('grok-imagine-video'), '~$0.05/sec');
         assert.equal(getModelCostLabel('google/gemini-3-pro-image-preview'), 'Usage-priced');

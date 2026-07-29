@@ -43,3 +43,33 @@ describe('frontend generation polling', () => {
         );
     });
 });
+
+describe('async spend accounting', () => {
+    it('prefers the provider-reported cost over the create-time estimate', async () => {
+        const { resolveAsyncCost, buildAsyncSpendMeta } = await modulePromise;
+        const request = { estimated_cost: 0.0338, usage_estimated: true, model: 'evolink/doubao-seedream-5.0-pro', provider: 'evolink', request_id: 't1', media_type: 'image' };
+
+        assert.deepEqual(resolveAsyncCost(request, { cost: 0.03375, usage_estimated: false }), { usage: 0.03375, estimated: false });
+
+        const meta = buildAsyncSpendMeta(request, { cost: 0.03375, usage_estimated: false });
+        assert.equal(meta.total_usage, 0.03375);
+        assert.equal(meta.requests[0].usage, 0.03375);
+        assert.equal(meta.requests[0].usage_estimated, false);
+    });
+
+    it('falls back to the estimate when the provider reports no cost', async () => {
+        const { resolveAsyncCost, buildAsyncSpendMeta } = await modulePromise;
+        const request = { estimated_cost: 0.995, usage_estimated: true };
+
+        assert.deepEqual(resolveAsyncCost(request, { status: 'completed', url: '/v.mp4' }), { usage: 0.995, estimated: true });
+        assert.deepEqual(resolveAsyncCost(request, undefined), { usage: 0.995, estimated: true });
+        assert.equal(buildAsyncSpendMeta(request, {}).requests[0].usage_estimated, true);
+    });
+
+    it('records zero rather than NaN when neither side reports a cost', async () => {
+        const { buildAsyncSpendMeta } = await modulePromise;
+        const meta = buildAsyncSpendMeta({ request_id: 'x' }, null);
+        assert.equal(meta.total_usage, 0);
+        assert.equal(meta.requests[0].usage, 0);
+    });
+});
