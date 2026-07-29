@@ -132,6 +132,34 @@ export function getModelPricing(modelId) {
     return caps.pricing || {};
 }
 
+function pickTieredAmount(amounts, tier, fallbackTier) {
+    if (!amounts || typeof amounts !== 'object') return null;
+    for (const key of [tier, fallbackTier, ...Object.keys(amounts)]) {
+        const amount = Number(amounts[key]);
+        if (Number.isFinite(amount) && amount >= 0) return amount;
+    }
+    return null;
+}
+
+/** Price of one generated image in USD; supports flat and per-quality tiers. */
+export function getImageOutputPrice(modelId, quality) {
+    const price = getModelPricing(modelId).price;
+    if (!price) return 0;
+    if (price.type === 'byQuality') {
+        return pickTieredAmount(price.amounts, quality, price.default) ?? 0;
+    }
+    if (price.type === 'flat' && Number.isFinite(price.amount)) return price.amount;
+    return 0;
+}
+
+/** Price per second of generated video in USD; supports flat and per-quality tiers. */
+export function getVideoPricePerSecond(modelId, quality) {
+    const pricing = getModelPricing(modelId);
+    const perSecond = pricing.pricePerSecond ?? pricing.perSecondOutput;
+    if (Number.isFinite(perSecond)) return perSecond;
+    return pickTieredAmount(perSecond, quality, pricing.defaultQuality) ?? 0;
+}
+
 export function getUiCapabilities(modelId) {
     const ui = resolveCapabilities(modelId).ui || {};
     return {

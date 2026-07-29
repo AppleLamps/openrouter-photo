@@ -1,5 +1,10 @@
 const { redactKey } = require('../_middleware');
-const { getEvolinkConfig, getModelPricing } = require('../model-catalog');
+const {
+    getEvolinkConfig,
+    getImageOutputPrice,
+    getInputImagePrice,
+    evolinkCreditsToUsd,
+} = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
 const { buildEvolinkProxyUrl } = require('./evolink-task');
 
@@ -18,12 +23,17 @@ function normalizeZImageAspectRatio(ratio) {
     return Z_IMAGE_ASPECT_FALLBACK[ratio] || '1:1';
 }
 
-function getEvolinkImageCostPerImage(model) {
-    const price = getModelPricing(model)?.price;
-    if (price?.type === 'flat' && Number.isFinite(price.amount)) {
-        return price.amount;
-    }
-    return 0;
+/**
+ * Estimated cost of one Evolink image task, in USD.
+ * Evolink bills the generated image at its quality tier and, on models such as
+ * Seedream 5.0 Pro, each reference image on top of that.
+ */
+function getEvolinkImageCostPerImage(model, { quality, inputImageCount = 0 } = {}) {
+    const outputPrice = getImageOutputPrice(model, quality);
+    const billableInputs = Number.isFinite(inputImageCount) && inputImageCount > 0
+        ? Math.floor(inputImageCount)
+        : 0;
+    return outputPrice + (getInputImagePrice(model) * billableInputs);
 }
 
 function normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault) {
@@ -32,6 +42,25 @@ function normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault) {
         : ['2K', '4K'];
     if (options.includes(resolution)) return resolution;
     return options.includes(qualityDefault) ? qualityDefault : options[0];
+}
+
+// Seedream 5.0 Pro tiers by output pixel count: 1K presets sit near 1024x1024
+// (~1.05M px) and 2K presets near 2048x2048 (~4.19M px).
+const SEEDREAM_2K_PIXEL_THRESHOLD = 2097152;
+
+/**
+ * The quality tier Evolink bills for. When an exact WxH size is requested the
+ * `quality` field is omitted from the payload and Evolink derives the tier from
+ * the pixel count, so mirror that here instead of using the UI resolution.
+ */
+function resolveBilledQuality({ exactImageSize, resolution, qualityOptions, qualityDefault }) {
+    if (typeof exactImageSize === 'string' && exactImageSize) {
+        const [width, height] = exactImageSize.split('x').map((value) => parseInt(value, 10));
+        if (Number.isFinite(width) && Number.isFinite(height)) {
+            return width * height >= SEEDREAM_2K_PIXEL_THRESHOLD ? '2K' : '1K';
+        }
+    }
+    return normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault);
 }
 
 function normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions) {
@@ -180,7 +209,12 @@ async function handleEvolink(ctx) {
 
     try {
         const { variant, apiModel, qualityOptions, qualityDefault, outputFormatOptions } = evolinkConfig;
-        const costPerImage = getEvolinkImageCostPerImage(model);
+        const costPerImage = getEvolinkImageCostPerImage(model, {
+            quality: resolveBilledQuality({ exactImageSize, resolution, qualityOptions, qualityDefault }),
+            // Every task uploads its own copy of the reference set, and Evolink
+            // bills each billable input image per task.
+            inputImageCount: variant === 'z-image-turbo' ? 0 : normalizedInputImages.length,
+        });
 
         const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, async (_, index) => {
             // Each output is a separate Evolink task. Upload an independent
@@ -212,13 +246,19 @@ async function handleEvolink(ctx) {
 
         const requests = taskResults
             .filter((result) => !result.error)
-            .map((result) => ({
-                index: result.index,
-                request_id: result.taskId,
-                estimated_cost: costPerImage,
-                credits_reserved: result.createData?.usage?.credits_reserved || null,
-                usage_estimated: false,
-            }));
+            .map((result) => {
+                const creditsReserved = result.createData?.usage?.credits_reserved ?? null;
+                // Evolink reserves the exact credits it will charge, so prefer that
+                // over the catalog price whenever the create response carries it.
+                const reservedCost = evolinkCreditsToUsd(creditsReserved);
+                return {
+                    index: result.index,
+                    request_id: result.taskId,
+                    estimated_cost: reservedCost ?? costPerImage,
+                    credits_reserved: creditsReserved,
+                    usage_estimated: true,
+                };
+            });
         const errors = taskResults
             .filter((result) => result.error)
             .map((result) => ({
@@ -248,7 +288,7 @@ async function handleEvolink(ctx) {
                     imageCount: 0,
                     delivered_count: 0,
                     usage_pending: true,
-                    usage_estimated: false,
+                    usage_estimated: true,
                     media_type: 'image',
                 })),
             },
@@ -274,6 +314,7 @@ module.exports = {
     buildZImageTurboPayload,
     buildEvolinkProxyUrl,
     getEvolinkImageCostPerImage,
+    resolveBilledQuality,
     normalizeZImageAspectRatio,
     normalizeSeedreamQuality,
     normalizeSeedreamOutputFormat,

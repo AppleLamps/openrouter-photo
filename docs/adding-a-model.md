@@ -184,7 +184,7 @@ Z Image Turbo uses a dedicated profile and async task polling (no batch `n`, no 
   "tier": "fast",
   "via": "Evolink",
   "profile": "evolink-z-image",
-  "pricing": { "price": { "type": "flat", "amount": 0.004 } }
+  "pricing": { "price": { "type": "flat", "amount": 0.0038 } }
 }
 ```
 
@@ -202,7 +202,11 @@ Text-to-video and image-to-video share the `evolink-video` backend and `/v1/vide
   "type": "text-to-video",
   "tier": "quality",
   "via": "Evolink",
-  "profile": "evolink-video-seedance2-t2v"
+  "profile": "evolink-video-seedance2-t2v",
+  "pricing": {
+    "pricePerSecond": { "480p": 0.092, "720p": 0.199, "1080p": 0.496 },
+    "defaultQuality": "720p"
+  }
 }
 ```
 
@@ -240,26 +244,44 @@ When an old client uses a different id string, or a removed model should map to 
 
 ## Pricing (spend tracker)
 
-Pricing is optional but recommended. Shapes used today:
+Add pricing for every non-OpenRouter model. A model with no pricing silently records **$0** in the spend tracker, which is worse than a rough estimate. Shapes used today:
 
 ```json
 // Flat per image (Evolink)
-"pricing": { "price": { "type": "flat", "amount": 0.04 } }
+"pricing": { "price": { "type": "flat", "amount": 0.03 } }
+
+// Per-image with quality tiers, plus per-billable-input-image surcharge
+// (Seedream 5.0 Pro bills 1K and 2K differently and bills each reference image)
+"pricing": {
+  "price": { "type": "byQuality", "amounts": { "1K": 0.03375, "2K": 0.0675 }, "default": "1K" },
+  "inputImageCost": 0.00225
+}
 
 // xAI image
 "pricing": { "perImageOutput": 0.02, "inputImageCost": 0.002 }
 
-// Per-second video (xAI video, and Evolink video when rates are known)
+// Per-second video — flat (xAI) or by resolution (Evolink)
 "pricing": { "perSecondOutput": 0.05, "inputImageCost": 0.002 }
-"pricing": { "pricePerSecond": 0.05 }
+"pricing": { "pricePerSecond": { "480p": 0.092, "720p": 0.199 }, "defaultQuality": "720p" }
 ```
+
+Resolve prices through the catalog helpers rather than reading `pricing` directly, so both
+shapes stay supported: `getImageOutputPrice(id, quality)`, `getInputImagePrice(id)` and
+`getVideoPricePerSecond(id, quality)` (exported from `api/model-catalog.js`, mirrored in
+`js/model-capabilities.js`). An unknown tier falls back to `default`/`defaultQuality`.
 
 Notes:
 
 - Image spend is recorded from each provider's per-image cost (Evolink/xAI) or live OpenRouter usage.
-- Async image/video spend is recorded once when each task completes successfully. Video usage is marked estimated because providers do not return final billing usage in the status response.
-- Evolink video cost remains `0` when no `pricePerSecond` is configured; add it to the profile/model `pricing` to produce a useful estimate.
+- Async image/video spend is recorded once when each task completes successfully.
+- Evolink bills in credits. `providers.evolink.creditUsd` in the catalog holds the published
+  credit → USD rate; `evolinkCreditsToUsd()` uses it to convert `usage.credits_reserved` (returned
+  when a task is created) and `usage.credits_used` (returned when it completes). Both beat the
+  catalog estimate and are used when present, so Evolink spend reflects what was actually billed.
+  Catalog pricing is the fallback for the window before those figures exist.
 - OpenRouter models often rely on live usage from the API response instead of catalog pricing.
+- Evolink rates change often. See `docs/evolink-pricing.md` for the current table, its sources,
+  and how to re-verify.
 
 ---
 

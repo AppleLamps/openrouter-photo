@@ -28,6 +28,7 @@ import {
     buildAsyncSpendMeta,
     normalizePendingRequests,
     pollGenerationRequest,
+    resolveAsyncCost,
 } from './generation-polling.js';
 
 /** @type {string[]} */
@@ -552,19 +553,20 @@ async function handleGenerate(input, button, retryOptions = null) {
                     return { outcome, request, index };
                 }
 
+                const { usage: actualCost } = resolveAsyncCost(request, outcome.result);
                 const image = {
                     url: outcome.result.url,
                     source_url: outcome.result.source_url || null,
                     media_type: outcome.result.media_type || request.media_type,
                     model: request.model,
-                    cost: request.estimated_cost || 0,
+                    cost: actualCost,
                     provider: request.provider,
                 };
                 const savePromise = persistenceQueue.then(() => saveGeneratedImage(image, index));
                 persistenceQueue = savePromise.catch(() => {});
                 const result = await savePromise;
                 persistenceWarning ||= result?.persisted === false;
-                recordSpend(buildAsyncSpendMeta(request), 1);
+                recordSpend(buildAsyncSpendMeta(request, outcome.result), 1);
                 successCount += 1;
                 return { outcome, request, index };
             });

@@ -200,7 +200,7 @@ function openSpendBreakdownModal() {
 
     const topModelDisplay = topEntry ? getModelDisplay(topEntry.model) : null;
     const hint = spend.pending
-        ? 'Some OpenRouter costs are still pending. Fal, xAI, and Evolink estimates are recorded when the app can calculate them.'
+        ? 'Some OpenRouter costs are still pending. Evolink records what it actually billed once a task completes; xAI costs are estimated from published rates.'
         : 'Spend is stored locally in this browser and updates after each completed generation.';
 
     overlay.innerHTML = `

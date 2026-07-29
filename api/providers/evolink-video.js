@@ -1,5 +1,5 @@
 const { redactKey } = require('../_middleware');
-const { resolveCapabilities, getModelPricing } = require('../model-catalog');
+const { resolveCapabilities, getVideoPricePerSecond, evolinkCreditsToUsd } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
 
 const EVOLINK_VIDEO_ASPECT_RATIOS = new Set(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive']);
@@ -21,12 +21,14 @@ function normalizeVideoQuality(value, options, fallback) {
     return fallback;
 }
 
-function estimateVideoCost(model, duration) {
-    const pricePerSecond = getModelPricing(model)?.pricePerSecond;
-    if (pricePerSecond && Number.isFinite(pricePerSecond)) {
-        return pricePerSecond * duration;
-    }
-    return 0;
+/**
+ * Evolink video routes bill per second of output at a rate that varies by
+ * resolution (e.g. Seedance 2.0 is 480p $0.092/s, 720p $0.199/s, 1080p $0.496/s).
+ */
+function estimateVideoCost(model, duration, quality) {
+    const pricePerSecond = getVideoPricePerSecond(model, quality);
+    if (!Number.isFinite(pricePerSecond) || !Number.isFinite(duration)) return 0;
+    return pricePerSecond * duration;
 }
 
 /**
@@ -152,7 +154,10 @@ async function handleEvolinkVideo(ctx) {
             return res.status(502).json({ error: 'Evolink video request did not return a task ID' });
         }
 
-        const estimatedCost = estimateVideoCost(model, duration);
+        const creditsReserved = createData?.usage?.credits_reserved ?? null;
+        // Evolink reserves the exact credits it will charge; fall back to the
+        // catalog per-second rate for the requested resolution.
+        const estimatedCost = evolinkCreditsToUsd(creditsReserved) ?? estimateVideoCost(model, duration, quality);
         const request = {
             index: 0,
             request_id: taskId,

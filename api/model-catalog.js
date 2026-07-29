@@ -4,7 +4,10 @@
 
 const catalog = require('../shared/model-catalog.json');
 
-const { capabilityProfiles, models, legacyRedirects, defaultModelId, defaults } = catalog;
+const { capabilityProfiles, models, legacyRedirects, defaultModelId, defaults, providers } = catalog;
+
+// Evolink bills in credits; the dashboard publishes the credit → USD rate.
+const EVOLINK_CREDIT_USD = Number(providers?.evolink?.creditUsd) || 0.0147;
 
 function deepMerge(base, override) {
     if (!override) return base ? { ...base } : {};
@@ -128,6 +131,57 @@ function getModelPricing(modelId) {
     return caps.pricing || {};
 }
 
+function pickTieredAmount(amounts, tier, fallbackTier) {
+    if (!amounts || typeof amounts !== 'object') return null;
+    const candidates = [tier, fallbackTier, ...Object.keys(amounts)];
+    for (const key of candidates) {
+        const amount = Number(amounts[key]);
+        if (Number.isFinite(amount) && amount >= 0) return amount;
+    }
+    return null;
+}
+
+/**
+ * Price of a single generated image, in USD.
+ * Supports flat pricing and per-quality tiers (e.g. Seedream 5.0 Pro 1K vs 2K).
+ */
+function getImageOutputPrice(modelId, quality) {
+    const price = getModelPricing(modelId).price;
+    if (!price) return 0;
+    if (price.type === 'byQuality') {
+        return pickTieredAmount(price.amounts, quality, price.default) ?? 0;
+    }
+    if (price.type === 'flat' && Number.isFinite(price.amount)) return price.amount;
+    return 0;
+}
+
+/** Per-billable-input-image surcharge, in USD (Evolink bills reference images separately). */
+function getInputImagePrice(modelId) {
+    const amount = Number(getModelPricing(modelId).inputImageCost);
+    return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
+
+/**
+ * Price per second of generated video, in USD.
+ * Supports a flat number and per-quality tiers (480p/720p/1080p).
+ */
+function getVideoPricePerSecond(modelId, quality) {
+    const pricing = getModelPricing(modelId);
+    const perSecond = pricing.pricePerSecond ?? pricing.perSecondOutput;
+    if (Number.isFinite(perSecond)) return perSecond;
+    return pickTieredAmount(perSecond, quality, pricing.defaultQuality) ?? 0;
+}
+
+/**
+ * Convert Evolink credits to USD. Returns null when no credit figure is
+ * available so callers fall back to an estimate instead of recording $0
+ * (`Number(null)` is 0, so the type check has to come first).
+ */
+function evolinkCreditsToUsd(credits) {
+    if (typeof credits !== 'number' || !Number.isFinite(credits) || credits < 0) return null;
+    return credits * EVOLINK_CREDIT_USD;
+}
+
 function getUiCapabilities(modelId) {
     const ui = resolveCapabilities(modelId).ui || {};
     return {
@@ -162,6 +216,11 @@ module.exports = {
     getEvolinkConfig,
     getOpenRouterConfig,
     getModelPricing,
+    getImageOutputPrice,
+    getInputImagePrice,
+    getVideoPricePerSecond,
+    evolinkCreditsToUsd,
+    EVOLINK_CREDIT_USD,
     getUiCapabilities,
     DEFAULT_MODEL_ID: defaultModelId,
     LEGACY_MODEL_REDIRECTS: legacyRedirects,

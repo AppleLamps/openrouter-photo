@@ -90,8 +90,23 @@ export async function pollGenerationRequest(request, pollStatus, signal, options
     return { status: 'failed', request, error: 'Generation timed out. Please try again.' };
 }
 
-export function buildAsyncSpendMeta(request) {
-    const usage = Number.isFinite(request?.estimated_cost) ? request.estimated_cost : 0;
+/**
+ * Cost to record for a finished async task. Providers that report what they
+ * actually billed (Evolink returns `credits_used` on a completed task) win over
+ * the estimate captured when the task was created.
+ */
+export function resolveAsyncCost(request, result) {
+    if (Number.isFinite(result?.cost) && result.cost >= 0) {
+        return { usage: result.cost, estimated: result.usage_estimated === true };
+    }
+    return {
+        usage: Number.isFinite(request?.estimated_cost) ? request.estimated_cost : 0,
+        estimated: request?.usage_estimated === true,
+    };
+}
+
+export function buildAsyncSpendMeta(request, result) {
+    const { usage, estimated } = resolveAsyncCost(request, result);
     return {
         total_usage: usage,
         usage_pending: false,
@@ -103,7 +118,7 @@ export function buildAsyncSpendMeta(request) {
             imageCount: 1,
             delivered_count: 1,
             usage_pending: false,
-            usage_estimated: request?.usage_estimated === true,
+            usage_estimated: estimated,
             media_type: request?.media_type === 'image' ? 'image' : 'video',
         }],
     };

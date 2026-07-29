@@ -6,6 +6,7 @@ const {
     buildZImageTurboPayload,
     getEvolinkImageCostPerImage,
     handleEvolink,
+    resolveBilledQuality,
     normalizeZImageAspectRatio,
     normalizeSeedreamQuality,
     normalizeSeedreamOutputFormat,
@@ -224,10 +225,33 @@ describe('evolink payload builders', () => {
         assert.equal(normalizeZImageAspectRatio('unknown'), '1:1');
     });
 
-    it('prices Evolink image output from transaction-derived USD costs', () => {
-        assert.equal(getEvolinkImageCostPerImage('evolink/z-image-turbo'), 0.004);
-        assert.equal(getEvolinkImageCostPerImage('evolink/doubao-seedream-4.5'), 0.035569230769);
-        assert.equal(getEvolinkImageCostPerImage('evolink/doubao-seedream-4.5/edit'), 0.035569230769);
+    // Rates published at evolink.ai/docs and the 2026-07-26 pricing changelog.
+    it('prices Evolink image output from published per-image rates', () => {
+        assert.equal(getEvolinkImageCostPerImage('evolink/z-image-turbo'), 0.0038);
+        assert.equal(getEvolinkImageCostPerImage('evolink/doubao-seedream-4.5'), 0.03);
+        assert.equal(getEvolinkImageCostPerImage('evolink/doubao-seedream-4.5/edit'), 0.03);
+        assert.equal(getEvolinkImageCostPerImage('evolink/doubao-seedream-5.0-lite'), 0.028);
+    });
+
+    it('prices Seedream 5.0 Pro by output tier plus billable input images', () => {
+        const model = 'evolink/doubao-seedream-5.0-pro';
+        assert.equal(getEvolinkImageCostPerImage(model, { quality: '1K' }), 0.03375);
+        assert.equal(getEvolinkImageCostPerImage(model, { quality: '2K' }), 0.0675);
+        // Unknown/absent tier falls back to the model's default tier.
+        assert.equal(getEvolinkImageCostPerImage(model), 0.03375);
+        assert.equal(
+            getEvolinkImageCostPerImage(model, { quality: '1K', inputImageCount: 2 }),
+            0.03375 + (2 * 0.00225),
+        );
+    });
+
+    it('derives the billed Seedream tier from exact pixel dimensions', () => {
+        const tiers = { qualityOptions: ['1K', '2K'], qualityDefault: '1K' };
+        assert.equal(resolveBilledQuality({ exactImageSize: '1024x1024', ...tiers }), '1K');
+        assert.equal(resolveBilledQuality({ exactImageSize: '2048x2048', ...tiers }), '2K');
+        assert.equal(resolveBilledQuality({ exactImageSize: '1664x2496', ...tiers }), '2K');
+        // No exact size: the requested resolution decides.
+        assert.equal(resolveBilledQuality({ resolution: '2K', ...tiers }), '2K');
     });
 
     it('builds same-origin proxy URLs for Evolink hosted images', () => {
