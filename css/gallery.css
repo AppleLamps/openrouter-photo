@@ -6,6 +6,13 @@
     gap: 20px;
 }
 
+.gallery__sentinel {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 1px;
+    pointer-events: none;
+}
+
 @media (max-width: 600px) {
     .gallery {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

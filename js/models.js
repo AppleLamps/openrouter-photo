@@ -7,6 +7,9 @@ import {
     CATALOG_MODELS,
     DEFAULT_MODEL_ID,
     LEGACY_MODEL_REDIRECTS,
+    getApiKey,
+    getInputConstraints,
+    getModelPricing,
     isVisibleInPicker,
 } from './model-capabilities.js';
 
@@ -30,7 +33,42 @@ export {
     LEGACY_MODEL_REDIRECTS,
 } from './model-capabilities.js';
 
+const API_KEY_LABELS = {
+    openrouter: 'OpenRouter',
+    xai: 'xAI',
+    evolink: 'Evolink',
+};
+
+function formatUsd(amount) {
+    if (!Number.isFinite(amount) || amount < 0) return null;
+    const digits = amount < 0.01 ? 3 : amount < 0.1 ? 3 : 2;
+    return `$${amount.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '')}`;
+}
+
+export function getModelCostLabel(modelId) {
+    const pricing = getModelPricing(modelId);
+    const flat = pricing?.price?.type === 'flat' ? formatUsd(Number(pricing.price.amount)) : null;
+    if (flat) return `~${flat}/output`;
+
+    const perImage = formatUsd(Number(pricing?.perImageOutput));
+    if (perImage) return `~${perImage}/image`;
+
+    const perSecond = formatUsd(Number(pricing?.perSecondOutput));
+    if (perSecond) return `~${perSecond}/sec`;
+
+    return 'Usage-priced';
+}
+
+export function getModelInputLabel(modelId) {
+    const input = getInputConstraints(modelId);
+    const maxImages = Number.isInteger(input?.maxImages) ? input.maxImages : 0;
+    if (maxImages <= 0) return 'Text only';
+    if (input.required) return `Image required · max ${maxImages}`;
+    return `Up to ${maxImages} image${maxImages === 1 ? '' : 's'}`;
+}
+
 function toPickerModel({ id, name, provider, type, modes, tier, via }) {
+    const apiKey = getApiKey(id);
     return {
         id,
         name,
@@ -38,6 +76,10 @@ function toPickerModel({ id, name, provider, type, modes, tier, via }) {
         type,
         modes: Array.isArray(modes) ? modes : [type],
         tier,
+        apiKey,
+        apiKeyLabel: API_KEY_LABELS[apiKey] || apiKey,
+        costLabel: getModelCostLabel(id),
+        inputLabel: getModelInputLabel(id),
         ...(via ? { via } : {}),
     };
 }

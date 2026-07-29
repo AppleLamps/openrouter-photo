@@ -36,6 +36,22 @@ const DEFAULT_ASPECT_RATIO_OPTIONS = [
     ['9:21', '9:21'],
 ];
 
+const API_KEY_STORAGE_KEYS = {
+    openrouter: 'openrouter_api_key',
+    xai: 'xai_api_key',
+    evolink: 'evolink_api_key',
+};
+
+function hasLocalApiKey(provider) {
+    const storageKey = API_KEY_STORAGE_KEYS[provider];
+    if (!storageKey) return false;
+    try {
+        return Boolean(localStorage.getItem(storageKey)?.trim());
+    } catch {
+        return false;
+    }
+}
+
 const ASPECT_RATIO_LABELS = new Map([
     ...DEFAULT_ASPECT_RATIO_OPTIONS,
     ['auto', 'Auto'],
@@ -228,6 +244,9 @@ function createModelPicker() {
         return m.name.toLowerCase().includes(q)
             || m.provider.toLowerCase().includes(q)
             || (m.via || '').toLowerCase().includes(q)
+            || (m.costLabel || '').toLowerCase().includes(q)
+            || (m.inputLabel || '').toLowerCase().includes(q)
+            || (m.apiKeyLabel || '').toLowerCase().includes(q)
             || m.id.toLowerCase().includes(q);
     };
 
@@ -278,6 +297,14 @@ function createModelPicker() {
         if (m.via) badges.appendChild(buildBadge('model-picker__badge--via', `via ${m.via}`));
 
         main.appendChild(badges);
+
+        const guidance = document.createElement('span');
+        guidance.className = 'model-picker__row-guidance';
+        const keyState = hasLocalApiKey(m.apiKey)
+            ? `${m.apiKeyLabel} key ready`
+            : `${m.apiKeyLabel} key required`;
+        guidance.textContent = `${m.costLabel} · ${m.inputLabel} · ${keyState}`;
+        main.appendChild(guidance);
         row.appendChild(main);
 
         const check = document.createElement('span');

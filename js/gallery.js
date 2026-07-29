@@ -39,10 +39,17 @@ let scrollYBeforeLock = 0;
 let isScrollLocked = false;
 
 const ZIP_DOWNLOAD_THRESHOLD = 5;
+const GALLERY_PAGE_SIZE = 48;
 let jsZipLoaderPromise = null;
 
 /** @type {IntersectionObserver|null} */
 let lazyObserver = null;
+
+/** @type {IntersectionObserver|null} */
+let galleryPaginationObserver = null;
+
+/** Number of filtered image cards currently mounted. */
+let renderedImageCount = 0;
 
 /**
  * Get or create the shared IntersectionObserver for lazy-loading gallery media.
@@ -76,6 +83,57 @@ function getLazyObserver() {
     }, { rootMargin: '200px' });
 
     return lazyObserver;
+}
+
+function getGalleryPaginationObserver() {
+    if (galleryPaginationObserver) return galleryPaginationObserver;
+
+    galleryPaginationObserver = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+            appendNextGalleryPage();
+        }
+    }, { rootMargin: '800px 0px' });
+
+    return galleryPaginationObserver;
+}
+
+function syncGalleryPaginationSentinel() {
+    if (!galleryElement) return;
+
+    galleryPaginationObserver?.disconnect();
+    galleryElement.querySelector('.gallery__sentinel')?.remove();
+
+    const images = state.getFilteredImages();
+    if (renderedImageCount >= images.length) return;
+
+    const sentinel = createElement('div', {
+        className: 'gallery__sentinel',
+        'aria-hidden': 'true',
+    });
+    galleryElement.appendChild(sentinel);
+    getGalleryPaginationObserver().observe(sentinel);
+}
+
+function appendNextGalleryPage() {
+    if (!galleryElement) return;
+
+    const images = state.getFilteredImages();
+    if (renderedImageCount >= images.length) {
+        syncGalleryPaginationSentinel();
+        return;
+    }
+
+    galleryPaginationObserver?.disconnect();
+    galleryElement.querySelector('.gallery__sentinel')?.remove();
+
+    const end = Math.min(renderedImageCount + GALLERY_PAGE_SIZE, images.length);
+    const fragment = document.createDocumentFragment();
+    images.slice(renderedImageCount, end).forEach((image) => {
+        fragment.appendChild(createImageCard(image));
+    });
+    galleryElement.appendChild(fragment);
+    renderedImageCount = end;
+    syncGalleryPaginationSentinel();
 }
 
 /**
@@ -323,6 +381,7 @@ function renderGallery() {
     if (lazyObserver) {
         lazyObserver.disconnect();
     }
+    galleryPaginationObserver?.disconnect();
 
     galleryElement.innerHTML = '';
 
@@ -341,11 +400,14 @@ function renderGallery() {
         }
     });
 
-    images.forEach(image => {
+    const initialImages = images.slice(0, GALLERY_PAGE_SIZE);
+    initialImages.forEach(image => {
         const card = createImageCard(image);
         fragment.appendChild(card);
     });
     galleryElement.appendChild(fragment);
+    renderedImageCount = initialImages.length;
+    syncGalleryPaginationSentinel();
 
     // Keep the container's edit-mode class in sync with state (e.g. after a
     // folder switch while multi-select is active).
@@ -875,6 +937,8 @@ function prependImageCard(image, preloaded = false) {
     const card = createImageCard(image, preloaded);
     card.classList.add('gallery__card--enter');
     galleryElement.insertBefore(card, galleryElement.firstChild);
+    renderedImageCount += 1;
+    syncGalleryPaginationSentinel();
 
     requestAnimationFrame(() => {
         card.classList.add('gallery__card--enter-active');
@@ -890,6 +954,7 @@ function removeImageCard(id) {
 
     const card = galleryElement.querySelector(`[data-id="${id}"]`);
     if (card) {
+        renderedImageCount = Math.max(0, renderedImageCount - 1);
         card.style.opacity = '0';
         card.style.transform = 'scale(0.9)';
 
@@ -910,6 +975,7 @@ function removeImageCard(id) {
 
         // Clean up confirmation state when image is removed
         resetConfirmationState(id);
+        syncGalleryPaginationSentinel();
     }
 }
 

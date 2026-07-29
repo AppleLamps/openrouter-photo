@@ -76,9 +76,17 @@ describe('frontend hardening', () => {
         assert.match(html, /html\{[^}]*overflow-x:hidden;/);
     });
 
-    it('stacks input bar dropdown controls onto a full mobile row', () => {
+    it('uses a compact mobile composer with progressively disclosed secondary tools', () => {
+        const html = read('index.html');
+        const app = read('js/app.js');
         const components = read('css/components.css');
-        assert.match(components, /\.input-bar__actions-center\s*\{[^}]*flex: 0 0 100%;[^}]*width: 100%;/s);
+
+        assert.match(html, /id="mobile-tools-btn"[^>]+aria-controls="input-bar-tools"[^>]+aria-expanded="false"/);
+        assert.match(app, /function initMobileComposerTools\(\)/);
+        assert.match(app, /input-bar--tools-open/);
+        assert.match(components, /grid-template-columns: 44px minmax\(0, 1fr\) 44px;/);
+        assert.match(components, /\.input-bar--tools-open \.input-bar__actions-left\s*\{[^}]*display: flex;/s);
+        assert.match(components, /#folder-selector-dropdown\s*\{[^}]*display: none;/s);
     });
 
     it('sets DOM boolean properties instead of serializing false boolean attributes', () => {
@@ -179,5 +187,26 @@ describe('frontend hardening', () => {
         const picker = read('js/model-picker.js');
         assert.match(picker, /PICKER_MODELS\.filter\(matches\)/);
         assert.doesNotMatch(picker, /const filtered = MODELS\.filter\(matches\);/);
+    });
+
+    it('shows catalog-derived cost, input, and key guidance in the model picker', () => {
+        const models = read('js/models.js');
+        const picker = read('js/model-picker.js');
+
+        assert.match(models, /export function getModelCostLabel\(modelId\)/);
+        assert.match(models, /export function getModelInputLabel\(modelId\)/);
+        assert.match(picker, /className = 'model-picker__row-guidance'/);
+        assert.match(picker, /key ready/);
+        assert.match(picker, /key required/);
+    });
+
+    it('mounts large galleries in bounded incremental pages', () => {
+        const gallery = read('js/gallery.js');
+
+        assert.match(gallery, /const GALLERY_PAGE_SIZE = 48;/);
+        assert.match(gallery, /images\.slice\(0, GALLERY_PAGE_SIZE\)/);
+        assert.match(gallery, /function appendNextGalleryPage\(\)/);
+        assert.match(gallery, /className: 'gallery__sentinel'/);
+        assert.match(gallery, /rootMargin: '800px 0px'/);
     });
 });

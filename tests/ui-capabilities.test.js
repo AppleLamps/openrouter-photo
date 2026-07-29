@@ -86,6 +86,17 @@ describe('UI capabilities', () => {
         assert.equal(matches.length, 1);
         assert.deepEqual(matches[0].modes, ['image', 'edit']);
     });
+
+    it('derives concise model-picker cost and input guidance from the catalog', async () => {
+        const { getModelCostLabel, getModelInputLabel } = await import('../js/models.js');
+
+        assert.equal(getModelCostLabel('evolink/z-image-turbo'), '~$0.004/output');
+        assert.equal(getModelCostLabel('grok-imagine-image'), '~$0.02/image');
+        assert.equal(getModelCostLabel('grok-imagine-video'), '~$0.05/sec');
+        assert.equal(getModelCostLabel('google/gemini-3-pro-image-preview'), 'Usage-priced');
+        assert.equal(getModelInputLabel('evolink/seedance-2.0/image-to-video'), 'Image required · max 2');
+        assert.equal(getModelInputLabel('evolink/seedance-2.0/text-to-video'), 'Text only');
+    });
 });
 
 describe('picker visibility', () => {

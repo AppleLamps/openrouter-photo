@@ -256,6 +256,7 @@ async function init() {
     });
     initSettingsUI();
     initModelPicker();
+    initMobileComposerTools();
     initEmptyStateKeyPrompt();
 
     // Spend tracker
@@ -282,6 +283,47 @@ async function init() {
     scheduleStorageIndicatorUpdate();
 
     console.log('AI Image Generator initialized');
+}
+
+function initMobileComposerTools() {
+    const inputBar = document.querySelector('.input-bar');
+    const toggle = document.getElementById('mobile-tools-btn');
+    const tools = document.getElementById('input-bar-tools');
+    if (!(inputBar instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement) || !tools) return;
+
+    const setOpen = (open) => {
+        inputBar.classList.toggle('input-bar--tools-open', open);
+        document.body.classList.toggle('mobile-composer-tools-open', open);
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.setAttribute('aria-label', open ? 'Hide creation tools' : 'Show more creation tools');
+    };
+
+    toggle.addEventListener('click', () => {
+        setOpen(!inputBar.classList.contains('input-bar--tools-open'));
+    });
+
+    tools.addEventListener('click', (event) => {
+        if (event.target instanceof Element && event.target.closest('button')) {
+            requestAnimationFrame(() => setOpen(false));
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && inputBar.classList.contains('input-bar--tools-open')) {
+            setOpen(false);
+            toggle.focus({ preventScroll: true });
+        }
+    });
+
+    const desktopQuery = window.matchMedia('(min-width: 601px)');
+    const handleDesktopChange = (event) => {
+        if (event.matches) setOpen(false);
+    };
+    if (typeof desktopQuery.addEventListener === 'function') {
+        desktopQuery.addEventListener('change', handleDesktopChange);
+    } else {
+        desktopQuery.addListener(handleDesktopChange);
+    }
 }
 
 /**

@@ -240,7 +240,20 @@
                 </div>
                 <div id="prompt-attachments" class="input-bar__attachments" aria-label="Attached images"></div>
                 <div class="input-bar__actions">
-                    <div class="input-bar__actions-left">
+                    <button id="mobile-tools-btn" class="input-bar__icon-btn input-bar__mobile-tools-btn" type="button"
+                        title="More creation tools" aria-label="Show more creation tools"
+                        aria-controls="input-bar-tools" aria-expanded="false">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="4" y1="6" x2="20" y2="6"></line>
+                            <line x1="4" y1="12" x2="20" y2="12"></line>
+                            <line x1="4" y1="18" x2="20" y2="18"></line>
+                            <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"></circle>
+                            <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"></circle>
+                            <circle cx="11" cy="18" r="2" fill="currentColor" stroke="none"></circle>
+                        </svg>
+                    </button>
+                    <div id="input-bar-tools" class="input-bar__actions-left">
                         <button id="settings-btn" class="input-bar__icon-btn" title="Generation settings"
                             aria-label="Open generation settings" aria-controls="settings-panel" aria-expanded="false">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
