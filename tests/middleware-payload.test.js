@@ -108,6 +108,82 @@ describe('api middleware payload limit', () => {
         }
     });
 
+    it('uses the normalized method and pathname so query strings cannot bypass limits', async () => {
+        const previousMax = process.env.API_RATE_LIMIT_MAX;
+        process.env.API_RATE_LIMIT_MAX = '1';
+        __test.rateLimitBuckets.clear();
+
+        try {
+            let calls = 0;
+            const handler = withMiddleware(async (_req, res) => {
+                calls += 1;
+                return res.status(200).json({ ok: true });
+            });
+
+            const first = makeReq('{}');
+            first.url = '/api/generate?nonce=one';
+            const second = makeReq('{}');
+            second.url = '/api/generate?nonce=two';
+            const firstRes = makeRes();
+            const secondRes = makeRes();
+
+            await handler(first, firstRes);
+            await handler(second, secondRes);
+
+            assert.equal(calls, 1);
+            assert.equal(firstRes.statusCode, 200);
+            assert.equal(secondRes.statusCode, 429);
+            assert.equal(firstRes.headers['x-ratelimit-source'], 'local');
+            assert.equal(__test.getRateLimitRoute(first), '/api/generate');
+            assert.equal(__test.buildRateLimitKey(first), __test.buildRateLimitKey(second));
+        } finally {
+            __test.rateLimitBuckets.clear();
+            if (previousMax === undefined) {
+                delete process.env.API_RATE_LIMIT_MAX;
+            } else {
+                process.env.API_RATE_LIMIT_MAX = previousMax;
+            }
+        }
+    });
+
+    it('uses an atomic distributed limiter when Upstash REST credentials are configured', async () => {
+        const previousUrl = process.env.UPSTASH_REDIS_REST_URL;
+        const previousToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+        const originalFetch = global.fetch;
+        process.env.UPSTASH_REDIS_REST_URL = 'https://rate-limit.example';
+        process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
+
+        try {
+            global.fetch = async (url, options) => {
+                assert.equal(url, 'https://rate-limit.example');
+                assert.equal(options.headers.Authorization, 'Bearer test-token');
+                const command = JSON.parse(options.body);
+                assert.equal(command[0], 'EVAL');
+                assert.equal(command[2], '1');
+                return {
+                    ok: true,
+                    json: async () => ({ result: [1, 60000] }),
+                };
+            };
+
+            const handler = withMiddleware(async (_req, res) => res.status(200).json({ ok: true }));
+            const req = makeReq('{}');
+            req.url = '/api/generate?nonce=ignored';
+            const res = makeRes();
+
+            await handler(req, res);
+
+            assert.equal(res.statusCode, 200);
+            assert.equal(res.headers['x-ratelimit-source'], 'distributed');
+        } finally {
+            global.fetch = originalFetch;
+            if (previousUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+            else process.env.UPSTASH_REDIS_REST_URL = previousUrl;
+            if (previousToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+            else process.env.UPSTASH_REDIS_REST_TOKEN = previousToken;
+        }
+    });
+
     it('keeps CORS allow headers hyphenated only', () => {
         assert.equal(API_CORS_ALLOW_HEADERS.includes('_'), false);
         assert.match(API_CORS_ALLOW_HEADERS, /X-OpenRouter-Api-Key/);

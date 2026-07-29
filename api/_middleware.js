@@ -3,14 +3,26 @@
  * Handles CORS, OPTIONS preflight, POST-only enforcement, and body parsing.
  */
 
+const { createHash } = require('node:crypto');
+
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_RATE_LIMIT_MAX = 60;
+const DEFAULT_DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS = 1500;
 const VERCEL_FUNCTION_PAYLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const RATE_LIMIT_PRUNE_INTERVAL_MS = 60 * 1000;
 const API_CORS_ALLOW_HEADERS = 'Content-Type, X-OpenRouter-Api-Key, X-XAI-Api-Key, X-Evolink-Api-Key, X-App-Access-Token';
 const rateLimitBuckets = new Map();
 const SERVER_PROVIDER_KEY_ACCESS_HEADER = 'x-app-access-token';
+const DISTRIBUTED_RATE_LIMIT_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('PTTL', KEYS[1])
+return { count, ttl }
+`;
 let lastRateLimitPruneMs = 0;
+let didWarnDistributedRateLimit = false;
 
 const parseOptionalInteger = (raw) => {
     if (raw == null || String(raw).trim() === '') return null;
@@ -52,11 +64,31 @@ const resolveCorsOrigin = (req) => {
 };
 
 const getClientId = (req) => {
-    const forwardedFor = req.headers['x-forwarded-for'];
+    const trustForwardedFor = process.env.VERCEL === '1' || process.env.TRUST_PROXY === 'true';
+    const forwardedFor = trustForwardedFor ? req.headers['x-forwarded-for'] : null;
     if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
         return forwardedFor.split(',')[0].trim();
     }
     return req.socket?.remoteAddress || 'unknown';
+};
+
+const getRateLimitRoute = (req) => {
+    try {
+        return new URL(req.url || '/', 'http://rate-limit.local').pathname;
+    } catch {
+        return '/';
+    }
+};
+
+const getDistributedRateLimitConfig = () => {
+    const url = getEnvValue('UPSTASH_REDIS_REST_URL') || getEnvValue('KV_REST_API_URL');
+    const token = getEnvValue('UPSTASH_REDIS_REST_TOKEN') || getEnvValue('KV_REST_API_TOKEN');
+    return url && token ? { url: url.replace(/\/+$/, ''), token } : null;
+};
+
+const buildRateLimitKey = (req) => {
+    const identity = `${getClientId(req)}:${String(req.method || 'GET').toUpperCase()}:${getRateLimitRoute(req)}`;
+    return `api-rate-limit:${createHash('sha256').update(identity).digest('hex')}`;
 };
 
 function pruneExpiredRateLimitBuckets(now = Date.now()) {
@@ -74,14 +106,9 @@ function maybePruneExpiredRateLimitBuckets(now) {
     }
 }
 
-const checkRateLimit = (req, options = {}) => {
-    const windowMs = resolveIntegerSetting('API_RATE_LIMIT_WINDOW_MS', options.windowMs, DEFAULT_RATE_LIMIT_WINDOW_MS);
-    const max = resolveIntegerSetting('API_RATE_LIMIT_MAX', options.max, DEFAULT_RATE_LIMIT_MAX);
-    if (max <= 0) return { allowed: true, remaining: 0, resetMs: Date.now() + windowMs };
-
+const checkLocalRateLimit = (key, windowMs, max) => {
     const now = Date.now();
     maybePruneExpiredRateLimitBuckets(now);
-    const key = `${getClientId(req)}:${req.url || ''}`;
     let bucket = rateLimitBuckets.get(key);
     if (!bucket || bucket.resetMs <= now) {
         bucket = { count: 0, resetMs: now + windowMs };
@@ -93,7 +120,80 @@ const checkRateLimit = (req, options = {}) => {
         allowed: bucket.count <= max,
         remaining: Math.max(max - bucket.count, 0),
         resetMs: bucket.resetMs,
+        source: 'local',
     };
+};
+
+const checkDistributedRateLimit = async (key, windowMs, max, config) => {
+    const timeoutMs = resolveIntegerSetting(
+        'API_RATE_LIMIT_TIMEOUT_MS',
+        null,
+        DEFAULT_DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS
+    );
+    const response = await fetch(config.url, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${config.token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(['EVAL', DISTRIBUTED_RATE_LIMIT_SCRIPT, '1', key, String(windowMs)]),
+        signal: AbortSignal.timeout(Math.max(timeoutMs, 1)),
+    });
+    if (!response.ok) {
+        throw new Error(`Distributed rate limiter returned HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const result = payload?.result;
+    if (!Array.isArray(result) || result.length < 2) {
+        throw new Error('Distributed rate limiter returned an invalid response');
+    }
+
+    const count = Number(result[0]);
+    const ttl = Number(result[1]);
+    if (!Number.isFinite(count) || !Number.isFinite(ttl)) {
+        throw new Error('Distributed rate limiter returned invalid counters');
+    }
+
+    const now = Date.now();
+    return {
+        allowed: count <= max,
+        remaining: Math.max(max - count, 0),
+        resetMs: now + Math.max(ttl, 0),
+        source: 'distributed',
+    };
+};
+
+const checkRateLimit = async (req, options = {}) => {
+    const windowMs = resolveIntegerSetting('API_RATE_LIMIT_WINDOW_MS', options.windowMs, DEFAULT_RATE_LIMIT_WINDOW_MS);
+    const max = resolveIntegerSetting('API_RATE_LIMIT_MAX', options.max, DEFAULT_RATE_LIMIT_MAX);
+    if (max <= 0) {
+        return { allowed: true, remaining: 0, resetMs: Date.now() + windowMs, source: 'disabled' };
+    }
+
+    const key = buildRateLimitKey(req);
+    const distributedConfig = getDistributedRateLimitConfig();
+    if (distributedConfig) {
+        try {
+            return await checkDistributedRateLimit(key, windowMs, max, distributedConfig);
+        } catch (error) {
+            if (!didWarnDistributedRateLimit) {
+                console.error('Distributed API rate limiter unavailable; using local fallback:', error);
+                didWarnDistributedRateLimit = true;
+            }
+            if (process.env.API_RATE_LIMIT_FAIL_CLOSED === 'true') {
+                return {
+                    allowed: false,
+                    unavailable: true,
+                    remaining: 0,
+                    resetMs: Date.now() + windowMs,
+                    source: 'distributed-error',
+                };
+            }
+        }
+    }
+
+    return checkLocalRateLimit(key, windowMs, max);
 };
 
 const getHeaderValue = (req, names) => {
@@ -257,9 +357,13 @@ function withMiddleware(handler, options = {}) {
         }
 
         // ---------- Rate limiting ----------
-        const limit = checkRateLimit(req, rateLimit);
+        const limit = await checkRateLimit(req, rateLimit);
         res.setHeader('X-RateLimit-Remaining', String(limit.remaining));
         res.setHeader('X-RateLimit-Reset', String(Math.ceil(limit.resetMs / 1000)));
+        res.setHeader('X-RateLimit-Source', limit.source);
+        if (limit.unavailable) {
+            return res.status(503).json({ error: 'Rate limit service unavailable. Please try again.' });
+        }
         if (!limit.allowed) {
             return res.status(429).json({ error: 'Too many requests. Please wait and try again.' });
         }
@@ -306,5 +410,8 @@ module.exports = {
     __test: {
         rateLimitBuckets,
         pruneExpiredRateLimitBuckets,
+        buildRateLimitKey,
+        getRateLimitRoute,
+        checkRateLimit,
     },
 };

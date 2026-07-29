@@ -57,8 +57,9 @@ describe('image proxy allowlist', () => {
 
     it('proxies allowed images through the app origin', async () => {
         const imageUrl = 'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream/out.jpeg';
-        global.fetch = async (url) => {
+        global.fetch = async (url, options) => {
             assert.equal(url, imageUrl);
+            assert.equal(options.redirect, 'manual');
             return {
                 ok: true,
                 status: 200,
@@ -80,6 +81,71 @@ describe('image proxy allowlist', () => {
         assert.equal(res.headers['content-type'], 'image/jpeg');
         assert.equal(Buffer.isBuffer(res.body), true);
         assert.equal(res.body.toString(), 'jpeg-bytes');
+    });
+
+    it('blocks redirects that leave the image host allowlist', async () => {
+        const imageUrl = 'https://files-api.evolink.ai/redirect.jpeg';
+        let calls = 0;
+        global.fetch = async () => {
+            calls += 1;
+            return {
+                ok: false,
+                status: 302,
+                headers: {
+                    get(name) {
+                        return name.toLowerCase() === 'location'
+                            ? 'http://169.254.169.254/latest/meta-data/'
+                            : null;
+                    },
+                },
+            };
+        };
+
+        const res = makeRes();
+        await handler(makeReq(imageUrl), res);
+
+        assert.equal(res.statusCode, 400);
+        assert.deepEqual(res.body, { error: 'Unsupported image redirect host' });
+        assert.equal(calls, 1);
+    });
+
+    it('revalidates and follows redirects that remain on allowed hosts', async () => {
+        const firstUrl = 'https://files-api.evolink.ai/redirect.jpeg';
+        const finalUrl = 'https://cdn.evolink.ai/final.jpeg';
+        const seen = [];
+        global.fetch = async (url) => {
+            seen.push(url);
+            if (url === firstUrl) {
+                return {
+                    ok: false,
+                    status: 302,
+                    headers: {
+                        get(name) {
+                            return name.toLowerCase() === 'location' ? finalUrl : null;
+                        },
+                    },
+                };
+            }
+            return {
+                ok: true,
+                status: 200,
+                headers: {
+                    get(name) {
+                        if (name.toLowerCase() === 'content-type') return 'image/jpeg';
+                        if (name.toLowerCase() === 'content-length') return '5';
+                        return null;
+                    },
+                },
+                arrayBuffer: async () => Buffer.from('image'),
+            };
+        };
+
+        const res = makeRes();
+        await handler(makeReq(firstUrl), res);
+
+        assert.equal(res.statusCode, 200);
+        assert.deepEqual(seen, [firstUrl, finalUrl]);
+        assert.equal(res.body.toString(), 'image');
     });
 
     it('rejects images above 20 MB from content-length', async () => {

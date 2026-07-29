@@ -56,7 +56,7 @@ function extractUsageNumber(openRouterJson) {
     return 0;
 }
 
-function calculateDeliveredUsage({ usageRequests, deliveredImages }) {
+function calculateBilledUsage({ usageRequests, deliveredImages }) {
     const deliveredByMeta = new Map();
     for (const img of deliveredImages) {
         deliveredByMeta.set(img.metaIndex, (deliveredByMeta.get(img.metaIndex) || 0) + 1);
@@ -70,14 +70,16 @@ function calculateDeliveredUsage({ usageRequests, deliveredImages }) {
             ? meta.usage * Math.min(deliveredCount, producedCount) / producedCount
             : 0;
 
-        totalUsage += deliveredUsage;
+        totalUsage += meta.usage;
 
         return {
             ...meta,
             imageCount: deliveredCount,
-            usage: deliveredUsage,
+            delivered_count: deliveredCount,
+            generated_count: producedCount,
+            delivered_usage: deliveredUsage,
         };
-    }).filter((meta) => meta.imageCount > 0);
+    });
 
     return { totalUsage, billedRequests };
 }
@@ -266,14 +268,15 @@ async function handleOpenRouter(ctx) {
             return meta.usage;
         }));
 
-        const { totalUsage, billedRequests } = calculateDeliveredUsage({
+        const { totalUsage, billedRequests } = calculateBilledUsage({
             usageRequests,
             deliveredImages: limited,
         });
 
         for (const img of limited) {
             const meta = usageRequests[img.metaIndex];
-            img.cost = meta.imageCount > 0 ? meta.usage / meta.imageCount : 0;
+            const deliveredCount = billedRequests[img.metaIndex]?.delivered_count || 0;
+            img.cost = deliveredCount > 0 ? meta.usage / deliveredCount : 0;
             delete img.metaIndex;
         }
 
@@ -291,4 +294,4 @@ async function handleOpenRouter(ctx) {
     }
 }
 
-module.exports = { handleOpenRouter, calculateDeliveredUsage };
+module.exports = { handleOpenRouter, calculateBilledUsage };

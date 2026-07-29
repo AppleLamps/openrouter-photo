@@ -192,6 +192,13 @@ Tests cover catalog integrity, provider routing and payloads, API-key validation
 2. Import at [vercel.com/new](https://vercel.com/new)
 3. Deploy (no environment variables required — users provide their own API keys)
 
+For deployment-wide abuse protection, connect an Upstash Redis database and set
+`UPSTASH_REDIS_REST_URL` plus `UPSTASH_REDIS_REST_TOKEN`. The API uses an atomic
+shared limit when those variables are present; otherwise it falls back to a
+per-process limiter suitable for local development. Set
+`API_RATE_LIMIT_FAIL_CLOSED=true` if requests must be rejected whenever the
+shared limiter is unavailable.
+
 Or use the CLI:
 
 ```bash

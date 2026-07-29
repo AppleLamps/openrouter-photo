@@ -105,6 +105,7 @@ export function recordSpend(meta, imagesReturned) {
         requests.some((req) => req && req.usage_pending === true);
 
     const images = typeof imagesReturned === 'number' && Number.isFinite(imagesReturned) ? imagesReturned : 0;
+    const hasDeliveredCounts = requests.some((req) => Number.isFinite(req?.delivered_count));
     const imagesPerGeneration = requests.length > 0 ? images / requests.length : 0;
 
     for (const req of requests) {
@@ -117,7 +118,10 @@ export function recordSpend(meta, imagesReturned) {
 
         spend.byModel[model].cost += usage;
         spend.byModel[model].generations += 1;
-        spend.byModel[model].images += imagesPerGeneration;
+        const deliveredImages = hasDeliveredCounts
+            ? Math.max(Number(req?.delivered_count) || 0, 0)
+            : imagesPerGeneration;
+        spend.byModel[model].images += deliveredImages;
         spend.total += usage;
     }
 
