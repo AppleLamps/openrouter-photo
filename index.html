@@ -40,8 +40,8 @@
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{--bg-primary:#f8f8f6;--bg-secondary:#f1f1ef;--bg-tertiary:#e9e9e5;--bg-card:#ffffff;--bg-hover:#ececea;--text-primary:#161616;--text-secondary:#555552;--text-muted:#74746f;--accent-primary:#111111;--accent-secondary:#000000;--accent-soft:#eeeeeb;--accent-glow:rgba(17,17,17,0.2);--shimmer-start:#f1f3f4;--shimmer-mid:#111111;--shimmer-end:#f1f3f4;--border-color:#deded8;--border-strong:#cacac2;--border-radius-sm:8px;--border-radius-md:16px;--border-radius-lg:24px;--shadow-sm:0 1px 3px rgba(17,17,17,0.08);--shadow-md:0 8px 24px rgba(17,17,17,0.1);--shadow-lg:0 24px 64px rgba(17,17,17,0.16);--spacing-xs:4px;--spacing-sm:8px;--spacing-md:16px;--spacing-lg:24px;--spacing-xl:32px;--spacing-2xl:48px;--transition-fast:150ms ease;--transition-normal:250ms ease;--transition-slow:400ms ease;--z-gallery:1;--z-input-bar:100;--z-sidebar:900;--z-modal:1000;--z-app-modal:10000}
-    html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-x:hidden;min-height:100vh;min-height:100dvh}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:radial-gradient(circle at 78% 6%, rgba(17,17,17,.055), transparent 28rem),radial-gradient(circle at 28% 88%, rgba(17,17,17,.035), transparent 30rem),var(--bg-primary);color:var(--text-primary);line-height:1.6;min-height:100vh;min-height:100dvh;overflow-x:hidden;touch-action:pan-y pinch-zoom}
+    html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;-webkit-text-size-adjust:100%;text-size-adjust:100%;overflow-x:hidden;min-height:100vh;min-height:100dvh}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:radial-gradient(circle at 78% 6%, rgba(17,17,17,.055), transparent 28rem),radial-gradient(circle at 28% 88%, rgba(17,17,17,.035), transparent 30rem),var(--bg-primary);color:var(--text-primary);line-height:1.6;min-height:100vh;min-height:100dvh;overflow-x:hidden;touch-action:pan-y pinch-zoom;overscroll-behavior-y:contain}
     img{max-width:100%;height:auto;display:block}
     button{font-family:inherit;cursor:pointer;border:none;background:none}
     input{font-family:inherit;border:none;outline:none}
@@ -65,12 +65,15 @@
     <link rel="stylesheet" href="css/layout.css" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="css/components.css" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="css/gallery.css" media="print" onload="this.media='all'">
+    <!-- Mobile/iOS overrides load last so they win over the desktop-first rules -->
+    <link rel="stylesheet" href="css/mobile.css" media="print" onload="this.media='all'">
     <!-- Fallback for no-JS -->
     <noscript>
         <link rel="stylesheet" href="css/base.css">
         <link rel="stylesheet" href="css/layout.css">
         <link rel="stylesheet" href="css/components.css">
         <link rel="stylesheet" href="css/gallery.css">
+        <link rel="stylesheet" href="css/mobile.css">
     </noscript>
 
     <!-- Favicon -->

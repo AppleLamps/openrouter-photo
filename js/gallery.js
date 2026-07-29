@@ -32,12 +32,6 @@ let lightboxLoadToken = 0;
 /** @type {HTMLElement|null} */
 let lightboxModalContentElement = null;
 
-/** @type {number} */
-let scrollYBeforeLock = 0;
-
-/** @type {boolean} */
-let isScrollLocked = false;
-
 const ZIP_DOWNLOAD_THRESHOLD = 5;
 const GALLERY_PAGE_SIZE = 48;
 let jsZipLoaderPromise = null;
@@ -176,36 +170,6 @@ function revokeStaleFullImageUrl(imageId, fullUrl) {
     if (fullUrl) {
         state.revokeFullImageUrl(imageId, fullUrl);
     }
-}
-
-function lockBodyScroll() {
-    if (isScrollLocked) return;
-    isScrollLocked = true;
-
-    scrollYBeforeLock = window.scrollY || window.pageYOffset || 0;
-
-    // iOS Safari: `overflow: hidden` is not sufficient; fix the body in place.
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollYBeforeLock}px`;
-    document.body.style.left = '0';
-    document.body.style.right = '0';
-    document.body.style.width = '100%';
-}
-
-function unlockBodyScroll() {
-    if (!isScrollLocked) return;
-    isScrollLocked = false;
-
-    const top = document.body.style.top;
-    const y = top ? Math.abs(parseInt(top, 10)) : scrollYBeforeLock;
-
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.left = '';
-    document.body.style.right = '';
-    document.body.style.width = '';
-
-    window.scrollTo(0, y);
 }
 
 /**
@@ -1335,8 +1299,6 @@ async function openLightbox(image) {
     modal.classList.add('modal--active');
     modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('is-modal-open');
-
-    lockBodyScroll();
     updateNavButtons();
 
     // Move focus into the dialog for better keyboard accessibility.
@@ -1433,16 +1395,10 @@ function updateNavButtons() {
 export function closeLightbox() {
     const modal = document.getElementById('lightbox-modal');
     if (!modal) return;
+    if (!modal.classList.contains('modal--active')) return;
 
     const modalVideo = modal.querySelector('.modal__image--video');
-    const modalInfo = modal.querySelector('.modal__info');
-    const infoToggle = modal.querySelector('.modal__info-toggle');
 
-    infoToggle?.addEventListener('click', () => {
-        if (!(modalInfo instanceof HTMLElement)) return;
-        const collapsed = modalInfo.classList.toggle('modal__info--collapsed');
-        infoToggle.setAttribute('aria-expanded', String(!collapsed));
-    });
     if (modalVideo instanceof HTMLVideoElement) {
         modalVideo.style.display = 'none';
         modalVideo.pause();
@@ -1470,8 +1426,6 @@ export function closeLightbox() {
         currentLightboxImageId = null;
     }
     lightboxLoadToken += 1;
-
-    unlockBodyScroll();
 
     if (lastFocusedElement instanceof HTMLElement) {
         lastFocusedElement.focus({ preventScroll: true });
@@ -1518,6 +1472,15 @@ export function initLightbox() {
     if (modalImage) {
         modalImage.addEventListener('click', toggleUi);
     }
+
+    // Mobile "Details" disclosure for the info panel
+    const modalInfo = modal.querySelector('.modal__info');
+    const infoToggle = modal.querySelector('.modal__info-toggle');
+    infoToggle?.addEventListener('click', () => {
+        if (!(modalInfo instanceof HTMLElement)) return;
+        const collapsed = modalInfo.classList.toggle('modal__info--collapsed');
+        infoToggle.setAttribute('aria-expanded', String(!collapsed));
+    });
 
     // Keyboard navigation: Escape to close, Arrow keys to navigate
     document.addEventListener('keydown', (e) => {

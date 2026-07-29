@@ -501,9 +501,11 @@
     animation: confirmPulse 1.5s ease-in-out infinite;
 }
 
-.gallery__delete-btn--confirm:hover {
-    background: #b91c1c;
-    transform: scale(1.15);
+@media (hover: hover) {
+    .gallery__delete-btn--confirm:hover {
+        background: #b91c1c;
+        transform: scale(1.15);
+    }
 }
 
 @keyframes confirmPulse {

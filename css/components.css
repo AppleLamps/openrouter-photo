@@ -103,9 +103,11 @@ body.is-modal-open .spend-tracker {
     -webkit-tap-highlight-color: transparent;
 }
 
-.spend-tracker:hover {
-    background: rgba(17, 17, 17, 0.96);
-    transform: translateY(-1px);
+@media (hover: hover) {
+    .spend-tracker:hover {
+        background: rgba(17, 17, 17, 0.96);
+        transform: translateY(-1px);
+    }
 }
 
 /* Floating Input Bar */
@@ -258,9 +260,11 @@ body.is-modal-open .spend-tracker {
     transition: var(--transition-fast);
 }
 
-.input-bar__attachment-remove:hover {
-    background: rgba(239, 68, 68, 0.85);
-    border-color: rgba(239, 68, 68, 0.4);
+@media (hover: hover) {
+    .input-bar__attachment-remove:hover {
+        background: rgba(239, 68, 68, 0.85);
+        border-color: rgba(239, 68, 68, 0.4);
+    }
 }
 
 .input-bar__attachments:empty {
@@ -298,10 +302,12 @@ body.is-modal-open .spend-tracker {
     cursor: pointer;
 }
 
-.input-bar__inline-select:hover {
-    border-color: rgba(17, 17, 17, 0.3);
-    color: var(--accent-secondary);
-    background: var(--accent-soft);
+@media (hover: hover) {
+    .input-bar__inline-select:hover {
+        border-color: rgba(17, 17, 17, 0.3);
+        color: var(--accent-secondary);
+        background: var(--accent-soft);
+    }
 }
 
 .input-bar__inline-select--compact {
@@ -370,8 +376,10 @@ body.is-modal-open .spend-tracker {
     transition: var(--transition-fast);
 }
 
-.input-bar__dropdown-item:hover {
-    background: rgba(0, 0, 0, 0.06);
+@media (hover: hover) {
+    .input-bar__dropdown-item:hover {
+        background: rgba(0, 0, 0, 0.06);
+    }
 }
 
 .input-bar__dropdown-item--action {
@@ -385,8 +393,10 @@ body.is-modal-open .spend-tracker {
     color: var(--text-secondary);
 }
 
-.input-bar__dropdown-item--action:hover {
-    color: var(--text-primary);
+@media (hover: hover) {
+    .input-bar__dropdown-item--action:hover {
+        color: var(--text-primary);
+    }
 }
 
 /* Folder selector styles */
@@ -453,9 +463,11 @@ body.is-modal-open .spend-tracker {
     height: 20px;
 }
 
-.input-bar__icon-btn:hover:not(:disabled) {
-    color: var(--accent-secondary);
-    background: var(--accent-soft);
+@media (hover: hover) {
+    .input-bar__icon-btn:hover:not(:disabled) {
+        color: var(--accent-secondary);
+        background: var(--accent-soft);
+    }
 }
 
 .input-bar__icon-btn:active:not(:disabled) {
@@ -486,10 +498,12 @@ body.is-modal-open .spend-tracker {
     height: 18px;
 }
 
-.input-bar__button:hover:not(:disabled) {
-    transform: scale(1.05);
-    background: var(--accent-secondary);
-    box-shadow: 0 10px 24px rgba(17, 17, 17, 0.32);
+@media (hover: hover) {
+    .input-bar__button:hover:not(:disabled) {
+        transform: scale(1.05);
+        background: var(--accent-secondary);
+        box-shadow: 0 10px 24px rgba(17, 17, 17, 0.32);
+    }
 }
 
 .input-bar__button:active:not(:disabled) {
@@ -962,10 +976,12 @@ body.is-modal-open .spend-tracker {
     z-index: 20;
 }
 
-.modal__close:hover {
-    background: rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.95);
-    transform: scale(1.04);
+@media (hover: hover) {
+    .modal__close:hover {
+        background: rgba(255, 255, 255, 0.14);
+        color: rgba(255, 255, 255, 0.95);
+        transform: scale(1.04);
+    }
 }
 
 .modal--dragging .modal__content {
@@ -1003,10 +1019,12 @@ body.is-modal-open .spend-tracker {
     right: 18px;
 }
 
-.modal__nav-btn:hover {
-    background: rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.95);
-    transform: translateY(-50%) scale(1.06);
+@media (hover: hover) {
+    .modal__nav-btn:hover {
+        background: rgba(255, 255, 255, 0.14);
+        color: rgba(255, 255, 255, 0.95);
+        transform: translateY(-50%) scale(1.06);
+    }
 }
 
 .modal__nav-btn:active {
@@ -1761,8 +1779,10 @@ body.is-settings-open {
     transition: var(--transition-fast);
 }
 
-.settings-range::-webkit-slider-thumb:hover {
-    transform: scale(1.1);
+@media (hover: hover) {
+    .settings-range::-webkit-slider-thumb:hover {
+        transform: scale(1.1);
+    }
 }
 
 .settings-range::-moz-range-thumb {

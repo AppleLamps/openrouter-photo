@@ -79,6 +79,9 @@ html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* iOS inflates text when a phone is rotated to landscape without this */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     overflow-x: hidden;
     /* Dynamic viewport: avoids 100vh bugs when iOS toolbars show/hide */
     min-height: 100vh;
@@ -98,6 +101,8 @@ body {
     overflow-x: hidden;
     /* Reduce accidental horizontal panning on iOS while scrolling vertically */
     touch-action: pan-y pinch-zoom;
+    /* Stop the page rubber-banding behind the fixed composer */
+    overscroll-behavior-y: contain;
 }
 
 img {
