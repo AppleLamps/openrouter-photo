@@ -1,4 +1,10 @@
-const { withMiddleware, redactKey, resolveXaiApiKey, resolveEvolinkApiKey } = require('./_middleware');
+const {
+    withMiddleware,
+    redactKey,
+    resolveOpenRouterApiKey,
+    resolveXaiApiKey,
+    resolveEvolinkApiKey,
+} = require('./_middleware');
 const { formatEvolinkError } = require('./providers/format-errors');
 const { buildEvolinkProxyUrl, extractEvolinkResultUrls } = require('./providers/evolink-task');
 const { evolinkCreditsToUsd } = require('./model-catalog');
@@ -114,6 +120,65 @@ async function handleXaiStatus(req, res, requestId) {
     }
 }
 
+async function handleOpenRouterStatus(req, res, requestId) {
+    const openRouterApiKey = resolveOpenRouterApiKey(req);
+    if (!openRouterApiKey) {
+        return res.status(401).json({
+            code: 'OPENROUTER_API_KEY_REQUIRED',
+            error: 'OpenRouter API key required',
+            help: {
+                message: 'Open Settings → paste your OpenRouter API key. Create one at openrouter.ai/keys.',
+                url: 'https://openrouter.ai/keys',
+            },
+        });
+    }
+
+    try {
+        const pollResponse = await fetch(
+            `https://openrouter.ai/api/v1/videos/${encodeURIComponent(requestId)}`,
+            { headers: { Authorization: `Bearer ${openRouterApiKey}` } },
+        );
+        if (!pollResponse.ok) {
+            const errorText = await pollResponse.text();
+            return res.status(pollResponse.status).json({
+                error: 'Failed to retrieve OpenRouter video generation status',
+                details: redactKey(errorText),
+            });
+        }
+
+        const pollData = await pollResponse.json();
+        const status = String(pollData?.status || '').toLowerCase();
+        if (status === 'completed') {
+            const url = Array.isArray(pollData?.unsigned_urls) ? pollData.unsigned_urls[0] : null;
+            if (!url) {
+                return res.status(200).json({
+                    status: 'failed',
+                    error: 'OpenRouter video completed without a content URL.',
+                });
+            }
+            const cost = Number(pollData?.usage?.cost);
+            return res.status(200).json({
+                status: 'completed',
+                media_type: 'video',
+                url,
+                ...(Number.isFinite(cost) && cost >= 0 ? { cost, usage_estimated: false } : {}),
+            });
+        }
+
+        if (['failed', 'cancelled', 'expired'].includes(status)) {
+            return res.status(200).json({
+                status: 'failed',
+                error: redactKey(pollData?.error?.message || pollData?.error || 'OpenRouter video generation failed'),
+            });
+        }
+
+        return res.status(200).json({ status: 'pending', media_type: 'video' });
+    } catch (error) {
+        console.error('OpenRouter generation status error:', redactKey(error));
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
 const handler = withMiddleware(async function generationStatusHandler(req, res) {
     const input = req.method === 'GET' ? req.query : req.body;
     const requestId = normalizeStringParam(input?.request_id);
@@ -123,9 +188,11 @@ const handler = withMiddleware(async function generationStatusHandler(req, res) 
     if (!requestId) return res.status(400).json({ error: 'request_id is required' });
     if (provider === 'evolink') return handleEvolinkStatus(req, res, requestId, mediaType);
     if (provider === 'xai') return handleXaiStatus(req, res, requestId);
+    if (provider === 'openrouter') return handleOpenRouterStatus(req, res, requestId);
     return res.status(400).json({ error: 'Unsupported generation provider' });
 }, { methods: ['GET', 'POST'] });
 
 module.exports = handler;
 module.exports.handleEvolinkStatus = handleEvolinkStatus;
 module.exports.handleXaiStatus = handleXaiStatus;
+module.exports.handleOpenRouterStatus = handleOpenRouterStatus;

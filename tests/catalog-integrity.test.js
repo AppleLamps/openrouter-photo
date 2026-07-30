@@ -18,7 +18,7 @@ const MODEL_IDS = catalog.models.map((m) => m.id);
 describe('catalog integrity — structure', () => {
     it('has unique model ids', () => {
         assert.equal(new Set(MODEL_IDS).size, MODEL_IDS.length);
-        assert.equal(MODEL_IDS.length, 19);
+        assert.equal(MODEL_IDS.length, 30);
     });
 
     it('every model references a valid profile', () => {
@@ -54,7 +54,7 @@ describe('catalog integrity — structure', () => {
 
 describe('catalog integrity — routing', () => {
     it('every model resolves to a known backend and api key', () => {
-        const backends = new Set(['openrouter', 'xai', 'evolink', 'evolink-video']);
+        const backends = new Set(['openrouter', 'openrouter-video', 'xai', 'evolink', 'evolink-video']);
         const apiKeys = new Set(['openrouter', 'xai', 'evolink']);
         for (const id of MODEL_IDS) {
             const backend = getBackend(id);
@@ -66,7 +66,8 @@ describe('catalog integrity — routing', () => {
 
     it('backend counts match catalog', () => {
         const byBackend = listModelsByBackend();
-        assert.equal(byBackend.openrouter.length, 8);
+        assert.equal(byBackend.openrouter.length, 17);
+        assert.equal(byBackend['openrouter-video'].length, 2);
         assert.equal(byBackend.evolink.length, 5);
         assert.equal(byBackend['evolink-video'].length, 3);
         assert.equal(byBackend.xai.length, 3);
@@ -116,10 +117,10 @@ describe('catalog integrity — model types', () => {
             counts[m.type] = (counts[m.type] || 0) + 1;
         }
         assert.deepEqual(counts, {
-            image: 14,
+            image: 23,
             edit: 1,
-            'text-to-video': 2,
-            'image-to-video': 2,
+            'text-to-video': 3,
+            'image-to-video': 3,
         });
     });
 });

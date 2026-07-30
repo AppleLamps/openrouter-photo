@@ -16,12 +16,32 @@ describe('UI capabilities', () => {
         assert.equal(ui.videoLength, null);
     });
 
+    it('OpenRouter Grok image uses OpenRouter controls without replacing direct xAI', () => {
+        const ui = getUiCapabilities('x-ai/grok-imagine-image-quality');
+        assert.equal(ui.aspectRatio, true);
+        assert.deepEqual(ui.resolution?.options, ['1K', '2K']);
+        assert.equal(getOutputConstraints('x-ai/grok-imagine-image-quality').maxImages, 4);
+    });
+
     it('grok video exposes video length and quality only', () => {
         const ui = getUiCapabilities('grok-imagine-video');
         assert.equal(ui.aspectRatio, false);
         assert.equal(ui.resolution, null);
         assert.ok(ui.videoLength);
         assert.deepEqual(ui.videoQuality?.options, ['480p', '720p']);
+    });
+
+    it('OpenRouter Grok videos expose their documented controls', () => {
+        const base = getUiCapabilities('x-ai/grok-imagine-video');
+        assert.equal(base.aspectRatio, true);
+        assert.deepEqual(base.videoQuality?.options, ['480p', '720p']);
+        assert.equal(base.videoLength?.max, 15);
+        assert.equal(base.imageToVideoHint, true);
+
+        const v15 = getUiCapabilities('x-ai/grok-imagine-video-1.5');
+        assert.equal(v15.aspectRatio, false);
+        assert.deepEqual(v15.videoQuality?.options, ['480p', '720p', '1080p']);
+        assert.equal(v15.imageToVideoHint, true);
     });
 
     it('evolink seedance i2v exposes aspect ratio, video length, quality, audio, and the i2v hint', () => {

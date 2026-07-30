@@ -1,6 +1,6 @@
 const { describe, it, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { handleEvolinkStatus, handleXaiStatus } = require('../api/generation-status');
+const { handleEvolinkStatus, handleXaiStatus, handleOpenRouterStatus } = require('../api/generation-status');
 
 function makeRes() {
     return {
@@ -52,6 +52,52 @@ describe('generic generation status', () => {
         global.fetch = async () => ({ ok: true, json: async () => ({ status: 'FAILED', error: 'xai-abcdefghijklmnopqrstuvwxyz' }) });
         const failed = makeRes();
         await handleXaiStatus({ headers: { 'x-xai-api-key': 'xai-test-key' } }, failed, 'video-2');
+        assert.equal(failed.body.status, 'failed');
+        assert.doesNotMatch(failed.body.error, /abcdefghijklmnopqrstuvwxyz/);
+    });
+
+    it('maps OpenRouter video completion, billing, pending, and failure states', async () => {
+        global.fetch = async () => ({
+            ok: true,
+            json: async () => ({
+                status: 'completed',
+                unsigned_urls: ['https://openrouter.ai/api/v1/videos/job-1/content?index=0'],
+                usage: { cost: 1.4 },
+            }),
+        });
+        const completed = makeRes();
+        await handleOpenRouterStatus(
+            { headers: { 'x-openrouter-api-key': 'or-test-key' } },
+            completed,
+            'job-1',
+        );
+        assert.deepEqual(completed.body, {
+            status: 'completed',
+            media_type: 'video',
+            url: 'https://openrouter.ai/api/v1/videos/job-1/content?index=0',
+            cost: 1.4,
+            usage_estimated: false,
+        });
+
+        global.fetch = async () => ({ ok: true, json: async () => ({ status: 'in_progress' }) });
+        const pending = makeRes();
+        await handleOpenRouterStatus(
+            { headers: { 'x-openrouter-api-key': 'or-test-key' } },
+            pending,
+            'job-2',
+        );
+        assert.deepEqual(pending.body, { status: 'pending', media_type: 'video' });
+
+        global.fetch = async () => ({
+            ok: true,
+            json: async () => ({ status: 'failed', error: 'Bearer abcdefghijklmnopqrstuvwxyz failed' }),
+        });
+        const failed = makeRes();
+        await handleOpenRouterStatus(
+            { headers: { 'x-openrouter-api-key': 'or-test-key' } },
+            failed,
+            'job-3',
+        );
         assert.equal(failed.body.status, 'failed');
         assert.doesNotMatch(failed.body.error, /abcdefghijklmnopqrstuvwxyz/);
     });

@@ -21,6 +21,7 @@ const { handleEvolink } = require('./providers/evolink');
 const { handleEvolinkVideo } = require('./providers/evolink-video');
 const { handleXai } = require('./providers/xai');
 const { handleOpenRouter } = require('./providers/openrouter');
+const { handleOpenRouterVideo } = require('./providers/openrouter-video');
 
 const imageSizePresetToAspectRatio = (preset) => {
     switch (preset) {
@@ -171,6 +172,8 @@ module.exports = withMiddleware(async function handler(req, res) {
             return handleEvolinkVideo(ctx);
         case 'xai':
             return handleXai(ctx);
+        case 'openrouter-video':
+            return handleOpenRouterVideo(ctx);
         case 'openrouter':
         default:
             return handleOpenRouter(ctx);

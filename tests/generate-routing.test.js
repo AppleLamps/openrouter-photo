@@ -14,7 +14,7 @@ const SAMPLE_IMAGE = 'data:image/png;base64,abc';
 describe('generate routing — provider resolution', () => {
     it('each backend type has at least one model', () => {
         const byBackend = listModelsByBackend();
-        const expected = ['openrouter', 'xai', 'evolink', 'evolink-video'];
+        const expected = ['openrouter', 'openrouter-video', 'xai', 'evolink', 'evolink-video'];
         for (const backend of expected) {
             assert.ok(byBackend[backend]?.length >= 1, `missing models for backend: ${backend}`);
         }

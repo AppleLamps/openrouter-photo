@@ -46,12 +46,39 @@ describe('model catalog — backend routing', () => {
     it('routes OpenRouter flux models', () => {
         assert.equal(getBackend('black-forest-labs/flux.2-pro'), 'openrouter');
         assert.equal(getApiKey('black-forest-labs/flux.2-pro'), 'openrouter');
+        assert.equal(getBackend('black-forest-labs/flux.2-klein-4b'), 'openrouter');
     });
 
     it('routes gemini via openrouter with gemini config', () => {
         const cfg = getOpenRouterConfig('google/gemini-3-pro-image-preview');
         assert.equal(getBackend('google/gemini-3-pro-image-preview'), 'openrouter');
         assert.equal(cfg.gemini, true);
+        assert.equal(getOpenRouterConfig('google/gemini-3-pro-image').gemini, true);
+        assert.equal(getOpenRouterConfig('google/gemini-3.1-flash-image').gemini, true);
+        assert.equal(getOpenRouterConfig('google/gemini-3.1-flash-lite-image').gemini, true);
+    });
+
+    it('routes the new OpenRouter image models with the OpenRouter key', () => {
+        const ids = [
+            'openai/gpt-5.4-image-2',
+            'microsoft/mai-image-2.5-pro',
+            'recraft/recraft-v4.1-pro',
+            'sourceful/riverflow-v2.5-pro',
+            'x-ai/grok-imagine-image-quality',
+        ];
+        for (const id of ids) {
+            assert.equal(getBackend(id), 'openrouter', id);
+            assert.equal(getApiKey(id), 'openrouter', id);
+        }
+    });
+
+    it('routes OpenRouter Grok video models through the async OpenRouter backend', () => {
+        for (const id of ['x-ai/grok-imagine-video', 'x-ai/grok-imagine-video-1.5']) {
+            assert.equal(getBackend(id), 'openrouter-video', id);
+            assert.equal(getApiKey(id), 'openrouter', id);
+        }
+        assert.equal(requiresInputImage('x-ai/grok-imagine-video'), false);
+        assert.equal(requiresInputImage('x-ai/grok-imagine-video-1.5'), true);
     });
 
     it('routes seedream openrouter with fallback flag', () => {
