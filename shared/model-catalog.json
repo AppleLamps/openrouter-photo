@@ -44,7 +44,18 @@
       },
       "output": { "maxImages": 4, "defaultImages": 2 },
       "input": { "maxImages": 3, "required": false },
-      "openrouter": { "gemini": true }
+      "openrouter": { "gemini": true, "imageConfig": true }
+    },
+    "openrouter-grok-image": {
+      "apiKey": "openrouter",
+      "backend": "openrouter",
+      "ui": {
+        "aspectRatio": true,
+        "resolution": { "options": ["1K", "2K"], "default": "1K" }
+      },
+      "output": { "maxImages": 4, "defaultImages": 2 },
+      "input": { "maxImages": 3, "required": false },
+      "openrouter": { "imageConfig": true }
     },
     "openrouter-video-grok": {
       "apiKey": "openrouter",
@@ -209,7 +220,7 @@
     { "id": "openai/gpt-5-image", "name": "GPT-5 Image", "provider": "OpenAI", "type": "image", "tier": "quality", "profile": "openrouter-image" },
     { "id": "openai/gpt-5-image-mini", "name": "GPT-5 Image Mini", "provider": "OpenAI", "type": "image", "tier": "fast", "profile": "openrouter-image" },
     { "id": "openai/gpt-5.4-image-2", "name": "GPT-5.4 Image 2", "provider": "OpenAI", "type": "image", "tier": "quality", "profile": "openrouter-image" },
-    { "id": "x-ai/grok-imagine-image-quality", "name": "Grok Imagine Image Quality", "provider": "xAI", "type": "image", "tier": "quality", "via": "OpenRouter", "profile": "openrouter-gemini", "capabilities": { "ui": { "resolution": { "options": ["1K", "2K"], "default": "1K" } }, "input": { "maxImages": 3, "required": false }, "output": { "maxImages": 4, "defaultImages": 2 } } },
+    { "id": "x-ai/grok-imagine-image-quality", "name": "Grok Imagine Image Quality", "provider": "xAI", "type": "image", "tier": "quality", "via": "OpenRouter", "profile": "openrouter-grok-image" },
     { "id": "x-ai/grok-imagine-video", "name": "Grok Imagine Video", "provider": "xAI", "type": "text-to-video", "modes": ["text-to-video", "image-to-video"], "tier": "quality", "via": "OpenRouter", "profile": "openrouter-video-grok", "pricing": { "pricePerSecond": { "480p": 0.05, "720p": 0.07 }, "defaultQuality": "720p", "inputImageCost": 0.002 } },
     { "id": "x-ai/grok-imagine-video-1.5", "name": "Grok Imagine Video 1.5", "provider": "xAI", "type": "image-to-video", "tier": "quality", "via": "OpenRouter", "profile": "openrouter-video-grok-1.5", "pricing": { "pricePerSecond": { "480p": 0.08, "720p": 0.14, "1080p": 0.25 }, "defaultQuality": "720p", "inputImageCost": 0.01 } },
     { "id": "grok-imagine-image-quality", "name": "Grok Image Quality", "provider": "xAI", "type": "image", "tier": "quality", "profile": "xai-image", "pricing": { "perImageOutput": 0.07, "inputImageCost": 0.002 } },

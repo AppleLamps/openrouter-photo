@@ -29,7 +29,7 @@ function buildOpenRouterPayload({
         stream: false,
     };
 
-    if (openRouterConfig.gemini) {
+    if (openRouterConfig.imageConfig) {
         payload.image_config = { aspect_ratio: normalizedAspectRatio };
         if (typeof resolution === 'string' && ['1K', '2K', '4K'].includes(resolution)) {
             payload.image_config.image_size = resolution;
@@ -294,4 +294,4 @@ async function handleOpenRouter(ctx) {
     }
 }
 
-module.exports = { handleOpenRouter, calculateBilledUsage };
+module.exports = { handleOpenRouter, buildOpenRouterPayload, calculateBilledUsage };

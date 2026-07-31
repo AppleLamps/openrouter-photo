@@ -72,6 +72,12 @@ describe('model catalog — backend routing', () => {
         }
     });
 
+    it('routes OpenRouter Grok image with image-only output and image config', () => {
+        const cfg = getOpenRouterConfig('x-ai/grok-imagine-image-quality');
+        assert.equal(cfg.gemini, undefined);
+        assert.equal(cfg.imageConfig, true);
+    });
+
     it('routes OpenRouter Grok video models through the async OpenRouter backend', () => {
         for (const id of ['x-ai/grok-imagine-video', 'x-ai/grok-imagine-video-1.5']) {
             assert.equal(getBackend(id), 'openrouter-video', id);
