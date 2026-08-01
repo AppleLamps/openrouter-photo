@@ -237,6 +237,7 @@ function getGenerationSettings() {
     const xaiVideoLengthInput = document.getElementById('setting-xai-video-length');
     const xaiVideoQualitySelect = document.getElementById('setting-xai-video-quality');
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
+    const contentFilterSwitch = document.getElementById('setting-content-filter-switch');
     const webSearchSwitch = document.getElementById('setting-web-search-switch');
     const flashheadVoiceSelect = document.getElementById('setting-flashhead-voice');
     const flashheadStabilityInput = document.getElementById('setting-flashhead-stability');
@@ -268,6 +269,7 @@ function getGenerationSettings() {
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
         generate_audio_switch: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
+        content_filter_switch: contentFilterSwitch instanceof HTMLInputElement ? contentFilterSwitch.checked : true,
         enable_web_search: webSearchSwitch instanceof HTMLInputElement ? webSearchSwitch.checked : false,
         flashhead_voice: flashheadVoiceSelect?.value || 'Aria',
         flashhead_stability: flashheadStability,
@@ -345,6 +347,11 @@ export function restoreSettings(settings) {
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
     if (generateAudioSwitch instanceof HTMLInputElement && typeof settings.generate_audio_switch === 'boolean') {
         generateAudioSwitch.checked = settings.generate_audio_switch;
+    }
+
+    const contentFilterSwitch = document.getElementById('setting-content-filter-switch');
+    if (contentFilterSwitch instanceof HTMLInputElement && typeof settings.content_filter_switch === 'boolean') {
+        contentFilterSwitch.checked = settings.content_filter_switch;
     }
 
     const webSearchSwitch = document.getElementById('setting-web-search-switch');

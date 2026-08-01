@@ -40,6 +40,13 @@ describe('evolink video cost estimation', () => {
         assert.equal(estimateVideoCost(happyhorse, 5, '1080p').toFixed(4), '1.2340');
     });
 
+    it('bills Seedance 2.0 Mini by resolution and applies the relaxed-filter surcharge', () => {
+        const mini = 'evolink/seedance-2.0-mini/text-to-video';
+        assert.equal(estimateVideoCost(mini, 5, '480p').toFixed(3), '0.230');
+        assert.equal(estimateVideoCost(mini, 5, '720p').toFixed(3), '0.495');
+        assert.equal(estimateVideoCost(mini, 5, '720p', false).toFixed(4), '0.5445');
+    });
+
     it('falls back to the default resolution and never returns NaN', () => {
         assert.equal(estimateVideoCost(seedance, 5, undefined), estimateVideoCost(seedance, 5, '720p'));
         assert.equal(estimateVideoCost(seedance, undefined, '720p'), 0);
@@ -92,6 +99,42 @@ describe('evolink video cost estimation', () => {
         });
 
         assert.equal(res.body.estimated_cost.toFixed(2), '1.47');
+    });
+
+    it('creates the documented Seedance Mini text-to-video payload', async () => {
+        let requestBody;
+        global.fetch = async (url, options = {}) => {
+            assert.equal(url, 'https://api.evolink.ai/v1/videos/generations');
+            requestBody = JSON.parse(options.body);
+            return { ok: true, json: async () => ({ id: 'task-mini-1' }) };
+        };
+
+        const res = makeRes();
+        await handleEvolinkVideo({
+            res,
+            model: 'evolink/seedance-2.0-mini/text-to-video',
+            prompt: 'a cinematic city at night',
+            normalizedInputImages: [],
+            normalizedAspectRatio: '21:9',
+            xai_video_length: 8,
+            xai_video_quality: '480p',
+            generate_audio_switch: false,
+            content_filter_switch: false,
+            evolinkKey: 'test-key',
+        });
+
+        assert.equal(res.statusCode, 202);
+        assert.deepEqual(requestBody, {
+            model: 'seedance-2.0-mini-text-to-video',
+            prompt: 'a cinematic city at night',
+            duration: 8,
+            quality: '480p',
+            aspect_ratio: '21:9',
+            generate_audio: false,
+            content_filter: false,
+        });
+        assert.equal(res.body.request_id, 'task-mini-1');
+        assert.equal(res.body.estimated_cost.toFixed(4), '0.4048');
     });
 });
 

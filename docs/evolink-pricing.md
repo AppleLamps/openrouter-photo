@@ -2,7 +2,7 @@
 
 Rates the spend tracker uses for Evolink models, and where they come from.
 
-**Verified: 2026-07-29** against the Evolink pricing changelog and the per-model route pages.
+**Verified: 2026-08-01** against the Evolink pricing changelog and the per-model route pages.
 The corresponding values live in `shared/model-catalog.json`.
 
 ## Credits
@@ -47,14 +47,18 @@ Notes:
 | Model | Catalog id | 480p | 720p | 1080p |
 | --- | --- | --- | --- | --- |
 | Seedance 2.0 (t2v / i2v) | `evolink/seedance-2.0/*` | $0.092 | $0.199 | $0.496 |
+| Seedance 2.0 Mini (t2v) | `evolink/seedance-2.0-mini/text-to-video` | $0.046 | $0.099 | — |
 | HappyHorse 1.0 (i2v) | `evolink/happyhorse-1.0/image-to-video` | — | $0.1388 | $0.2468 |
 
 Source: [Seedance 2.0 route page](https://evolink.ai/seedance-2-0),
+[Seedance 2.0 Mini route page](https://evolink.ai/seedance-2-0-mini),
 [HappyHorse route page](https://evolink.ai/happy-horse).
 
 Notes:
 
 - Seedance 2.0 includes generated audio at no extra charge, so `generate_audio` does not affect cost.
+- Seedance 2.0 Mini adds 10% when `content_filter` is disabled; catalog fallback estimates apply
+  `relaxedContentMultiplier: 1.1`, while provider-reported credits remain authoritative.
 - HappyHorse is priced in credits (9.4427 cr/s at 720p, 16.7892 cr/s at 1080p); the USD values
   above are those credits at the rate in `providers.evolink.creditUsd`.
 - The catalog omits Seedance 2.0's 4K tier because the app's UI does not offer 4K. Add it to

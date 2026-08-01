@@ -178,6 +178,30 @@
         "supportsWebSearch": true
       }
     },
+    "evolink-video-seedance2-mini-t2v": {
+      "apiKey": "evolink",
+      "backend": "evolink-video",
+      "ui": {
+        "aspectRatio": true,
+        "videoLength": { "min": 4, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["480p", "720p"], "default": "720p" },
+        "generateAudio": true,
+        "contentFilter": true
+      },
+      "output": { "maxImages": 1, "defaultImages": 1 },
+      "input": { "maxImages": 0, "required": false },
+      "async": true,
+      "evolink": {
+        "variant": "seedance2-mini-t2v",
+        "apiModel": "seedance-2.0-mini-text-to-video",
+        "aspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+        "defaultAspectRatio": "16:9",
+        "supportsGenerateAudio": true,
+        "defaultGenerateAudio": true,
+        "supportsContentFilter": true,
+        "defaultContentFilter": true
+      }
+    },
     "evolink-video-happyhorse1-i2v": {
       "apiKey": "evolink",
       "backend": "evolink-video",
@@ -204,6 +228,7 @@
     { "id": "evolink/z-image-turbo", "name": "Z Image Turbo", "provider": "Tongyi", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-z-image", "pricing": { "price": { "type": "flat", "amount": 0.0038 } } },
     { "id": "evolink/seedance-2.0/image-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "image-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-i2v", "pricing": { "pricePerSecond": { "480p": 0.092, "720p": 0.199, "1080p": 0.496 }, "defaultQuality": "720p" } },
     { "id": "evolink/seedance-2.0/text-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "text-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-t2v", "pricing": { "pricePerSecond": { "480p": 0.092, "720p": 0.199, "1080p": 0.496 }, "defaultQuality": "720p" } },
+    { "id": "evolink/seedance-2.0-mini/text-to-video", "name": "Seedance 2.0 Mini", "provider": "Bytedance", "type": "text-to-video", "tier": "fast", "via": "Evolink", "profile": "evolink-video-seedance2-mini-t2v", "pricing": { "pricePerSecond": { "480p": 0.046, "720p": 0.099 }, "defaultQuality": "720p", "relaxedContentMultiplier": 1.1 } },
     { "id": "evolink/happyhorse-1.0/image-to-video", "name": "HappyHorse 1.0", "provider": "HappyHorse", "type": "image-to-video", "tier": "balanced", "via": "Evolink", "profile": "evolink-video-happyhorse1-i2v", "pricing": { "pricePerSecond": { "720p": 0.13880769, "1080p": 0.24680124 }, "defaultQuality": "720p" } },
     { "id": "black-forest-labs/flux.2-pro", "name": "Flux 2 Pro", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
     { "id": "black-forest-labs/flux.2-max", "name": "Flux 2 Max", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },

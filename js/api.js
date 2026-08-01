@@ -161,6 +161,7 @@ function getAppAccessHeaders() {
  * @property {number} [xai_video_length] - xAI video duration (seconds)
  * @property {string} [xai_video_quality] - xAI video resolution (720p, 480p)
  * @property {boolean} [generate_audio_switch] - Enable audio generation for supported video models
+ * @property {boolean} [content_filter_switch] - Enable the standard content filter for supported video models
  * @property {string} [flashhead_voice] - FlashHead ElevenLabs voice name
  * @property {number} [flashhead_stability] - FlashHead voice stability (0-1)
  */

@@ -3,7 +3,7 @@
  * Caches core assets for offline loading
  */
 
-const CACHE_NAME = 'ai-image-gen-v10';
+const CACHE_NAME = 'ai-image-gen-v11';
 
 const CORE_ASSETS = [
     '/',

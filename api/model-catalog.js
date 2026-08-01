@@ -193,6 +193,7 @@ function getUiCapabilities(modelId) {
         videoLength: ui.videoLength || null,
         videoQuality: ui.videoQuality || null,
         generateAudio: Boolean(ui.generateAudio),
+        contentFilter: Boolean(ui.contentFilter),
         webSearch: Boolean(ui.webSearch),
         flashhead: Boolean(ui.flashhead),
         imageToVideoHint: Boolean(ui.imageToVideoHint),

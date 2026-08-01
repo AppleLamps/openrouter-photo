@@ -18,7 +18,7 @@ const MODEL_IDS = catalog.models.map((m) => m.id);
 describe('catalog integrity — structure', () => {
     it('has unique model ids', () => {
         assert.equal(new Set(MODEL_IDS).size, MODEL_IDS.length);
-        assert.equal(MODEL_IDS.length, 30);
+        assert.equal(MODEL_IDS.length, 31);
     });
 
     it('every model references a valid profile', () => {
@@ -69,7 +69,7 @@ describe('catalog integrity — routing', () => {
         assert.equal(byBackend.openrouter.length, 17);
         assert.equal(byBackend['openrouter-video'].length, 2);
         assert.equal(byBackend.evolink.length, 5);
-        assert.equal(byBackend['evolink-video'].length, 3);
+        assert.equal(byBackend['evolink-video'].length, 4);
         assert.equal(byBackend.xai.length, 3);
     });
 
@@ -99,6 +99,19 @@ describe('catalog integrity — evolink video', () => {
     it('the animate model is the evolink seedance video model', () => {
         assert.equal(getBackend(catalog.defaults.animateModelId), 'evolink-video');
     });
+
+    it('exposes Seedance 2.0 Mini text-to-video as an async text-only model', () => {
+        const id = 'evolink/seedance-2.0-mini/text-to-video';
+        assert.ok(MODEL_IDS.includes(id));
+        assert.equal(getBackend(id), 'evolink-video');
+        assert.equal(getApiKey(id), 'evolink');
+        assert.equal(requiresInputImage(id), false);
+
+        const profile = catalog.capabilityProfiles[catalog.models.find((m) => m.id === id).profile];
+        assert.equal(profile.async, true);
+        assert.equal(profile.input.maxImages, 0);
+        assert.equal(profile.evolink.apiModel, 'seedance-2.0-mini-text-to-video');
+    });
 });
 
 describe('catalog integrity — evolink image config', () => {
@@ -119,7 +132,7 @@ describe('catalog integrity — model types', () => {
         assert.deepEqual(counts, {
             image: 23,
             edit: 1,
-            'text-to-video': 3,
+            'text-to-video': 4,
             'image-to-video': 3,
         });
     });

@@ -181,6 +181,19 @@ describe('model catalog — evolink config', () => {
         assert.equal(caps.ui.imageToVideoHint, undefined);
         assert.equal(caps.input.required, false);
     });
+
+    it('exposes Seedance 2.0 Mini text-to-video options', () => {
+        const id = 'evolink/seedance-2.0-mini/text-to-video';
+        const caps = resolveCapabilities(id);
+        assert.equal(caps.evolink.apiModel, 'seedance-2.0-mini-text-to-video');
+        assert.equal(caps.ui.videoLength.min, 4);
+        assert.equal(caps.ui.videoLength.max, 15);
+        assert.deepEqual(caps.ui.videoQuality.options, ['480p', '720p']);
+        assert.equal(caps.ui.generateAudio, true);
+        assert.equal(caps.ui.contentFilter, true);
+        assert.equal(requiresInputImage(id), false);
+        assert.equal(getMaxInputImages(id), 0);
+    });
 });
 
 describe('model catalog — pricing', () => {

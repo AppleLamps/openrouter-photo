@@ -721,6 +721,8 @@ export function updateSettingsForModel(model) {
     const xaiVideoQualityGroup = document.getElementById('xai-video-quality-group');
     const generateAudioGroup = document.getElementById('generate-audio-group');
     const generateAudioSwitch = document.getElementById('setting-generate-audio-switch');
+    const contentFilterGroup = document.getElementById('content-filter-group');
+    const contentFilterSwitch = document.getElementById('setting-content-filter-switch');
     const webSearchGroup = document.getElementById('web-search-group');
     const webSearchSwitch = document.getElementById('setting-web-search-switch');
     const flashheadSettingsGroup = document.getElementById('flashhead-settings-group');
@@ -731,6 +733,7 @@ export function updateSettingsForModel(model) {
     if (activeSettingsModel) {
         modelSettings.set(activeSettingsModel, {
             generateAudio: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
+            contentFilter: contentFilterSwitch instanceof HTMLInputElement ? contentFilterSwitch.checked : true,
             webSearch: webSearchSwitch instanceof HTMLInputElement ? webSearchSwitch.checked : true,
         });
     }
@@ -762,6 +765,7 @@ export function updateSettingsForModel(model) {
     xaiVideoLengthGroup?.classList.toggle('settings-group--hidden', !ui.videoLength);
     xaiVideoQualityGroup?.classList.toggle('settings-group--hidden', !ui.videoQuality);
     generateAudioGroup?.classList.toggle('settings-group--hidden', !ui.generateAudio);
+    contentFilterGroup?.classList.toggle('settings-group--hidden', !ui.contentFilter);
     webSearchGroup?.classList.toggle('settings-group--hidden', !ui.webSearch);
     flashheadSettingsGroup?.classList.toggle('settings-group--hidden', !ui.flashhead);
     imageToVideoHintGroup?.classList.toggle('settings-group--hidden', !ui.imageToVideoHint);
@@ -786,6 +790,9 @@ export function updateSettingsForModel(model) {
     const remembered = modelSettings.get(model);
     if (ui.generateAudio && generateAudioSwitch instanceof HTMLInputElement) {
         generateAudioSwitch.checked = remembered?.generateAudio ?? true;
+    }
+    if (ui.contentFilter && contentFilterSwitch instanceof HTMLInputElement) {
+        contentFilterSwitch.checked = remembered?.contentFilter ?? true;
     }
     if (ui.webSearch && webSearchSwitch instanceof HTMLInputElement) {
         webSearchSwitch.checked = remembered?.webSearch ?? true;

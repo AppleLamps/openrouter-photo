@@ -1,5 +1,5 @@
 const { redactKey } = require('../_middleware');
-const { resolveCapabilities, getVideoPricePerSecond, evolinkCreditsToUsd } = require('../model-catalog');
+const { resolveCapabilities, getModelPricing, getVideoPricePerSecond, evolinkCreditsToUsd } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
 
 const EVOLINK_VIDEO_ASPECT_RATIOS = new Set(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive']);
@@ -25,10 +25,14 @@ function normalizeVideoQuality(value, options, fallback) {
  * Evolink video routes bill per second of output at a rate that varies by
  * resolution (e.g. Seedance 2.0 is 480p $0.092/s, 720p $0.199/s, 1080p $0.496/s).
  */
-function estimateVideoCost(model, duration, quality) {
+function estimateVideoCost(model, duration, quality, contentFilter = true) {
     const pricePerSecond = getVideoPricePerSecond(model, quality);
     if (!Number.isFinite(pricePerSecond) || !Number.isFinite(duration)) return 0;
-    return pricePerSecond * duration;
+    const relaxedMultiplier = getModelPricing(model).relaxedContentMultiplier;
+    const multiplier = contentFilter === false && Number.isFinite(relaxedMultiplier)
+        ? relaxedMultiplier
+        : 1;
+    return pricePerSecond * duration * multiplier;
 }
 
 /**
@@ -46,6 +50,7 @@ async function handleEvolinkVideo(ctx) {
         xai_video_length,
         xai_video_quality,
         generate_audio_switch,
+        content_filter_switch,
         enable_web_search,
         evolinkKey,
     } = ctx;
@@ -115,6 +120,8 @@ async function handleEvolinkVideo(ctx) {
         // the first frame and reject aspect_ratio/generate_audio; only send them when supported.
         const supportsAspectRatio = videoUi.aspectRatio === true;
         const supportsGenerateAudio = evolink.supportsGenerateAudio === true;
+        const supportsContentFilter = evolink.supportsContentFilter === true;
+        const contentFilter = content_filter_switch !== false;
 
         const payload = {
             model: apiModel,
@@ -130,6 +137,7 @@ async function handleEvolinkVideo(ctx) {
                   }
                 : {}),
             ...(supportsGenerateAudio ? { generate_audio: generate_audio_switch !== false } : {}),
+            ...(supportsContentFilter ? { content_filter: contentFilter } : {}),
             ...(isImageToVideo ? { image_urls: imageUrls } : {}),
             ...(!isImageToVideo && evolink.supportsWebSearch && enable_web_search === true
                 ? { model_params: { web_search: true } }
@@ -157,7 +165,8 @@ async function handleEvolinkVideo(ctx) {
         const creditsReserved = createData?.usage?.credits_reserved ?? null;
         // Evolink reserves the exact credits it will charge; fall back to the
         // catalog per-second rate for the requested resolution.
-        const estimatedCost = evolinkCreditsToUsd(creditsReserved) ?? estimateVideoCost(model, duration, quality);
+        const estimatedCost = evolinkCreditsToUsd(creditsReserved)
+            ?? estimateVideoCost(model, duration, quality, contentFilter);
         const request = {
             index: 0,
             request_id: taskId,

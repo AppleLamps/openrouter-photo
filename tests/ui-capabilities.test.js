@@ -63,6 +63,17 @@ describe('UI capabilities', () => {
         assert.equal(ui.imageToVideoHint, false);
     });
 
+    it('evolink Seedance Mini exposes its documented text-to-video controls', () => {
+        const ui = getUiCapabilities('evolink/seedance-2.0-mini/text-to-video');
+        assert.equal(ui.aspectRatio, true);
+        assert.deepEqual(ui.videoLength, { min: 4, max: 15, default: 5 });
+        assert.deepEqual(ui.videoQuality?.options, ['480p', '720p']);
+        assert.equal(ui.generateAudio, true);
+        assert.equal(ui.contentFilter, true);
+        assert.equal(ui.webSearch, false);
+        assert.equal(ui.imageToVideoHint, false);
+    });
+
     it('evolink z-image-turbo exposes aspect ratio without resolution', () => {
         const ui = getUiCapabilities('evolink/z-image-turbo');
         assert.equal(ui.aspectRatio, true);
