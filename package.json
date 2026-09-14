@@ -12,5 +12,8 @@
         "express": "^5.1.0",
         "jszip": "^3.10.1",
         "vercel": "^50.14.0"
+    },
+    "devDependencies": {
+        "fake-indexeddb": "^6.2.5"
     }
 }

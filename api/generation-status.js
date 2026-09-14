@@ -31,6 +31,7 @@ async function handleEvolinkStatus(req, res, requestId, mediaType) {
 
     try {
         const taskResponse = await fetch(`https://api.evolink.ai/v1/tasks/${encodeURIComponent(requestId)}`, {
+            signal: AbortSignal.timeout(25000),
             headers: { Authorization: `Bearer ${evolinkKey}` },
         });
         if (!taskResponse.ok) {
@@ -93,6 +94,7 @@ async function handleXaiStatus(req, res, requestId) {
 
     try {
         const pollResponse = await fetch(`https://api.x.ai/v1/videos/${encodeURIComponent(requestId)}`, {
+            signal: AbortSignal.timeout(25000),
             headers: { Authorization: `Bearer ${xaiKey}` },
         });
         if (!pollResponse.ok) {
@@ -136,7 +138,7 @@ async function handleOpenRouterStatus(req, res, requestId) {
     try {
         const pollResponse = await fetch(
             `https://openrouter.ai/api/v1/videos/${encodeURIComponent(requestId)}`,
-            { headers: { Authorization: `Bearer ${openRouterApiKey}` } },
+            { headers: { Authorization: `Bearer ${openRouterApiKey}` }, signal: AbortSignal.timeout(25000) },
         );
         if (!pollResponse.ok) {
             const errorText = await pollResponse.text();

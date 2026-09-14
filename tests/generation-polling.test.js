@@ -6,6 +6,18 @@ const path = require('node:path');
 const modulePromise = import(pathToFileURL(path.join(__dirname, '..', 'js', 'generation-polling.js')).href);
 
 describe('frontend generation polling', () => {
+    it('bounds stalled requests by wall-clock time and allows recovery', async () => {
+        const { pollGenerationRequest } = await modulePromise;
+        const start = Date.now();
+        let requestSignal;
+        const result = await pollGenerationRequest({ request_id: 'stalled' }, (_id, signal) => {
+            requestSignal = signal;
+            return new Promise(() => {});
+        }, null, { initialDelay: 1, maxElapsed: 100, requestTimeout: 15 });
+        assert.equal(result.recoverable, true);
+        assert.equal(requestSignal.aborted, true);
+        assert.ok(Date.now() - start < 1500);
+    });
     it('normalizes multi-task and legacy single-task responses', async () => {
         const { normalizePendingRequests } = await modulePromise;
         const multi = normalizePendingRequests({ provider: 'evolink', model: 'm', media_type: 'image', requests: [{ request_id: 'a' }, { request_id: 'b', index: 3 }] });
@@ -22,7 +34,7 @@ describe('frontend generation polling', () => {
             attempts += 1;
             if (attempts === 1) throw Object.assign(new Error('busy'), { status: 503 });
             return { status: 'completed', url: '/result.png' };
-        }, null, { initialDelay: 1, multiplier: 1, maxInterval: 1, maxElapsed: 5 });
+        }, null, { initialDelay: 1, multiplier: 1, maxInterval: 1, maxElapsed: 500 });
         assert.equal(result.status, 'completed');
         assert.equal(attempts, 2);
     });

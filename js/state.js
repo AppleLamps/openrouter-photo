@@ -4,7 +4,8 @@
  */
 
 import { ImageStorage } from './storage.js';
-import { dataUriToBlob, generateThumbnail, compressFullImage, createBlobUrl, revokeBlobUrl } from './image-utils.js';
+import { dataUriToBlob, generateThumbnail, generateVideoPoster, compressFullImage, createBlobUrl, revokeBlobUrl } from './image-utils.js';
+import { responseToMediaBlob } from './utils.js';
 
 const LEGACY_STORAGE_KEY = 'ai-image-generator-images';
 const FOLDERS_STORAGE_KEY = 'ai-image-generator-folders';
@@ -160,6 +161,7 @@ class State {
         this.blobUrls = new Map();
         /** @type {Map<string, Blob>} - Raw thumbnail blobs for lazy URL creation */
         this.thumbnailBlobs = new Map();
+        this.thumbnailLoads = new Map();
         /** @type {ImageStorage|null} */
         this.storage = null;
         /** @type {boolean} */
@@ -308,6 +310,41 @@ class State {
         return url;
     }
 
+    async loadThumbnailUrl(id) {
+        const cached = this.getThumbnailUrl(id);
+        if (cached) return cached;
+        if (this.useFallback) return this.getImage(id)?.url || null;
+        if (!this.thumbnailLoads.has(id)) {
+            const pending = this.storage.getThumbnailBlob(id).then(blob => {
+                if (!blob || !this.getImage(id)) return null;
+                this.thumbnailBlobs.set(id, blob);
+                return this.getThumbnailUrl(id);
+            }).finally(() => this.thumbnailLoads.delete(id));
+            this.thumbnailLoads.set(id, pending);
+        }
+        return this.thumbnailLoads.get(id);
+    }
+
+    async getVideoPreviewUrl(id) {
+        const key = `${id}-preview`;
+        if (this.blobUrls.has(key)) return this.blobUrls.get(key);
+        const image = this.getImage(id);
+        if (!image) return null;
+        if (this.useFallback) return image.url;
+        const blob = await this.storage.getFullImageBlob(id);
+        if (!this.getImage(id)) return null;
+        if (!blob) return image.sourceUrl || image.url;
+        // Another card may have requested the same video while the read was pending.
+        if (!this.blobUrls.has(key)) this.blobUrls.set(key, createBlobUrl(blob));
+        return this.blobUrls.get(key);
+    }
+
+    releaseVideoPreview(id) {
+        const key = `${id}-preview`;
+        revokeBlobUrl(this.blobUrls.get(key));
+        this.blobUrls.delete(key);
+    }
+
     /**
      * Load folders from IndexedDB
      */
@@ -421,7 +458,25 @@ class State {
                     sourceUrl: imageData.sourceUrl || imageData.url,
                 };
 
-                await this.storage.saveImage(metadata, null, null);
+                let videoBlob = null;
+                let posterBlob = null;
+                let persistenceError = null;
+                try {
+                    const response = await fetch(imageData.url, { signal: AbortSignal.timeout(60000) });
+                    const estimate = await this.storage.getStorageEstimate();
+                    const available = estimate.quota ? Math.max(0, estimate.quota - estimate.used) : Infinity;
+                    const declaredSize = Number(response.headers.get('content-length')) || 0;
+                    if (declaredSize > available) throw new Error('Not enough browser storage for this video.');
+                    videoBlob = await responseToMediaBlob(response);
+                    if (videoBlob.size > available) throw new Error('Not enough browser storage for this video.');
+                    posterBlob = await generateVideoPoster(videoBlob);
+                    await this.storage.saveImage(metadata, videoBlob, posterBlob);
+                } catch (error) {
+                    persistenceError = error;
+                    videoBlob = null;
+                    // Retain a remote fallback, but report that the file was not saved.
+                    await this.storage.saveImage(metadata, null, posterBlob);
+                }
 
                 const inMemoryVideo = {
                     ...metadata,
@@ -430,7 +485,7 @@ class State {
 
                 this.images.unshift(inMemoryVideo);
                 this.notifyListeners('add', inMemoryVideo);
-                return { image: inMemoryVideo, persisted: true };
+                return { image: inMemoryVideo, persisted: !persistenceError, error: persistenceError };
             }
 
             let fullBlob;
@@ -444,7 +499,9 @@ class State {
                 fullBlob = dataUriToBlob(dataUri);
             }
             // Compress PNG → WebP/JPEG (typically 5-10x smaller)
-            fullBlob = await compressFullImage(fullBlob);
+            let keepOriginal = false;
+            try { keepOriginal = localStorage.getItem('image-storage-quality') === 'original'; } catch {}
+            if (!keepOriginal) fullBlob = await compressFullImage(fullBlob);
             const thumbnailBlob = await generateThumbnail(fullBlob);
 
             const metadata = {
@@ -501,9 +558,6 @@ class State {
         }
 
         const image = this.images.find(img => img.id === id);
-        if (image?.mediaType === 'video') {
-            return image.sourceUrl || image.url || null;
-        }
 
         // Check if we already have a blob URL for this full image
         const existingUrl = this.blobUrls.get(`${id}-full`);
@@ -513,7 +567,7 @@ class State {
 
         try {
             const blob = await this.storage.getFullImageBlob(id);
-            if (!blob) return null;
+            if (!blob) return image?.sourceUrl || image?.url || null;
 
             const url = createBlobUrl(blob);
             this.blobUrls.set(`${id}-full`, url);
@@ -586,6 +640,8 @@ class State {
             this.blobUrls.delete(`${id}-full`);
         }
         this.thumbnailBlobs.delete(id);
+        revokeBlobUrl(this.blobUrls.get(`${id}-preview`));
+        this.blobUrls.delete(`${id}-preview`);
 
         this.notifyListeners('remove', removed);
     }

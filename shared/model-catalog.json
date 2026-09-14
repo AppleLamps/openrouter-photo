@@ -199,7 +199,7 @@
         "supportsGenerateAudio": true,
         "defaultGenerateAudio": true,
         "supportsContentFilter": true,
-        "defaultContentFilter": true
+        "defaultContentFilter": false
       }
     },
     "evolink-video-happyhorse1-i2v": {

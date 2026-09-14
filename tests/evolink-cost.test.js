@@ -101,7 +101,7 @@ describe('evolink video cost estimation', () => {
         assert.equal(res.body.estimated_cost.toFixed(2), '1.47');
     });
 
-    it('creates the documented Seedance Mini text-to-video payload', async () => {
+    it('defaults Seedance Mini to mature mode and includes its surcharge', async () => {
         let requestBody;
         global.fetch = async (url, options = {}) => {
             assert.equal(url, 'https://api.evolink.ai/v1/videos/generations');
@@ -119,7 +119,6 @@ describe('evolink video cost estimation', () => {
             xai_video_length: 8,
             xai_video_quality: '480p',
             generate_audio_switch: false,
-            content_filter_switch: false,
             evolinkKey: 'test-key',
         });
 
@@ -135,6 +134,20 @@ describe('evolink video cost estimation', () => {
         });
         assert.equal(res.body.request_id, 'task-mini-1');
         assert.equal(res.body.estimated_cost.toFixed(4), '0.4048');
+    });
+
+    it('allows the standard content filter to be explicitly re-enabled for Mini', async () => {
+        let payload;
+        global.fetch = async (_url, options) => {
+            payload = JSON.parse(options.body);
+            return { ok: true, json: async () => ({ id: 'task-standard' }) };
+        };
+        const res = makeRes();
+        await handleEvolinkVideo({ res, model: 'evolink/seedance-2.0-mini/text-to-video',
+            prompt: 'a mountain landscape', xai_video_length: 5, xai_video_quality: '720p',
+            content_filter_switch: true, evolinkKey: 'test-key' });
+        assert.equal(payload.content_filter, true);
+        assert.equal(res.body.estimated_cost.toFixed(3), '0.495');
     });
 });
 

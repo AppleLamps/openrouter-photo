@@ -507,12 +507,14 @@ export async function getRandomPromptFromAI() {
  * @throws {Error} If polling fails
  */
 export async function pollGenerationStatus(requestId, signal = null, meta = {}) {
+    const openRouterApiKey = getOpenRouterApiKey();
     const xaiApiKey = getXaiApiKey();
     const evolinkApiKey = getEvolinkApiKey();
     const response = await fetch(GENERATION_STATUS_ENDPOINT, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            ...(openRouterApiKey ? { 'X-OpenRouter-Api-Key': openRouterApiKey } : {}),
             ...(xaiApiKey ? { 'X-XAI-Api-Key': xaiApiKey } : {}),
             ...(evolinkApiKey ? { 'X-Evolink-Api-Key': evolinkApiKey } : {}),
             ...getAppAccessHeaders(),

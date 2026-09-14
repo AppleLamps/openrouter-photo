@@ -23,6 +23,7 @@ import {
     updateSettingsForModel,
 } from './model-picker.js';
 import { recordSpend } from './spend-tracker.js';
+import { pendingTaskKey, readPendingGenerations, savePendingGeneration, removePendingGeneration } from './pending-generations.js';
 import { showApiKeyPopupForCode } from './settings-keys.js';
 import {
     buildAsyncSpendMeta,
@@ -43,6 +44,51 @@ let isProcessingAttachments = false;
 
 /** @type {Map<string, {prompt: string, settings: Object}>} */
 let placeholderMetadata = new Map();
+const recoveringTasks = new Set();
+
+async function recoverPendingGeneration(entry, placeholderId = entry.id) {
+    const key = pendingTaskKey(entry.request);
+    if (recoveringTasks.has(key)) return;
+    recoveringTasks.add(key);
+    showPlaceholder(placeholderId, entry.folderId);
+    try {
+        const outcome = entry.result ? { status: 'completed', result: entry.result }
+            : await pollGenerationRequest(entry.request, pollGenerationStatus, null);
+        if (outcome.status !== 'completed') {
+            if (!outcome.recoverable) removePendingGeneration(entry.request);
+            showErrorCard(placeholderId, outcome.error, entry.prompt, outcome.recoverable
+                ? () => recoverPendingGeneration(entry, placeholderId)
+                : () => retryGeneration(entry.prompt, entry.settings, entry.folderId),
+                () => removePendingGeneration(entry.request));
+            return;
+        }
+        const { usage } = resolveAsyncCost(entry.request, outcome.result);
+        entry.result = outcome.result;
+        savePendingGeneration(entry);
+        let saved = { persisted: true };
+        if (state.getImage(entry.id) && !state.useFallback && !await state.storage.getFullImageBlob(entry.id)) {
+            await state.removeImage(entry.id);
+        }
+        if (!state.getImage(entry.id)) {
+            saved = await state.addImage({
+                id: entry.id, prompt: entry.prompt, settings: entry.settings,
+                folderId: entry.folderId, createdAt: entry.createdAt,
+                url: outcome.result.url, sourceUrl: outcome.result.source_url || null,
+                mediaType: outcome.result.media_type || entry.request.media_type,
+                generation: { model: entry.request.model, provider: entry.request.provider, cost: usage },
+            });
+        }
+        recordSpend({ ...buildAsyncSpendMeta(entry.request, outcome.result), recovery_key: key }, 1);
+        if (saved.persisted) removePendingGeneration(entry.request);
+        else deps.showError('Recovered media could not be saved. Download it before closing this page.');
+        removePlaceholder(placeholderId);
+    } catch (error) {
+        showErrorCard(placeholderId, `${error.message} Retry checks the existing generation.`, entry.prompt,
+            () => recoverPendingGeneration(entry, placeholderId), () => removePendingGeneration(entry.request));
+    } finally {
+        recoveringTasks.delete(key);
+    }
+}
 
 /** @type {{ showError: Function, shakeElement: Function, autoResizeTextarea: Function }} */
 let deps = {
@@ -269,7 +315,9 @@ function getGenerationSettings() {
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
         generate_audio_switch: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
-        content_filter_switch: contentFilterSwitch instanceof HTMLInputElement ? contentFilterSwitch.checked : true,
+        content_filter_switch: contentFilterSwitch instanceof HTMLInputElement
+            ? contentFilterSwitch.checked
+            : resolveCapabilities(model).evolink?.defaultContentFilter !== false,
         enable_web_search: webSearchSwitch instanceof HTMLInputElement ? webSearchSwitch.checked : false,
         flashhead_voice: flashheadVoiceSelect?.value || 'Aria',
         flashhead_stability: flashheadStability,
@@ -479,7 +527,7 @@ async function handleGenerate(input, button, retryOptions = null) {
 
         let response = await generateImage(prompt, requestSettings, abortSignal);
 
-        if (abortSignal.aborted) {
+        if (abortSignal.aborted && response.status !== 'pending') {
             placeholderIds.forEach(id => removePlaceholder(id));
             placeholderIds.forEach(id => placeholderMetadata.delete(id));
             return;
@@ -489,10 +537,10 @@ async function handleGenerate(input, button, retryOptions = null) {
         delete storableSettings.image_url;
         delete storableSettings.image_urls;
         const generationCreatedAt = Date.now();
-        const saveGeneratedImage = async (image, index) => {
+        const saveGeneratedImage = async (image, index, id = generateId()) => {
                 const mediaType = image.media_type || image.mediaType || 'image';
                 const result = await state.addImage({
-                    id: generateId(),
+                    id,
                     url: image.url,
                     prompt: prompt,
                     createdAt: generationCreatedAt + index,
@@ -543,7 +591,15 @@ async function handleGenerate(input, button, retryOptions = null) {
             });
 
             let persistenceQueue = Promise.resolve();
+            const pendingEntries = requests.map(request => ({
+                request, id: generateId(), prompt, settings: storableSettings,
+                folderId: generationFolderId, createdAt: generationCreatedAt,
+            }));
+            for (const entry of pendingEntries) {
+                if (!savePendingGeneration(entry)) deps.showError('This browser could not save the pending task. Keep this page open until generation finishes.');
+            }
             const pollPromises = requests.map(async (request, requestIndex) => {
+                const entry = pendingEntries[requestIndex];
                 const index = Number.isInteger(request.index) ? request.index : requestIndex;
                 handledIndexes.add(index);
                 let outcome;
@@ -551,16 +607,24 @@ async function handleGenerate(input, button, retryOptions = null) {
                     outcome = await pollGenerationRequest(request, pollGenerationStatus, abortSignal);
                 } catch (error) {
                     if (error?.name === 'AbortError') return { aborted: true, error, request, index };
-                    outcome = { status: 'failed', request, error: error?.message || 'Generation failed.' };
+                    outcome = { status: 'failed', recoverable: true, request, error: error?.message || 'Generation failed.' };
                 }
 
                 if (outcome.status === 'failed') {
                     failureCount += 1;
-                    showTaskFailure(index, outcome.error);
+                    if (outcome.recoverable) {
+                        showErrorCard(placeholderIds[index], `${outcome.error} Retry checks the existing generation.`, prompt,
+                            () => recoverPendingGeneration(entry, placeholderIds[index]), () => removePendingGeneration(request));
+                    } else {
+                        removePendingGeneration(request);
+                        showTaskFailure(index, outcome.error);
+                    }
                     return { outcome, request, index };
                 }
 
                 const { usage: actualCost } = resolveAsyncCost(request, outcome.result);
+                entry.result = outcome.result;
+                savePendingGeneration(entry);
                 const image = {
                     url: outcome.result.url,
                     source_url: outcome.result.source_url || null,
@@ -569,11 +633,12 @@ async function handleGenerate(input, button, retryOptions = null) {
                     cost: actualCost,
                     provider: request.provider,
                 };
-                const savePromise = persistenceQueue.then(() => saveGeneratedImage(image, index));
+                const savePromise = persistenceQueue.then(() => saveGeneratedImage(image, index, entry.id));
                 persistenceQueue = savePromise.catch(() => {});
                 const result = await savePromise;
                 persistenceWarning ||= result?.persisted === false;
-                recordSpend(buildAsyncSpendMeta(request, outcome.result), 1);
+                recordSpend({ ...buildAsyncSpendMeta(request, outcome.result), recovery_key: pendingTaskKey(request) }, 1);
+                if (result?.persisted) removePendingGeneration(request);
                 successCount += 1;
                 return { outcome, request, index };
             });
@@ -729,6 +794,12 @@ function handleCancelGeneration() {
 
 export function initGenerationController(controllerDeps) {
     deps = { ...deps, ...controllerDeps };
+    state.ready.then(async () => {
+        const queue = readPendingGenerations();
+        await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
+            while (queue.length) await recoverPendingGeneration(queue.shift());
+        }));
+    }).catch(error => deps.showError(`Could not restore pending generations: ${error.message}`));
 
     const promptInput = document.getElementById('prompt-input');
     const promptImageBtn = document.getElementById('prompt-image-btn');

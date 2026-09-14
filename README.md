@@ -53,6 +53,9 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 - **Touch Gestures** — Swipe-to-close lightbox on mobile
 - **PWA Support** — Install as a standalone app and reload the cached application shell offline
 - **Persistent Storage** — IndexedDB with localStorage fallback
+- **Generation Recovery** — Pending tasks resume after reload; status-check retries reuse the existing task and avoid duplicate spend entries.
+- **Storage Quality** — Choose optimized or original-quality storage for new images in Settings → Storage. New videos and preview posters are saved in IndexedDB when space allows; a warning appears when the media file cannot be saved.
+- **Lazy Media Loading** — Thumbnail bytes load near the viewport; video previews pause and release their source when offscreen.
 - **Zero Build** — No bundlers, transpilers, or build steps required
 
 ---

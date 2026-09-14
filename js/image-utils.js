@@ -38,6 +38,40 @@ export function revokeBlobUrl(url) {
     }
 }
 
+/** Capture a small local poster; unsupported codecs do not prevent video storage. */
+export function generateVideoPoster(blob) {
+    return new Promise(resolve => {
+        const video = document.createElement('video');
+        const url = URL.createObjectURL(blob);
+        let settled = false;
+        const finish = poster => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            video.onloadeddata = video.onerror = null;
+            video.removeAttribute('src');
+            video.load();
+            URL.revokeObjectURL(url);
+            resolve(poster);
+        };
+        const timer = setTimeout(() => finish(null), 8000);
+        video.muted = true;
+        video.playsInline = true;
+        video.onloadeddata = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                const scale = Math.min(1, 512 / Math.max(video.videoWidth, video.videoHeight));
+                canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+                canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(finish, 'image/webp', 0.85);
+            } catch { finish(null); }
+        };
+        video.onerror = () => finish(null);
+        video.src = url;
+    });
+}
+
 /**
  * Generate a thumbnail from an image blob
  * @param {Blob} imageBlob - Original image

@@ -62,15 +62,27 @@ export async function pollGenerationRequest(request, pollStatus, signal, options
     let delay = options.initialDelay ?? POLL_INITIAL_DELAY_MS;
     const multiplier = options.multiplier ?? POLL_MULTIPLIER;
     const maxInterval = options.maxInterval ?? POLL_MAX_INTERVAL_MS;
-    let elapsed = 0;
+    const deadline = Date.now() + maxElapsed;
 
-    while (elapsed < maxElapsed) {
-        await waitForPollDelay(delay, signal);
-        elapsed += delay;
+    while (Date.now() < deadline) {
+        await waitForPollDelay(Math.min(delay, Math.max(0, deadline - Date.now())), signal);
         delay = Math.min(delay * multiplier, maxInterval);
+        if (Date.now() >= deadline) break;
 
+        const controller = new AbortController();
+        const onAbort = () => controller.abort(signal.reason);
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (signal?.aborted) onAbort();
+        const timer = setTimeout(() => controller.abort(), Math.min(options.requestTimeout ?? 30000, deadline - Date.now()));
         try {
-            const result = await pollStatus(request.request_id, signal, request);
+            const result = await Promise.race([
+                pollStatus(request.request_id, controller.signal, request),
+                new Promise((_, reject) => {
+                    const abort = () => reject(Object.assign(new Error('Status request timed out'), { name: 'AbortError' }));
+                    if (controller.signal.aborted) abort();
+                    else controller.signal.addEventListener('abort', abort, { once: true });
+                }),
+            ]);
             if (result?.status === 'completed' && result.url) {
                 return { status: 'completed', request, result };
             }
@@ -82,12 +94,17 @@ export async function pollGenerationRequest(request, pollStatus, signal, options
                 };
             }
         } catch (error) {
+            if (signal?.aborted) throw error;
+            if (controller.signal.aborted) continue;
             if (!isRetryablePollError(error)) throw error;
             console.warn('Transient generation status error; polling will continue:', error.message);
+        } finally {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
         }
     }
 
-    return { status: 'failed', request, error: 'Generation timed out. Please try again.' };
+    return { status: 'failed', recoverable: true, request, error: 'Status checking timed out. Retry to check the existing generation.' };
 }
 
 /**

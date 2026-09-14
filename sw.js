@@ -3,7 +3,7 @@
  * Caches core assets for offline loading
  */
 
-const CACHE_NAME = 'ai-image-gen-v11';
+const CACHE_NAME = 'ai-image-gen-v13';
 
 const CORE_ASSETS = [
     '/',
@@ -26,6 +26,7 @@ const CORE_ASSETS = [
     '/js/storage.js',
     '/js/generation-controller.js',
     '/js/generation-polling.js',
+    '/js/pending-generations.js',
     '/js/model-capabilities.js',
     '/js/model-picker.js',
     '/js/models.js',

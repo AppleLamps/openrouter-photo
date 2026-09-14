@@ -194,6 +194,14 @@ async function init() {
 
     // Generation controller (generate, cancel, attachments)
     initGenerationController({ showError, shakeElement, autoResizeTextarea });
+    const storageQuality = document.getElementById('image-storage-quality');
+    if (storageQuality) {
+        try { storageQuality.value = localStorage.getItem('image-storage-quality') === 'original' ? 'original' : 'optimized'; } catch {}
+        storageQuality.addEventListener('change', () => {
+            try { localStorage.setItem('image-storage-quality', storageQuality.value); }
+            catch { showError('Could not save the image storage preference.'); }
+        });
+    }
 
     // Set up enhance button listener
     if (enhanceBtn && promptInput) {

@@ -15,6 +15,7 @@ import {
     getUiCapabilities,
     getInputConstraints,
     getOutputConstraints,
+    resolveCapabilities,
 } from './models.js';
 
 /**
@@ -792,7 +793,8 @@ export function updateSettingsForModel(model) {
         generateAudioSwitch.checked = remembered?.generateAudio ?? true;
     }
     if (ui.contentFilter && contentFilterSwitch instanceof HTMLInputElement) {
-        contentFilterSwitch.checked = remembered?.contentFilter ?? true;
+        contentFilterSwitch.checked = remembered?.contentFilter
+            ?? (resolveCapabilities(model).evolink?.defaultContentFilter !== false);
     }
     if (ui.webSearch && webSearchSwitch instanceof HTMLInputElement) {
         webSearchSwitch.checked = remembered?.webSearch ?? true;

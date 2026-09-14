@@ -121,7 +121,9 @@ async function handleEvolinkVideo(ctx) {
         const supportsAspectRatio = videoUi.aspectRatio === true;
         const supportsGenerateAudio = evolink.supportsGenerateAudio === true;
         const supportsContentFilter = evolink.supportsContentFilter === true;
-        const contentFilter = content_filter_switch !== false;
+        const contentFilter = typeof content_filter_switch === 'boolean'
+            ? content_filter_switch
+            : evolink.defaultContentFilter !== false;
 
         const payload = {
             model: apiModel,

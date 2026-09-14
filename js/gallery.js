@@ -55,23 +55,33 @@ function getLazyObserver() {
 
     lazyObserver = new IntersectionObserver((entries) => {
         for (const entry of entries) {
-            if (!entry.isIntersecting) continue;
-
             const el = entry.target;
             const imageId = el.dataset.lazyImageId;
-
-            // For IndexedDB images, materialise the thumbnail blob URL on demand
-            if (imageId) {
-                const thumbUrl = state.getThumbnailUrl(imageId);
-                if (thumbUrl) {
-                    el.src = thumbUrl;
+            if (el instanceof HTMLVideoElement) {
+                el.dataset.visible = String(entry.isIntersecting);
+                if (!entry.isIntersecting) {
+                    el.pause();
+                    el.removeAttribute('src');
+                    el.load();
+                    state.releaseVideoPreview(imageId);
+                    continue;
                 }
-            } else {
-                // Fallback: use the stored data-lazy-src
-                const src = el.dataset.lazySrc;
-                if (src) el.src = src;
+                Promise.all([state.loadThumbnailUrl(imageId), state.getVideoPreviewUrl(imageId)]).then(([poster, src]) => {
+                    if (!el.isConnected || el.dataset.visible !== 'true') {
+                        state.releaseVideoPreview(imageId);
+                        return;
+                    }
+                    if (poster) el.poster = poster;
+                    if (src && el.getAttribute('src') !== src) el.src = src;
+                    el.play().catch(() => {});
+                }).catch(error => console.warn('Could not load video preview:', error));
+                continue;
             }
-
+            if (!entry.isIntersecting) continue;
+            const load = imageId ? state.loadThumbnailUrl(imageId) : Promise.resolve(null);
+            load.then(url => {
+                if (el.isConnected && (url || el.dataset.lazySrc)) el.src = url || el.dataset.lazySrc;
+            }).catch(error => console.warn('Could not load thumbnail:', error));
             lazyObserver.unobserve(el);
         }
     }, { rootMargin: '200px' });
@@ -347,6 +357,12 @@ function renderGallery() {
     }
     galleryPaginationObserver?.disconnect();
 
+    galleryElement.querySelectorAll('video').forEach(video => {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        state.releaseVideoPreview(video.dataset.lazyImageId);
+    });
     galleryElement.innerHTML = '';
 
     // Use filtered images based on folder selection and visibility settings
@@ -818,15 +834,11 @@ function createImageCard(image, preloaded = false) {
     // off-screen images.
     const needsLazy = !preloaded && !isVideo;
     const resolvedSrc = needsLazy ? '' : image.url;
-    const videoUrl = isVideo ? (image.sourceUrl || image.url || '') : '';
     const videoAttributes = {
         className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
-        preload: 'metadata',
+        preload: 'none',
         'aria-label': image.prompt
     };
-    if (videoUrl) {
-        videoAttributes.src = videoUrl;
-    }
 
     const media = isVideo
         ? createElement('video', videoAttributes)
@@ -846,6 +858,8 @@ function createImageCard(image, preloaded = false) {
     }
 
     if (media instanceof HTMLVideoElement) {
+        media.dataset.lazyImageId = image.id;
+        getLazyObserver().observe(media);
         media.muted = true;
         media.defaultMuted = true;
         media.autoplay = true;
@@ -918,6 +932,14 @@ function removeImageCard(id) {
 
     const card = galleryElement.querySelector(`[data-id="${id}"]`);
     if (card) {
+        const video = card.querySelector('video');
+        if (video) {
+            lazyObserver?.unobserve(video);
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            state.releaseVideoPreview(id);
+        }
         renderedImageCount = Math.max(0, renderedImageCount - 1);
         card.style.opacity = '0';
         card.style.transform = 'scale(0.9)';
@@ -951,6 +973,7 @@ function removeImageCard(id) {
  */
 export function showPlaceholder(placeholderId, folderId = null) {
     if (!galleryElement) return;
+    removePlaceholder(placeholderId);
 
     const placeholder = createElement('div', {
         className: 'gallery__placeholder',
@@ -1021,7 +1044,7 @@ function shouldShowPlaceholderInCurrentView(folderId) {
  * @param {string} prompt - Original prompt
  * @param {Function} onRetry - Retry callback
  */
-export function showErrorCard(placeholderId, errorMessage, prompt, onRetry) {
+export function showErrorCard(placeholderId, errorMessage, prompt, onRetry, onDismiss = () => {}) {
     const entry = placeholderElements.get(placeholderId);
     if (!entry || !galleryElement) return;
     const placeholder = entry.element;
@@ -1072,6 +1095,7 @@ export function showErrorCard(placeholderId, errorMessage, prompt, onRetry) {
             createElement('button', {
                 className: 'gallery__error-card-btn gallery__error-card-btn--remove',
                 onClick: () => {
+                    onDismiss();
                     errorCard.remove();
                     updateEmptyState();
                 }
@@ -1114,7 +1138,7 @@ async function openLightbox(image) {
 
     if (image.mediaType === 'video') {
         if (modalVideo) {
-            const videoUrl = image.sourceUrl || image.url || '';
+            const videoUrl = '';
             modalVideo.style.display = 'block';
             if (videoUrl) {
                 modalVideo.src = videoUrl;

@@ -196,8 +196,8 @@ export class ImageStorage {
     }
 
     /**
-     * Get all images with their thumbnail blobs
-     * @returns {Promise<Array>} Array of metadata with thumbnailBlob attached
+     * Get lightweight metadata. Thumbnail bytes are loaded as cards become visible.
+     * @returns {Promise<Array>}
      */
     async getAllImages() {
         const tx = this.db.transaction([IMAGES_STORE, BLOBS_STORE], 'readonly');
@@ -209,30 +209,8 @@ export class ImageStorage {
             request.onerror = () => reject(request.error);
         });
 
-        const thumbTx = this.db.transaction(BLOBS_STORE, 'readonly');
-        const thumbStore = thumbTx.objectStore(BLOBS_STORE);
-        const thumbnailPromises = images.map((img) => new Promise((resolve) => {
-            if (!img.thumbnailBlobId) {
-                resolve(null);
-                return;
-            }
-
-            const thumbRequest = thumbStore.get(img.thumbnailBlobId);
-            thumbRequest.onsuccess = () => resolve(thumbRequest.result?.blob || null);
-            thumbRequest.onerror = (event) => {
-                event.preventDefault();
-                resolve(null);
-            };
-        }));
-
-        const thumbnailBlobs = await Promise.all(thumbnailPromises);
-        const results = images.map((img, index) => ({
-            ...img,
-            thumbnailBlob: thumbnailBlobs[index] || null,
-        }));
-
         // Sort by createdAt descending (newest first)
-        return results.sort((a, b) => b.createdAt - a.createdAt);
+        return images.sort((a, b) => b.createdAt - a.createdAt);
     }
 
     /**

@@ -31,7 +31,7 @@ function loadSpendState() {
     const total = typeof parsed.total === 'number' && Number.isFinite(parsed.total) ? parsed.total : 0;
     const byModel = parsed.byModel && typeof parsed.byModel === 'object' ? parsed.byModel : {};
     const pending = parsed.pending === true;
-    return { total, byModel, pending };
+    return { total, byModel, pending, recordedTasks: Array.isArray(parsed.recordedTasks) ? parsed.recordedTasks : [] };
 }
 
 function saveSpendState(state) {
@@ -100,6 +100,7 @@ export function recordSpend(meta, imagesReturned) {
     if (requests.length === 0) return;
 
     const spend = loadSpendState();
+    spend.recordedTasks ||= [];
     const hasPending =
         meta.usage_pending === true ||
         requests.some((req) => req && req.usage_pending === true);
@@ -109,6 +110,8 @@ export function recordSpend(meta, imagesReturned) {
     const imagesPerGeneration = requests.length > 0 ? images / requests.length : 0;
 
     for (const req of requests) {
+        const taskKey = meta.recovery_key;
+        if (taskKey && spend.recordedTasks.includes(taskKey)) continue;
         const model = typeof req?.model === 'string' ? req.model : 'unknown';
         const usage = typeof req?.usage === 'number' && Number.isFinite(req.usage) ? req.usage : 0;
 
@@ -123,6 +126,7 @@ export function recordSpend(meta, imagesReturned) {
             : imagesPerGeneration;
         spend.byModel[model].images += deliveredImages;
         spend.total += usage;
+        if (taskKey) spend.recordedTasks.push(taskKey);
     }
 
     if (hasPending) {

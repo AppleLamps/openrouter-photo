@@ -38,10 +38,11 @@ describe('frontend hardening', () => {
         assert.match(controller, /resolveCapabilities\(model\)\.evolink\?\.aspectRatios/);
     });
 
-    it('does not render empty video src attributes for missing video URLs', () => {
+    it('defers video sources until visibility instead of rendering empty URLs', () => {
         const gallery = read('js/gallery.js');
-        assert.match(gallery, /const videoUrl = isVideo \? \(image\.sourceUrl \|\| image\.url \|\| ''\) : '';/);
-        assert.match(gallery, /if \(videoUrl\) \{\s+videoAttributes\.src = videoUrl;/);
+        assert.match(gallery, /preload: 'none'/);
+        assert.match(gallery, /state\.getVideoPreviewUrl\(imageId\)/);
+        assert.doesNotMatch(gallery, /videoAttributes\.src =/);
         assert.doesNotMatch(gallery, /src: image\.url,\s+preload: 'metadata'/);
     });
 
