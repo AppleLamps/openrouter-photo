@@ -18,7 +18,7 @@ const MODEL_IDS = catalog.models.map((m) => m.id);
 describe('catalog integrity — structure', () => {
     it('has unique model ids', () => {
         assert.equal(new Set(MODEL_IDS).size, MODEL_IDS.length);
-        assert.equal(MODEL_IDS.length, 32);
+        assert.equal(MODEL_IDS.length, 33);
     });
 
     it('every model references a valid profile', () => {
@@ -68,7 +68,7 @@ describe('catalog integrity — routing', () => {
         const byBackend = listModelsByBackend();
         assert.equal(byBackend.openrouter.length, 17);
         assert.equal(byBackend['openrouter-video'].length, 2);
-        assert.equal(byBackend.evolink.length, 5);
+        assert.equal(byBackend.evolink.length, 6);
         assert.equal(byBackend['evolink-video'].length, 5);
         assert.equal(byBackend.xai.length, 3);
     });
@@ -120,6 +120,7 @@ describe('catalog integrity — evolink image config', () => {
         assert.equal(getEvolinkConfig('evolink/z-image-turbo').apiModel, 'z-image-turbo');
         assert.equal(getEvolinkConfig('evolink/doubao-seedream-5.0-lite').apiModel, 'doubao-seedream-5.0-lite');
         assert.equal(getEvolinkConfig('evolink/doubao-seedream-5.0-pro').apiModel, 'doubao-seedream-5.0-pro');
+        assert.equal(getEvolinkConfig('evolink/doubao-seedream-5.0-flash').apiModel, 'doubao-seedream-5.0-flash');
     });
 });
 
@@ -130,7 +131,7 @@ describe('catalog integrity — model types', () => {
             counts[m.type] = (counts[m.type] || 0) + 1;
         }
         assert.deepEqual(counts, {
-            image: 23,
+            image: 24,
             edit: 1,
             'text-to-video': 4,
             'image-to-video': 4,
