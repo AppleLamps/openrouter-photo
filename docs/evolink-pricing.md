@@ -27,6 +27,7 @@ The app prefers `credits_used`, then `credits_reserved`, then the catalog rates 
 | Seedream 5.0 Pro — 1K | `evolink/doubao-seedream-5.0-pro` | $0.03375 | 2.295 |
 | Seedream 5.0 Pro — 2K | `evolink/doubao-seedream-5.0-pro` | $0.0675 | 4.59 |
 | Seedream 5.0 Pro — input image | `evolink/doubao-seedream-5.0-pro` | $0.00225 each | 0.153 |
+| Seedream 5.0 Flash | `evolink/doubao-seedream-5.0-flash` | $0.027 | 1.837 |
 | Seedream 5.0 Lite | `evolink/doubao-seedream-5.0-lite` | $0.028 | 1.904 |
 | Seedream 4.5 | `evolink/doubao-seedream-4.5` (+ `/edit`) | $0.03 | 2.04 |
 | Z Image Turbo | `evolink/z-image-turbo` | $0.0038 | 0.26 |
@@ -36,6 +37,10 @@ Source: [2026-07-26 pricing changelog](https://evolink.ai/changelog) (Seedream r
 
 Notes:
 
+- Seedream 5.0 Flash's price ($0.027/image, flat across `1K`/`1.5K`/`2K`) could not be verified
+  against `evolink.ai` directly in this environment (the domain is unreachable here); it is a
+  best-effort estimate slightly below Seedream 5.0 Lite. Re-verify against the live route page and
+  update this row plus `shared/model-catalog.json` if it turns out to be wrong.
 - Seedream 5.0 Pro is the only model here with tiered output pricing *and* per-input-image
   billing — each reference image is charged on top of the output. When an exact `WxH` size is
   requested the `quality` field is omitted from the payload and Evolink derives the tier from the
