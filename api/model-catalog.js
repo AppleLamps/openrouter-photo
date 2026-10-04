@@ -111,12 +111,18 @@ function getEvolinkConfig(modelId) {
     const qualityOptions = caps.ui?.resolution?.options || ['2K', '4K'];
     const qualityDefault = caps.ui?.resolution?.default || qualityOptions[0];
     const outputFormatOptions = caps.ui?.outputFormat?.options || [];
+    // Models such as GPT Image 2.5 expose a rendering-quality tier (low…max)
+    // separate from the 1K/2K/4K resolution tier.
+    const qualityTierOptions = caps.ui?.quality?.options || [];
+    const qualityTierDefault = caps.ui?.quality?.default || qualityTierOptions[0] || null;
     return {
         variant: evolink.variant || 'seedream',
         apiModel: evolink.apiModel || 'doubao-seedream-4.5',
         qualityOptions,
         qualityDefault,
         outputFormatOptions,
+        qualityTierOptions,
+        qualityTierDefault,
     };
 }
 
@@ -142,14 +148,30 @@ function pickTieredAmount(amounts, tier, fallbackTier) {
 }
 
 /**
- * Price of a single generated image, in USD.
- * Supports flat pricing and per-quality tiers (e.g. Seedream 5.0 Pro 1K vs 2K).
+ * Multiplier applied to the per-quality base price for a resolution tier.
+ * Token-billed models (GPT Image 2.5) publish their per-quality rates at 1K;
+ * larger outputs scale the output tokens, so the catalog carries a per-tier
+ * factor. Models without `resolutionMultipliers` always return 1.
  */
-function getImageOutputPrice(modelId, quality) {
+function getResolutionMultiplier(modelId, resolution) {
+    const multipliers = getModelPricing(modelId).resolutionMultipliers;
+    if (!multipliers || typeof multipliers !== 'object') return 1;
+    const factor = Number(multipliers[resolution]);
+    return Number.isFinite(factor) && factor > 0 ? factor : 1;
+}
+
+/**
+ * Price of a single generated image, in USD.
+ * Supports flat pricing and per-quality tiers (e.g. Seedream 5.0 Pro 1K vs 2K,
+ * GPT Image 2.5 low…max). `resolution` only matters for models that publish
+ * `resolutionMultipliers`.
+ */
+function getImageOutputPrice(modelId, quality, resolution) {
     const price = getModelPricing(modelId).price;
     if (!price) return 0;
     if (price.type === 'byQuality') {
-        return pickTieredAmount(price.amounts, quality, price.default) ?? 0;
+        const base = pickTieredAmount(price.amounts, quality, price.default) ?? 0;
+        return base * getResolutionMultiplier(modelId, resolution);
     }
     if (price.type === 'flat' && Number.isFinite(price.amount)) return price.amount;
     return 0;
@@ -189,6 +211,8 @@ function getUiCapabilities(modelId) {
         aspectRatioOptions: ui.aspectRatioOptions || null,
         exactSize: ui.exactSize || null,
         resolution: ui.resolution || null,
+        resolutionRequiresRatio: Boolean(ui.resolutionRequiresRatio),
+        quality: ui.quality || null,
         outputFormat: ui.outputFormat || null,
         videoLength: ui.videoLength || null,
         videoQuality: ui.videoQuality || null,
@@ -218,6 +242,7 @@ module.exports = {
     getOpenRouterConfig,
     getModelPricing,
     getImageOutputPrice,
+    getResolutionMultiplier,
     getInputImagePrice,
     getVideoPricePerSecond,
     evolinkCreditsToUsd,

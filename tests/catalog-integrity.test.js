@@ -18,7 +18,7 @@ const MODEL_IDS = catalog.models.map((m) => m.id);
 describe('catalog integrity — structure', () => {
     it('has unique model ids', () => {
         assert.equal(new Set(MODEL_IDS).size, MODEL_IDS.length);
-        assert.equal(MODEL_IDS.length, 33);
+        assert.equal(MODEL_IDS.length, 35);
     });
 
     it('every model references a valid profile', () => {
@@ -68,7 +68,7 @@ describe('catalog integrity — routing', () => {
         const byBackend = listModelsByBackend();
         assert.equal(byBackend.openrouter.length, 17);
         assert.equal(byBackend['openrouter-video'].length, 2);
-        assert.equal(byBackend.evolink.length, 6);
+        assert.equal(byBackend.evolink.length, 8);
         assert.equal(byBackend['evolink-video'].length, 5);
         assert.equal(byBackend.xai.length, 3);
     });
@@ -121,6 +121,23 @@ describe('catalog integrity — evolink image config', () => {
         assert.equal(getEvolinkConfig('evolink/doubao-seedream-5.0-lite').apiModel, 'doubao-seedream-5.0-lite');
         assert.equal(getEvolinkConfig('evolink/doubao-seedream-5.0-pro').apiModel, 'doubao-seedream-5.0-pro');
         assert.equal(getEvolinkConfig('evolink/doubao-seedream-5.0-flash').apiModel, 'doubao-seedream-5.0-flash');
+        assert.equal(getEvolinkConfig('evolink/gpt-image-2.5-sunburst').apiModel, 'gpt-image-2.5-sunburst');
+        assert.equal(getEvolinkConfig('evolink/gpt-image-2.5-flare').apiModel, 'gpt-image-2.5-flare');
+    });
+
+    it('exposes both GPT Image 2.5 variants on the gpt-image route', () => {
+        for (const id of ['evolink/gpt-image-2.5-sunburst', 'evolink/gpt-image-2.5-flare']) {
+            assert.ok(MODEL_IDS.includes(id));
+            assert.equal(getBackend(id), 'evolink');
+            assert.equal(getApiKey(id), 'evolink');
+            assert.equal(requiresInputImage(id), false);
+            const cfg = getEvolinkConfig(id);
+            assert.equal(cfg.variant, 'gpt-image');
+            assert.deepEqual(cfg.qualityOptions, ['1K', '2K', '4K']);
+            assert.deepEqual(cfg.qualityTierOptions, ['low', 'medium', 'high', 'xhigh', 'max']);
+            assert.equal(cfg.qualityTierDefault, 'medium');
+            assert.deepEqual(cfg.outputFormatOptions, ['png', 'jpeg', 'webp']);
+        }
     });
 });
 
@@ -131,7 +148,7 @@ describe('catalog integrity — model types', () => {
             counts[m.type] = (counts[m.type] || 0) + 1;
         }
         assert.deepEqual(counts, {
-            image: 24,
+            image: 26,
             edit: 1,
             'text-to-video': 4,
             'image-to-video': 4,

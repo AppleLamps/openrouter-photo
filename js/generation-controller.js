@@ -213,8 +213,9 @@ async function addPromptImageFiles(files) {
             const progress = `Processing ${index + 1} of ${list.length}`;
             if (status) status.textContent = progress;
             if (button instanceof HTMLButtonElement) button.setAttribute('aria-label', progress);
-            if (promptImageDataUrls.length >= PROMPT_ATTACHMENTS_MAX) {
-                deps.showError(`Maximum ${PROMPT_ATTACHMENTS_MAX} images can be attached.`);
+            const attachmentLimit = getAttachmentLimit();
+            if (promptImageDataUrls.length >= attachmentLimit) {
+                deps.showError(`Maximum ${attachmentLimit} images can be attached for this model.`);
                 break;
             }
             if (file.size > PROMPT_ATTACHMENT_MAX_BYTES) {
@@ -264,7 +265,17 @@ export function setPromptAttachments(urls) {
     renderPromptAttachments();
 }
 
-export function getAttachedImageUrls(limit = PROMPT_ATTACHMENTS_MAX) {
+/**
+ * How many images the composer accepts for the selected model. The global
+ * cap is a floor so no model loses attachments it accepts today; models that
+ * document more references (Seedream 4.5: 14, GPT Image 2.5: 16) get theirs.
+ */
+export function getAttachmentLimit(model = normalizeModelId(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID)) {
+    const modelMax = resolveCapabilities(model).input?.maxImages;
+    return Number.isInteger(modelMax) && modelMax > PROMPT_ATTACHMENTS_MAX ? modelMax : PROMPT_ATTACHMENTS_MAX;
+}
+
+export function getAttachedImageUrls(limit = getAttachmentLimit()) {
     const images = promptImageDataUrls
         .filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
 
@@ -276,6 +287,7 @@ function getGenerationSettings() {
     const numImagesSelect = document.getElementById('setting-num-images');
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
     const resolutionSelect = document.getElementById('setting-resolution');
+    const imageQualitySelect = document.getElementById('setting-image-quality');
     const outputFormatSelect = document.getElementById('setting-output-format');
     const sizeModeSelect = document.getElementById('setting-size-mode');
     const exactWidthInput = document.getElementById('setting-exact-width');
@@ -289,7 +301,8 @@ function getGenerationSettings() {
     const flashheadStabilityInput = document.getElementById('setting-flashhead-stability');
 
     const model = normalizeModelId(modelSelect?.value || DEFAULT_MODEL_ID);
-    const exactSize = getUiCapabilities(model).exactSize;
+    const ui = getUiCapabilities(model);
+    const exactSize = ui.exactSize;
     const useExactSize = Boolean(exactSize)
         && sizeModeSelect instanceof HTMLSelectElement
         && sizeModeSelect.value === 'exact';
@@ -311,6 +324,7 @@ function getGenerationSettings() {
             image_size: `${exactWidthInput?.value || exactSize.defaultWidth}x${exactHeightInput?.value || exactSize.defaultHeight}`,
         } : {}),
         resolution: resolutionSelect?.value || '1K',
+        ...(ui.quality ? { image_quality: imageQualitySelect?.value || undefined } : {}),
         output_format: outputFormatSelect?.value || undefined,
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
@@ -367,6 +381,9 @@ export function restoreSettings(settings) {
 
     const resolutionSelect = document.getElementById('setting-resolution');
     setSelectIfValid(resolutionSelect, settings.resolution, ui.resolution?.options || null);
+
+    const imageQualitySelect = document.getElementById('setting-image-quality');
+    setSelectIfValid(imageQualitySelect, settings.image_quality, ui.quality?.options || null);
 
     const outputFormatSelect = document.getElementById('setting-output-format');
     setSelectIfValid(outputFormatSelect, settings.output_format, ui.outputFormat?.options || null);
@@ -472,6 +489,13 @@ async function handleGenerate(input, button, retryOptions = null) {
     if (Number.isInteger(inputConstraints.promptMaxLength) && Array.from(prompt).length > inputConstraints.promptMaxLength) {
         isGenerating = false;
         deps.showError(`Prompt must be ${inputConstraints.promptMaxLength} characters or fewer for this model.`);
+        input.focus();
+        return;
+    }
+    if (Number.isInteger(inputConstraints.promptMaxBytes)
+        && new TextEncoder().encode(prompt).length > inputConstraints.promptMaxBytes) {
+        isGenerating = false;
+        deps.showError(`Prompt must be ${inputConstraints.promptMaxBytes.toLocaleString('en-US')} bytes or fewer when UTF-8 encoded for this model.`);
         input.focus();
         return;
     }

@@ -74,6 +74,33 @@ describe('UI capabilities', () => {
         assert.equal(ui.imageToVideoHint, false);
     });
 
+    it('GPT Image 2.5 exposes aspect ratio, resolution, quality tier, exact size, and output format', () => {
+        for (const id of ['evolink/gpt-image-2.5-sunburst', 'evolink/gpt-image-2.5-flare']) {
+            const ui = getUiCapabilities(id);
+            assert.equal(ui.aspectRatio, true, id);
+            assert.equal(ui.aspectRatioOptions?.default, 'auto');
+            assert.ok(ui.aspectRatioOptions.options.includes('3:1'));
+            assert.ok(ui.aspectRatioOptions.options.includes('9:21'));
+            assert.deepEqual(ui.resolution, { options: ['1K', '2K', '4K'], default: '1K' });
+            assert.equal(ui.resolutionRequiresRatio, true);
+            assert.deepEqual(ui.quality, { options: ['low', 'medium', 'high', 'xhigh', 'max'], default: 'medium' });
+            assert.deepEqual(ui.outputFormat?.options, ['png', 'jpeg', 'webp']);
+            assert.equal(ui.exactSize?.minPixels, 655360);
+            assert.equal(ui.exactSize?.maxPixels, 8294400);
+            assert.equal(ui.exactSize?.multipleOf, 16);
+            assert.equal(ui.exactSize?.maxEdge, 3840);
+            assert.equal(ui.videoLength, null);
+            assert.equal(ui.webSearch, false);
+            assert.deepEqual(getOutputConstraints(id), { maxImages: 4, defaultImages: 2 });
+        }
+    });
+
+    it('models without a rendering-quality tier report quality as null', () => {
+        assert.equal(getUiCapabilities('evolink/doubao-seedream-5.0-pro').quality, null);
+        assert.equal(getUiCapabilities('evolink/doubao-seedream-5.0-pro').resolutionRequiresRatio, false);
+        assert.equal(getUiCapabilities('google/gemini-3-pro-image-preview').quality, null);
+    });
+
     it('evolink z-image-turbo exposes aspect ratio without resolution', () => {
         const ui = getUiCapabilities('evolink/z-image-turbo');
         assert.equal(ui.aspectRatio, true);
@@ -131,6 +158,36 @@ describe('UI capabilities', () => {
         assert.equal(getModelCostLabel('google/gemini-3-pro-image-preview'), 'Usage-priced');
         assert.equal(getModelInputLabel('evolink/seedance-2.0/image-to-video'), 'Image required · max 2');
         assert.equal(getModelInputLabel('evolink/seedance-2.0/text-to-video'), 'Text only');
+    });
+});
+
+describe('exact size validation (frontend mirror)', () => {
+    it('GPT Image 2.5 declares the UTF-8 prompt byte limit', async () => {
+        const { getInputConstraints } = await import('../js/model-capabilities.js');
+        const input = getInputConstraints('evolink/gpt-image-2.5-sunburst');
+        assert.equal(input.promptMaxLength, 32000);
+        assert.equal(input.promptMaxBytes, 60000);
+        assert.equal(getInputConstraints('evolink/doubao-seedream-5.0-pro').promptMaxBytes, undefined);
+    });
+
+    it('rejects a Seedream-valid pair that breaks GPT Image 2.5 alignment, and accepts presets', async () => {
+        const { getUiCapabilities, isExactSizeAllowed } = await import('../js/model-capabilities.js');
+        const gpt = getUiCapabilities('evolink/gpt-image-2.5-flare').exactSize;
+        const seedream = getUiCapabilities('evolink/doubao-seedream-5.0-pro').exactSize;
+
+        // 1600x1000 is fine for Seedream 5.0 Pro but 1000 is not a multiple of 16.
+        assert.equal(isExactSizeAllowed(seedream, 1600, 1000), true);
+        assert.equal(isExactSizeAllowed(gpt, 1600, 1000), false);
+        assert.equal(isExactSizeAllowed(gpt, 1600, 1008), true);
+        assert.equal(isExactSizeAllowed(gpt, 1024, 1024), true);
+        assert.equal(isExactSizeAllowed(gpt, 3840, 2160), true);
+        // Edge cap, pixel floor, and aspect limit.
+        assert.equal(isExactSizeAllowed(gpt, 3856, 1600), false);
+        assert.equal(isExactSizeAllowed(gpt, 512, 512), false);
+        assert.equal(isExactSizeAllowed(gpt, 2048, 512), false);
+        // Garbage input never passes.
+        assert.equal(isExactSizeAllowed(gpt, NaN, 1024), false);
+        assert.equal(isExactSizeAllowed(null, 1024, 1024), false);
     });
 });
 

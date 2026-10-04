@@ -70,7 +70,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 | --- | --- | --- | --- |
 | **Black Forest Labs** | Flux 2 Pro / Max / Flex | Image | OpenRouter |
 | **Google** | Gemini 3 Pro Image, Gemini 2.5 Flash Image | Image | OpenRouter |
-| **OpenAI** | GPT-5 Image, GPT-5 Image Mini | Image | OpenRouter |
+| **OpenAI** | GPT-5 Image, GPT-5 Image Mini, GPT-5.4 Image 2 (OpenRouter); GPT Image 2.5 Sunburst, GPT Image 2.5 Flare (Evolink) | Image, Edit | OpenRouter / Evolink |
 | **ByteDance** | Seedream 4.5 (OpenRouter + Evolink), Seedream 4.5 Edit, Seedream 5 Lite, Seedream 5.0 Pro, Seedream 5.0 Flash, Seedance 2.0 (T2V + I2V) | Image, Edit, Video | OpenRouter / Evolink |
 | **Tongyi** | Z Image Turbo | Image | Evolink |
 | **HappyHorse** | HappyHorse 1.0 | Image-to-Video | Evolink |

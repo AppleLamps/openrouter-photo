@@ -16,6 +16,7 @@ import {
     getInputConstraints,
     getOutputConstraints,
     resolveCapabilities,
+    isExactSizeAllowed,
 } from './models.js';
 
 /**
@@ -58,7 +59,19 @@ const ASPECT_RATIO_LABELS = new Map([
     ['auto', 'Auto'],
     ['4:5', '4:5 (Portrait)'],
     ['5:4', '5:4 (Landscape)'],
+    ['2:1', '2:1 (Wide)'],
+    ['1:2', '1:2 (Tall)'],
+    ['3:1', '3:1 (Panorama)'],
+    ['1:3', '1:3 (Banner)'],
     ['adaptive', 'Adaptive'],
+]);
+
+const IMAGE_QUALITY_LABELS = new Map([
+    ['low', 'Low'],
+    ['medium', 'Medium'],
+    ['high', 'High'],
+    ['xhigh', 'Extra High'],
+    ['max', 'Max'],
 ]);
 
 document.addEventListener('pointerdown', (e) => {
@@ -636,6 +649,26 @@ function syncImageResolutionOptions(model) {
         : resolution.default;
 }
 
+function syncImageQualityOptions(model) {
+    const qualitySelect = document.getElementById('setting-image-quality');
+    if (!(qualitySelect instanceof HTMLSelectElement)) return;
+
+    const { quality } = getUiCapabilities(model);
+    if (!quality) return;
+
+    const currentValue = qualitySelect.value;
+    qualitySelect.innerHTML = '';
+    quality.options.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = IMAGE_QUALITY_LABELS.get(value) || value;
+        qualitySelect.appendChild(option);
+    });
+    qualitySelect.value = quality.options.includes(currentValue)
+        ? currentValue
+        : quality.default;
+}
+
 function syncAspectRatioOptions(model) {
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
     if (!(aspectRatioSelect instanceof HTMLSelectElement)) return;
@@ -691,30 +724,100 @@ function syncExactSizeOptions(model) {
     const heightInput = document.getElementById('setting-exact-height');
     if (!exactSize || !(modeSelect instanceof HTMLSelectElement)) return;
 
-    if (widthInput instanceof HTMLInputElement && !Number.isInteger(Number(widthInput.value))) {
-        widthInput.value = String(exactSize.defaultWidth);
+    // A pair carried over from another model (e.g. Seedream's 1600x1000) may
+    // break this model's alignment, edge, pixel or ratio rules; fall back to
+    // the model's defaults rather than letting the API reject the request.
+    if (widthInput instanceof HTMLInputElement && heightInput instanceof HTMLInputElement) {
+        const width = Number.parseInt(widthInput.value, 10);
+        const height = Number.parseInt(heightInput.value, 10);
+        if (!isExactSizeAllowed(exactSize, width, height)) {
+            widthInput.value = String(exactSize.defaultWidth);
+            heightInput.value = String(exactSize.defaultHeight);
+        }
     }
-    if (heightInput instanceof HTMLInputElement && !Number.isInteger(Number(heightInput.value))) {
-        heightInput.value = String(exactSize.defaultHeight);
+
+    const step = Number.isInteger(exactSize.multipleOf) && exactSize.multipleOf > 1 ? exactSize.multipleOf : 1;
+    for (const input of [widthInput, heightInput]) {
+        if (!(input instanceof HTMLInputElement)) continue;
+        input.step = String(step);
+        input.min = String(step);
+        if (Number.isInteger(exactSize.maxEdge) && exactSize.maxEdge > 0) input.max = String(exactSize.maxEdge);
+        else input.removeAttribute('max');
     }
+
+    const hint = document.getElementById('exact-size-hint');
+    if (hint instanceof HTMLElement) hint.textContent = describeExactSize(exactSize);
+}
+
+function formatMegapixels(pixels) {
+    const mp = pixels / 1048576;
+    return Number.isInteger(mp) ? String(mp) : mp.toFixed(mp < 1 ? 2 : 1);
+}
+
+function formatAspectLimit(ratio) {
+    if (!Number.isFinite(ratio) || ratio <= 0) return null;
+    return ratio >= 1 ? `${Math.round(ratio)}:1` : `1:${Math.round(1 / ratio)}`;
+}
+
+function describeExactSize(exactSize) {
+    const parts = [];
+    const minMp = formatMegapixels(exactSize.minPixels);
+    const maxMp = formatMegapixels(exactSize.maxPixels);
+    const minRatio = formatAspectLimit(exactSize.minAspectRatio);
+    const maxRatio = formatAspectLimit(exactSize.maxAspectRatio);
+    let sentence = `Exact dimensions must contain ${minMp}–${maxMp} megapixels`;
+    if (minRatio && maxRatio) sentence += ` with an aspect ratio from ${minRatio} to ${maxRatio}`;
+    parts.push(`${sentence}.`);
+    if (Number.isInteger(exactSize.multipleOf) && exactSize.multipleOf > 1) {
+        parts.push(`Width and height must be multiples of ${exactSize.multipleOf}.`);
+    }
+    if (Number.isInteger(exactSize.maxEdge) && exactSize.maxEdge > 0) {
+        parts.push(`No side may exceed ${exactSize.maxEdge} px.`);
+    }
+    parts.push('Documented presets are also accepted.');
+    return parts.join(' ');
+}
+
+/**
+ * Show the resolution control only when it will be honoured: never in exact
+ * pixel mode, and for models that flag `resolutionRequiresRatio` (GPT Image
+ * 2.5) never while the aspect ratio is `auto`, since the provider ignores it.
+ */
+function updateResolutionVisibility() {
+    const resolutionGroup = document.getElementById('resolution-group');
+    if (!(resolutionGroup instanceof HTMLElement)) return;
+    const model = normalizeModelId(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID);
+    const ui = getUiCapabilities(model);
+    if (!ui.resolution) {
+        resolutionGroup.classList.add('settings-group--hidden');
+        return;
+    }
+    const modeSelect = document.getElementById('setting-size-mode');
+    const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
+    const exact = Boolean(ui.exactSize)
+        && modeSelect instanceof HTMLSelectElement
+        && modeSelect.value === 'exact';
+    const autoSize = ui.resolutionRequiresRatio
+        && aspectRatioSelect instanceof HTMLSelectElement
+        && aspectRatioSelect.value === 'auto';
+    resolutionGroup.classList.toggle('settings-group--hidden', exact || autoSize);
 }
 
 function updateExactSizeVisibility() {
     const modeSelect = document.getElementById('setting-size-mode');
     const inputs = document.getElementById('exact-size-inputs');
-    const resolutionGroup = document.getElementById('resolution-group');
     const exactSizeGroup = document.getElementById('exact-size-group');
     if (exactSizeGroup?.classList.contains('settings-group--hidden')) {
         if (inputs instanceof HTMLElement) inputs.hidden = true;
-        return;
+    } else {
+        const exact = modeSelect instanceof HTMLSelectElement && modeSelect.value === 'exact';
+        if (inputs instanceof HTMLElement) inputs.hidden = !exact;
     }
-    const exact = modeSelect instanceof HTMLSelectElement && modeSelect.value === 'exact';
-    if (inputs instanceof HTMLElement) inputs.hidden = !exact;
-    resolutionGroup?.classList.toggle('settings-group--hidden', exact);
+    updateResolutionVisibility();
 }
 
 export function updateSettingsForModel(model) {
-    const resolutionGroup = document.getElementById('resolution-group');
+    const imageQualityGroup = document.getElementById('image-quality-group');
     const aspectRatioGroup = document.getElementById('aspect-ratio-group');
     const outputFormatGroup = document.getElementById('output-format-group');
     const exactSizeGroup = document.getElementById('exact-size-group');
@@ -754,13 +857,14 @@ export function updateSettingsForModel(model) {
     }
 
     syncImageResolutionOptions(model);
+    syncImageQualityOptions(model);
     syncAspectRatioOptions(model);
     syncOutputFormatOptions(model);
     syncExactSizeOptions(model);
     syncVideoQualityOptions(model);
 
     aspectRatioGroup?.classList.toggle('settings-group--hidden', !ui.aspectRatio);
-    resolutionGroup?.classList.toggle('settings-group--hidden', !ui.resolution);
+    imageQualityGroup?.classList.toggle('settings-group--hidden', !ui.quality);
     outputFormatGroup?.classList.toggle('settings-group--hidden', !ui.outputFormat);
     exactSizeGroup?.classList.toggle('settings-group--hidden', !ui.exactSize);
     xaiVideoLengthGroup?.classList.toggle('settings-group--hidden', !ui.videoLength);
@@ -807,4 +911,5 @@ export function initModelPicker() {
     initNumImagesDropdown();
     initFolderSelectorDropdown();
     document.getElementById('setting-size-mode')?.addEventListener('change', updateExactSizeVisibility);
+    document.getElementById('setting-aspect-ratio')?.addEventListener('change', updateResolutionVisibility);
 }

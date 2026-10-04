@@ -141,12 +141,21 @@ function pickTieredAmount(amounts, tier, fallbackTier) {
     return null;
 }
 
+/** Resolution-tier factor for token-billed models (see api/model-catalog.js). */
+export function getResolutionMultiplier(modelId, resolution) {
+    const multipliers = getModelPricing(modelId).resolutionMultipliers;
+    if (!multipliers || typeof multipliers !== 'object') return 1;
+    const factor = Number(multipliers[resolution]);
+    return Number.isFinite(factor) && factor > 0 ? factor : 1;
+}
+
 /** Price of one generated image in USD; supports flat and per-quality tiers. */
-export function getImageOutputPrice(modelId, quality) {
+export function getImageOutputPrice(modelId, quality, resolution) {
     const price = getModelPricing(modelId).price;
     if (!price) return 0;
     if (price.type === 'byQuality') {
-        return pickTieredAmount(price.amounts, quality, price.default) ?? 0;
+        const base = pickTieredAmount(price.amounts, quality, price.default) ?? 0;
+        return base * getResolutionMultiplier(modelId, resolution);
     }
     if (price.type === 'flat' && Number.isFinite(price.amount)) return price.amount;
     return 0;
@@ -167,6 +176,8 @@ export function getUiCapabilities(modelId) {
         aspectRatioOptions: ui.aspectRatioOptions || null,
         exactSize: ui.exactSize || null,
         resolution: ui.resolution || null,
+        resolutionRequiresRatio: Boolean(ui.resolutionRequiresRatio),
+        quality: ui.quality || null,
         outputFormat: ui.outputFormat || null,
         videoLength: ui.videoLength || null,
         videoQuality: ui.videoQuality || null,
@@ -176,6 +187,29 @@ export function getUiCapabilities(modelId) {
         flashhead: Boolean(ui.flashhead),
         imageToVideoHint: Boolean(ui.imageToVideoHint),
     };
+}
+
+/**
+ * Whether a WIDTHxHEIGHT pair satisfies a model's `ui.exactSize` limits.
+ * Mirrors `normalizeExactImageSize` in api/generation-routing.js: documented
+ * presets always pass; otherwise the pixel budget, aspect-ratio range and the
+ * optional `multipleOf` alignment and `maxEdge` cap all have to hold.
+ */
+export function isExactSizeAllowed(exactSize, width, height) {
+    if (!exactSize || typeof exactSize !== 'object') return false;
+    if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) return false;
+
+    const multipleOf = Number(exactSize.multipleOf);
+    if (Number.isInteger(multipleOf) && multipleOf > 1 && (width % multipleOf !== 0 || height % multipleOf !== 0)) return false;
+    const maxEdge = Number(exactSize.maxEdge);
+    if (Number.isInteger(maxEdge) && maxEdge > 0 && (width > maxEdge || height > maxEdge)) return false;
+
+    const aspectRatio = width / height;
+    if (aspectRatio < exactSize.minAspectRatio || aspectRatio > exactSize.maxAspectRatio) return false;
+
+    if (Array.isArray(exactSize.presets) && exactSize.presets.includes(`${width}x${height}`)) return true;
+    const pixels = width * height;
+    return pixels >= exactSize.minPixels && pixels <= exactSize.maxPixels;
 }
 
 export const DEFAULT_MODEL_ID = defaultModelId;

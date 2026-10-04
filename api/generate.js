@@ -75,6 +75,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         aspect_ratio,
         image_size,
         resolution,
+        image_quality,
         output_format,
         xai_video_length,
         xai_video_quality,
@@ -94,9 +95,13 @@ module.exports = withMiddleware(async function handler(req, res) {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    const promptMaxLength = getInputConstraints(model).promptMaxLength;
+    const { promptMaxLength, promptMaxBytes } = getInputConstraints(model);
     if (Number.isInteger(promptMaxLength) && Array.from(normalizedPrompt).length > promptMaxLength) {
         return res.status(400).json({ error: `Prompt must be ${promptMaxLength} characters or fewer for this model` });
+    }
+    // Some routes (GPT Image 2.5) also cap the UTF-8 encoded size of the prompt.
+    if (Number.isInteger(promptMaxBytes) && Buffer.byteLength(normalizedPrompt, 'utf8') > promptMaxBytes) {
+        return res.status(400).json({ error: `Prompt must be ${promptMaxBytes.toLocaleString('en-US')} bytes or fewer when UTF-8 encoded for this model` });
     }
 
     const parsedNumImages = parseInt(num_images, 10);
@@ -153,6 +158,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         normalizedAspectRatio,
         exactImageSize: exactSizeResult?.value || null,
         resolution,
+        image_quality,
         output_format,
         normalizedInputImages,
         xai_video_length,
