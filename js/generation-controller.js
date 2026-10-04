@@ -213,8 +213,9 @@ async function addPromptImageFiles(files) {
             const progress = `Processing ${index + 1} of ${list.length}`;
             if (status) status.textContent = progress;
             if (button instanceof HTMLButtonElement) button.setAttribute('aria-label', progress);
-            if (promptImageDataUrls.length >= PROMPT_ATTACHMENTS_MAX) {
-                deps.showError(`Maximum ${PROMPT_ATTACHMENTS_MAX} images can be attached.`);
+            const attachmentLimit = getAttachmentLimit();
+            if (promptImageDataUrls.length >= attachmentLimit) {
+                deps.showError(`Maximum ${attachmentLimit} images can be attached for this model.`);
                 break;
             }
             if (file.size > PROMPT_ATTACHMENT_MAX_BYTES) {
@@ -264,7 +265,17 @@ export function setPromptAttachments(urls) {
     renderPromptAttachments();
 }
 
-export function getAttachedImageUrls(limit = PROMPT_ATTACHMENTS_MAX) {
+/**
+ * How many images the composer accepts for the selected model. The global
+ * cap is a floor so no model loses attachments it accepts today; models that
+ * document more references (Seedream 4.5: 14, GPT Image 2.5: 16) get theirs.
+ */
+export function getAttachmentLimit(model = normalizeModelId(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID)) {
+    const modelMax = resolveCapabilities(model).input?.maxImages;
+    return Number.isInteger(modelMax) && modelMax > PROMPT_ATTACHMENTS_MAX ? modelMax : PROMPT_ATTACHMENTS_MAX;
+}
+
+export function getAttachedImageUrls(limit = getAttachmentLimit()) {
     const images = promptImageDataUrls
         .filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
 

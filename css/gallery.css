@@ -114,15 +114,9 @@
    - -inner: fine grain plus a slowly drifting sheen
    - ::before: bright diagonal light sweep that pauses between passes
    - ::after: slow breathing centre glow
-   - -glow: rotating gold edge ring
+   - -glow: masked frame whose child rotates a static gold conic gradient
    - -status: small "Generating" pill with animated dots
    Only transform and opacity animate, so each layer stays on the compositor. */
-@property --shimmer-ring-angle {
-    syntax: '<angle>';
-    inherits: false;
-    initial-value: 0deg;
-}
-
 .gallery__placeholder {
     --gold-50: #fff8e1;
     --gold-100: #ffeeb8;
@@ -160,7 +154,6 @@
         inset 0 1px 0 rgba(255, 250, 230, 0.55),
         inset 0 -24px 48px rgba(90, 63, 12, 0.22),
         inset 0 0 0 1px rgba(255, 240, 190, 0.18);
-    animation: shimmerBreathe 4.2s ease-in-out infinite;
 }
 
 /* Fine grain and a slow drifting sheen for a brushed-metal feel */
@@ -230,20 +223,14 @@
     pointer-events: none;
 }
 
-/* Rotating gold edge ring (gradient border via mask) */
+/* Rotating gold edge ring: a masked frame whose oversized child carries a
+   static conic gradient and simply rotates (transform only, no repaint). */
 .gallery__placeholder-glow {
     position: absolute;
     inset: 0;
     border-radius: inherit;
     padding: 1.5px;
-    background: conic-gradient(from var(--shimmer-ring-angle),
-            rgba(255, 246, 210, 0) 0deg,
-            rgba(255, 246, 210, 0.95) 40deg,
-            rgba(255, 246, 210, 0) 90deg,
-            rgba(255, 246, 210, 0) 180deg,
-            rgba(255, 238, 180, 0.65) 220deg,
-            rgba(255, 246, 210, 0) 270deg,
-            rgba(255, 246, 210, 0) 360deg);
+    overflow: hidden;
     -webkit-mask:
         linear-gradient(#000 0 0) content-box,
         linear-gradient(#000 0 0);
@@ -252,8 +239,24 @@
         linear-gradient(#000 0 0) content-box,
         linear-gradient(#000 0 0);
     mask-composite: exclude;
-    animation: shimmerRing 3.6s linear infinite;
     pointer-events: none;
+}
+
+.gallery__placeholder-glow::before {
+    content: '';
+    position: absolute;
+    /* Large enough that a rotated square always covers the frame. */
+    inset: -25%;
+    background: conic-gradient(from 0deg,
+            rgba(255, 246, 210, 0) 0deg,
+            rgba(255, 246, 210, 0.95) 40deg,
+            rgba(255, 246, 210, 0) 90deg,
+            rgba(255, 246, 210, 0) 180deg,
+            rgba(255, 238, 180, 0.65) 220deg,
+            rgba(255, 246, 210, 0) 270deg,
+            rgba(255, 246, 210, 0) 360deg);
+    will-change: transform;
+    animation: shimmerRing 3.6s linear infinite;
 }
 
 /* Status pill: "Generating" with three cascading dots */
@@ -335,18 +338,6 @@
     }
 }
 
-@keyframes shimmerBreathe {
-
-    0%,
-    100% {
-        filter: saturate(1) brightness(1);
-    }
-
-    50% {
-        filter: saturate(1.08) brightness(1.04);
-    }
-}
-
 @keyframes shimmerDrift {
     0% {
         transform: translate3d(-3%, -2%, 0) rotate(0deg);
@@ -359,7 +350,7 @@
 
 @keyframes shimmerRing {
     to {
-        --shimmer-ring-angle: 360deg;
+        transform: rotate(360deg);
     }
 }
 
@@ -403,11 +394,10 @@
         transition: none !important;
     }
 
-    .gallery__placeholder,
     .gallery__placeholder::before,
     .gallery__placeholder::after,
     .gallery__placeholder-inner,
-    .gallery__placeholder-glow,
+    .gallery__placeholder-glow::before,
     .gallery__placeholder-status svg,
     .gallery__placeholder-status-dots i {
         animation: none !important;

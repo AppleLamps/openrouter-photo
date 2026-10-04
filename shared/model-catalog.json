@@ -143,6 +143,7 @@
           "default": "auto"
         },
         "resolution": { "options": ["1K", "2K", "4K"], "default": "1K" },
+        "resolutionRequiresRatio": true,
         "quality": { "options": ["low", "medium", "high", "xhigh", "max"], "default": "medium" },
         "exactSize": {
           "defaultWidth": 1024,

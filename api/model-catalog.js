@@ -211,6 +211,7 @@ function getUiCapabilities(modelId) {
         aspectRatioOptions: ui.aspectRatioOptions || null,
         exactSize: ui.exactSize || null,
         resolution: ui.resolution || null,
+        resolutionRequiresRatio: Boolean(ui.resolutionRequiresRatio),
         quality: ui.quality || null,
         outputFormat: ui.outputFormat || null,
         videoLength: ui.videoLength || null,

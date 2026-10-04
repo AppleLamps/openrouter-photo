@@ -778,22 +778,45 @@ function describeExactSize(exactSize) {
     return parts.join(' ');
 }
 
+/**
+ * Show the resolution control only when it will be honoured: never in exact
+ * pixel mode, and for models that flag `resolutionRequiresRatio` (GPT Image
+ * 2.5) never while the aspect ratio is `auto`, since the provider ignores it.
+ */
+function updateResolutionVisibility() {
+    const resolutionGroup = document.getElementById('resolution-group');
+    if (!(resolutionGroup instanceof HTMLElement)) return;
+    const model = normalizeModelId(document.getElementById('setting-model')?.value || DEFAULT_MODEL_ID);
+    const ui = getUiCapabilities(model);
+    if (!ui.resolution) {
+        resolutionGroup.classList.add('settings-group--hidden');
+        return;
+    }
+    const modeSelect = document.getElementById('setting-size-mode');
+    const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
+    const exact = Boolean(ui.exactSize)
+        && modeSelect instanceof HTMLSelectElement
+        && modeSelect.value === 'exact';
+    const autoSize = ui.resolutionRequiresRatio
+        && aspectRatioSelect instanceof HTMLSelectElement
+        && aspectRatioSelect.value === 'auto';
+    resolutionGroup.classList.toggle('settings-group--hidden', exact || autoSize);
+}
+
 function updateExactSizeVisibility() {
     const modeSelect = document.getElementById('setting-size-mode');
     const inputs = document.getElementById('exact-size-inputs');
-    const resolutionGroup = document.getElementById('resolution-group');
     const exactSizeGroup = document.getElementById('exact-size-group');
     if (exactSizeGroup?.classList.contains('settings-group--hidden')) {
         if (inputs instanceof HTMLElement) inputs.hidden = true;
-        return;
+    } else {
+        const exact = modeSelect instanceof HTMLSelectElement && modeSelect.value === 'exact';
+        if (inputs instanceof HTMLElement) inputs.hidden = !exact;
     }
-    const exact = modeSelect instanceof HTMLSelectElement && modeSelect.value === 'exact';
-    if (inputs instanceof HTMLElement) inputs.hidden = !exact;
-    resolutionGroup?.classList.toggle('settings-group--hidden', exact);
+    updateResolutionVisibility();
 }
 
 export function updateSettingsForModel(model) {
-    const resolutionGroup = document.getElementById('resolution-group');
     const imageQualityGroup = document.getElementById('image-quality-group');
     const aspectRatioGroup = document.getElementById('aspect-ratio-group');
     const outputFormatGroup = document.getElementById('output-format-group');
@@ -841,7 +864,6 @@ export function updateSettingsForModel(model) {
     syncVideoQualityOptions(model);
 
     aspectRatioGroup?.classList.toggle('settings-group--hidden', !ui.aspectRatio);
-    resolutionGroup?.classList.toggle('settings-group--hidden', !ui.resolution);
     imageQualityGroup?.classList.toggle('settings-group--hidden', !ui.quality);
     outputFormatGroup?.classList.toggle('settings-group--hidden', !ui.outputFormat);
     exactSizeGroup?.classList.toggle('settings-group--hidden', !ui.exactSize);
@@ -889,4 +911,5 @@ export function initModelPicker() {
     initNumImagesDropdown();
     initFolderSelectorDropdown();
     document.getElementById('setting-size-mode')?.addEventListener('change', updateExactSizeVisibility);
+    document.getElementById('setting-aspect-ratio')?.addEventListener('change', updateResolutionVisibility);
 }

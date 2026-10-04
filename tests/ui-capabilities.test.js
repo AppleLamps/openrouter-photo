@@ -82,6 +82,7 @@ describe('UI capabilities', () => {
             assert.ok(ui.aspectRatioOptions.options.includes('3:1'));
             assert.ok(ui.aspectRatioOptions.options.includes('9:21'));
             assert.deepEqual(ui.resolution, { options: ['1K', '2K', '4K'], default: '1K' });
+            assert.equal(ui.resolutionRequiresRatio, true);
             assert.deepEqual(ui.quality, { options: ['low', 'medium', 'high', 'xhigh', 'max'], default: 'medium' });
             assert.deepEqual(ui.outputFormat?.options, ['png', 'jpeg', 'webp']);
             assert.equal(ui.exactSize?.minPixels, 655360);
@@ -96,6 +97,7 @@ describe('UI capabilities', () => {
 
     it('models without a rendering-quality tier report quality as null', () => {
         assert.equal(getUiCapabilities('evolink/doubao-seedream-5.0-pro').quality, null);
+        assert.equal(getUiCapabilities('evolink/doubao-seedream-5.0-pro').resolutionRequiresRatio, false);
         assert.equal(getUiCapabilities('google/gemini-3-pro-image-preview').quality, null);
     });
 
