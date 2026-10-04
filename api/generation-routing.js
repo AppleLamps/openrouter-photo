@@ -48,9 +48,21 @@ function normalizeExactImageSize(modelId, imageSize) {
         && aspectRatio <= exactSize.maxAspectRatio
         && (isPreset || (pixels >= exactSize.minPixels && pixels <= exactSize.maxPixels));
 
-    return valid
-        ? { value: normalized }
-        : { error: 'Exact image size is outside the supported pixel or aspect-ratio range' };
+    if (!valid) {
+        return { error: 'Exact image size is outside the supported pixel or aspect-ratio range' };
+    }
+
+    // Some routes (GPT Image 2.5) also require 16-pixel alignment and cap each edge.
+    const multipleOf = Number(exactSize.multipleOf);
+    if (Number.isInteger(multipleOf) && multipleOf > 1 && (width % multipleOf !== 0 || height % multipleOf !== 0)) {
+        return { error: `Exact image dimensions must be multiples of ${multipleOf} pixels for this model` };
+    }
+    const maxEdge = Number(exactSize.maxEdge);
+    if (Number.isInteger(maxEdge) && maxEdge > 0 && (width > maxEdge || height > maxEdge)) {
+        return { error: `Exact image dimensions must not exceed ${maxEdge} pixels per side for this model` };
+    }
+
+    return { value: normalized };
 }
 
 function validateRequiredInputImages(modelId, image_urls) {

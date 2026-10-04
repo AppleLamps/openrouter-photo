@@ -156,6 +156,7 @@ function getAppAccessHeaders() {
  * @property {string} [safety_tolerance] - Safety tolerance level 1-6 (FLUX Kontext only)
  * @property {boolean} [enhance_prompt] - Enhance prompt (FLUX Kontext, Wan image-to-image)
  * @property {string} [resolution] - Resolution/image size (options vary by model)
+ * @property {string} [image_quality] - Rendering quality tier for GPT Image 2.5 (low, medium, high, xhigh, max)
  * @property {boolean} [limit_generations] - Limit generations per prompt to 1 (Nano Banana Pro)
  * @property {boolean} [enable_web_search] - Enable web search for image generation (Nano Banana Pro)
  * @property {number} [xai_video_length] - xAI video duration (seconds)

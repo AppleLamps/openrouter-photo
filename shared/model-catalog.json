@@ -133,6 +133,34 @@
       "input": { "maxImages": 0, "required": false },
       "evolink": { "variant": "z-image-turbo", "apiModel": "z-image-turbo" }
     },
+    "evolink-gpt-image": {
+      "apiKey": "evolink",
+      "backend": "evolink",
+      "ui": {
+        "aspectRatio": true,
+        "aspectRatioOptions": {
+          "options": ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3"],
+          "default": "auto"
+        },
+        "resolution": { "options": ["1K", "2K", "4K"], "default": "1K" },
+        "quality": { "options": ["low", "medium", "high", "xhigh", "max"], "default": "medium" },
+        "exactSize": {
+          "defaultWidth": 1024,
+          "defaultHeight": 1024,
+          "minPixels": 655360,
+          "maxPixels": 8294400,
+          "minAspectRatio": 0.3333,
+          "maxAspectRatio": 3,
+          "multipleOf": 16,
+          "maxEdge": 3840,
+          "presets": ["1024x1024", "2048x2048", "2880x2880", "1536x1024", "1024x1536", "1248x832", "832x1248", "2512x1680", "1680x2512", "1184x880", "880x1184", "2368x1776", "1776x2368", "1152x912", "912x1152", "1360x768", "768x1360", "2736x1536", "1536x2736", "3840x2160", "2160x3840", "1568x672", "672x1568", "1456x720", "720x1456"]
+        },
+        "outputFormat": { "options": ["png", "jpeg", "webp"] }
+      },
+      "output": { "maxImages": 4, "defaultImages": 2 },
+      "input": { "maxImages": 16, "required": false, "promptMaxLength": 32000 },
+      "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.5-flare" }
+    },
     "evolink-video-seedance2-i2v": {
       "apiKey": "evolink",
       "backend": "evolink-video",
@@ -227,6 +255,8 @@
     { "id": "evolink/doubao-seedream-5.0-pro", "name": "Seedream 5.0 Pro", "provider": "Bytedance", "type": "image", "modes": ["image", "edit"], "tier": "quality", "via": "Evolink", "profile": "evolink-image", "pricing": { "price": { "type": "byQuality", "amounts": { "1K": 0.03375, "2K": 0.0675 }, "default": "1K" }, "inputImageCost": 0.00225 }, "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-pro" }, "capabilities": { "ui": { "aspectRatioOptions": { "options": ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "auto" }, "exactSize": { "defaultWidth": 1024, "defaultHeight": 1024, "minPixels": 1048576, "maxPixels": 4194304, "minAspectRatio": 0.0625, "maxAspectRatio": 16, "presets": ["1024x1024", "2048x2048", "832x1248", "1664x2496", "1248x832", "2496x1664", "896x1184", "1728x2304", "1184x896", "2304x1728", "960x1200", "1792x2240", "1200x960", "2240x1792", "768x1376", "1440x2560", "1376x768", "2560x1440", "1568x672", "3024x1296"] }, "resolution": { "options": ["1K", "2K"], "default": "1K" }, "outputFormat": { "options": ["png", "jpeg"] } }, "input": { "maxImages": 10, "required": false, "promptMaxLength": 2000, "imageConstraints": { "minWidth": 15, "minHeight": 15, "maxWidth": 6000, "maxHeight": 6000, "minAspectRatio": 0.0625, "maxAspectRatio": 16 } } } },
     { "id": "evolink/doubao-seedream-5.0-flash", "name": "Seedream 5.0 Flash", "provider": "Bytedance", "type": "image", "modes": ["image", "edit"], "tier": "balanced", "via": "Evolink", "profile": "evolink-image", "pricing": { "price": { "type": "flat", "amount": 0.027 } }, "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-flash" }, "capabilities": { "ui": { "aspectRatioOptions": { "options": ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "auto" }, "resolution": { "options": ["1K", "1.5K", "2K"], "default": "1K" }, "outputFormat": { "options": ["png", "jpeg"] } }, "input": { "maxImages": 10, "required": false, "promptMaxLength": 4000, "imageConstraints": { "minWidth": 15, "minHeight": 15, "maxWidth": 6000, "maxHeight": 6000, "minAspectRatio": 0.0625, "maxAspectRatio": 16 } } } },
     { "id": "evolink/z-image-turbo", "name": "Z Image Turbo", "provider": "Tongyi", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-z-image", "pricing": { "price": { "type": "flat", "amount": 0.0038 } } },
+    { "id": "evolink/gpt-image-2.5-sunburst", "name": "GPT Image 2.5 Sunburst", "provider": "OpenAI", "type": "image", "modes": ["image", "edit"], "tier": "quality", "via": "Evolink", "profile": "evolink-gpt-image", "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.5-sunburst" }, "pricing": { "price": { "type": "byQuality", "amounts": { "low": 0.0053, "medium": 0.0119, "high": 0.0474, "xhigh": 0.0843, "max": 0.1896 }, "default": "medium" }, "resolutionMultipliers": { "1K": 1, "2K": 2, "4K": 2.8 }, "inputImageCost": 0.011 } },
+    { "id": "evolink/gpt-image-2.5-flare", "name": "GPT Image 2.5 Flare", "provider": "OpenAI", "type": "image", "modes": ["image", "edit"], "tier": "balanced", "via": "Evolink", "profile": "evolink-gpt-image", "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.5-flare" }, "pricing": { "price": { "type": "byQuality", "amounts": { "low": 0.0053, "medium": 0.0119, "high": 0.0474, "xhigh": 0.0843, "max": 0.1896 }, "default": "medium" }, "resolutionMultipliers": { "1K": 1, "2K": 2, "4K": 2.8 }, "inputImageCost": 0.011 } },
     { "id": "evolink/seedance-2.0/image-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "image-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-i2v", "pricing": { "pricePerSecond": { "480p": 0.092, "720p": 0.199, "1080p": 0.496 }, "defaultQuality": "720p" } },
     { "id": "evolink/seedance-2.0/text-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "text-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-t2v", "pricing": { "pricePerSecond": { "480p": 0.092, "720p": 0.199, "1080p": 0.496 }, "defaultQuality": "720p" } },
     { "id": "evolink/seedance-2.0-mini/text-to-video", "name": "Seedance 2.0 Mini", "provider": "Bytedance", "type": "text-to-video", "tier": "fast", "via": "Evolink", "profile": "evolink-video-seedance2-mini-t2v", "pricing": { "pricePerSecond": { "480p": 0.046, "720p": 0.099 }, "defaultQuality": "720p", "relaxedContentMultiplier": 1.1 } },

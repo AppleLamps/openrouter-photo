@@ -74,6 +74,31 @@ describe('UI capabilities', () => {
         assert.equal(ui.imageToVideoHint, false);
     });
 
+    it('GPT Image 2.5 exposes aspect ratio, resolution, quality tier, exact size, and output format', () => {
+        for (const id of ['evolink/gpt-image-2.5-sunburst', 'evolink/gpt-image-2.5-flare']) {
+            const ui = getUiCapabilities(id);
+            assert.equal(ui.aspectRatio, true, id);
+            assert.equal(ui.aspectRatioOptions?.default, 'auto');
+            assert.ok(ui.aspectRatioOptions.options.includes('3:1'));
+            assert.ok(ui.aspectRatioOptions.options.includes('9:21'));
+            assert.deepEqual(ui.resolution, { options: ['1K', '2K', '4K'], default: '1K' });
+            assert.deepEqual(ui.quality, { options: ['low', 'medium', 'high', 'xhigh', 'max'], default: 'medium' });
+            assert.deepEqual(ui.outputFormat?.options, ['png', 'jpeg', 'webp']);
+            assert.equal(ui.exactSize?.minPixels, 655360);
+            assert.equal(ui.exactSize?.maxPixels, 8294400);
+            assert.equal(ui.exactSize?.multipleOf, 16);
+            assert.equal(ui.exactSize?.maxEdge, 3840);
+            assert.equal(ui.videoLength, null);
+            assert.equal(ui.webSearch, false);
+            assert.deepEqual(getOutputConstraints(id), { maxImages: 4, defaultImages: 2 });
+        }
+    });
+
+    it('models without a rendering-quality tier report quality as null', () => {
+        assert.equal(getUiCapabilities('evolink/doubao-seedream-5.0-pro').quality, null);
+        assert.equal(getUiCapabilities('google/gemini-3-pro-image-preview').quality, null);
+    });
+
     it('evolink z-image-turbo exposes aspect ratio without resolution', () => {
         const ui = getUiCapabilities('evolink/z-image-turbo');
         assert.equal(ui.aspectRatio, true);

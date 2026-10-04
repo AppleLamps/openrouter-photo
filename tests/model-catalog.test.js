@@ -12,6 +12,7 @@ const {
     getOpenRouterConfig,
     getModelPricing,
     getImageOutputPrice,
+    getResolutionMultiplier,
     getVideoPricePerSecond,
     evolinkCreditsToUsd,
     catalog,
@@ -165,6 +166,32 @@ describe('model catalog — evolink config', () => {
         assert.equal(input.imageConstraints.minWidth, 15);
     });
 
+    it('assigns GPT Image 2.5 api models with resolution, quality tier, and format options', () => {
+        const sunburst = getEvolinkConfig('evolink/gpt-image-2.5-sunburst');
+        assert.equal(sunburst.variant, 'gpt-image');
+        assert.equal(sunburst.apiModel, 'gpt-image-2.5-sunburst');
+        assert.deepEqual(sunburst.qualityOptions, ['1K', '2K', '4K']);
+        assert.equal(sunburst.qualityDefault, '1K');
+        assert.deepEqual(sunburst.qualityTierOptions, ['low', 'medium', 'high', 'xhigh', 'max']);
+        assert.equal(sunburst.qualityTierDefault, 'medium');
+        assert.deepEqual(sunburst.outputFormatOptions, ['png', 'jpeg', 'webp']);
+
+        const flare = getEvolinkConfig('evolink/gpt-image-2.5-flare');
+        assert.equal(flare.variant, 'gpt-image');
+        assert.equal(flare.apiModel, 'gpt-image-2.5-flare');
+
+        const input = getInputConstraints('evolink/gpt-image-2.5-sunburst');
+        assert.equal(input.maxImages, 16);
+        assert.equal(input.required, false);
+        assert.equal(input.promptMaxLength, 32000);
+    });
+
+    it('seedream configs expose no quality tier', () => {
+        const cfg = getEvolinkConfig('evolink/doubao-seedream-5.0-pro');
+        assert.deepEqual(cfg.qualityTierOptions, []);
+        assert.equal(cfg.qualityTierDefault, null);
+    });
+
     it('exposes seedance video api model and aspect ratios via capabilities', () => {
         const caps = resolveCapabilities('evolink/seedance-2.0/image-to-video');
         assert.equal(caps.evolink.apiModel, 'seedance-2.0-image-to-video');
@@ -213,6 +240,32 @@ describe('model catalog — pricing', () => {
         assert.equal(getModelPricing('evolink/doubao-seedream-4.5').price.amount, 0.03);
         assert.equal(getModelPricing('evolink/doubao-seedream-4.5/edit').price.amount, 0.03);
         assert.equal(getModelPricing('evolink/doubao-seedream-5.0-lite').price.amount, 0.028);
+    });
+
+    it('prices GPT Image 2.5 by quality tier at 1K and scales by resolution tier', () => {
+        for (const id of ['evolink/gpt-image-2.5-sunburst', 'evolink/gpt-image-2.5-flare']) {
+            assert.equal(getImageOutputPrice(id, 'low'), 0.0053, id);
+            assert.equal(getImageOutputPrice(id, 'medium'), 0.0119, id);
+            assert.equal(getImageOutputPrice(id, 'high'), 0.0474, id);
+            assert.equal(getImageOutputPrice(id, 'xhigh'), 0.0843, id);
+            assert.equal(getImageOutputPrice(id, 'max'), 0.1896, id);
+            // Unknown or absent tier falls back to the medium default.
+            assert.equal(getImageOutputPrice(id), 0.0119, id);
+            assert.equal(getImageOutputPrice(id, 'ultra'), 0.0119, id);
+            // Resolution tiers multiply the 1K base price.
+            assert.equal(getResolutionMultiplier(id, '1K'), 1);
+            assert.equal(getResolutionMultiplier(id, '2K'), 2);
+            assert.equal(getResolutionMultiplier(id, '4K'), 2.8);
+            assert.equal(getResolutionMultiplier(id, undefined), 1);
+            assert.equal(getImageOutputPrice(id, 'medium', '2K').toFixed(4), '0.0238');
+            assert.equal(getImageOutputPrice(id, 'xhigh', '4K').toFixed(4), '0.2360');
+            assert.equal(getModelPricing(id).inputImageCost, 0.011);
+        }
+    });
+
+    it('ignores the resolution argument for models without resolution multipliers', () => {
+        assert.equal(getResolutionMultiplier('evolink/doubao-seedream-5.0-pro', '2K'), 1);
+        assert.equal(getImageOutputPrice('evolink/doubao-seedream-5.0-pro', '1K', '2K'), 0.03375);
     });
 
     it('prices every Evolink model so spend is never silently recorded as zero', () => {

@@ -987,9 +987,21 @@ export function showPlaceholder(placeholderId, folderId = null) {
     const glowEffect = createElement('div', {
         className: 'gallery__placeholder-glow'
     });
+    const status = createElement('div', {
+        className: 'gallery__placeholder-status',
+        role: 'status',
+        'aria-live': 'polite',
+        'aria-label': 'Generating image'
+    });
+    status.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+        + '<path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9L12 2.5z"/>'
+        + '<path d="M19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z" opacity="0.8"/></svg>'
+        + '<span>Generating</span>'
+        + '<span class="gallery__placeholder-status-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
 
     placeholder.appendChild(innerShimmer);
     placeholder.appendChild(glowEffect);
+    placeholder.appendChild(status);
 
     placeholderElements.set(placeholderId, { element: placeholder, folderId: folderId ?? null });
     if (shouldShowPlaceholderInCurrentView(folderId ?? null)) {

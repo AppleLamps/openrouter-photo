@@ -276,6 +276,7 @@ function getGenerationSettings() {
     const numImagesSelect = document.getElementById('setting-num-images');
     const aspectRatioSelect = document.getElementById('setting-aspect-ratio');
     const resolutionSelect = document.getElementById('setting-resolution');
+    const imageQualitySelect = document.getElementById('setting-image-quality');
     const outputFormatSelect = document.getElementById('setting-output-format');
     const sizeModeSelect = document.getElementById('setting-size-mode');
     const exactWidthInput = document.getElementById('setting-exact-width');
@@ -289,7 +290,8 @@ function getGenerationSettings() {
     const flashheadStabilityInput = document.getElementById('setting-flashhead-stability');
 
     const model = normalizeModelId(modelSelect?.value || DEFAULT_MODEL_ID);
-    const exactSize = getUiCapabilities(model).exactSize;
+    const ui = getUiCapabilities(model);
+    const exactSize = ui.exactSize;
     const useExactSize = Boolean(exactSize)
         && sizeModeSelect instanceof HTMLSelectElement
         && sizeModeSelect.value === 'exact';
@@ -311,6 +313,7 @@ function getGenerationSettings() {
             image_size: `${exactWidthInput?.value || exactSize.defaultWidth}x${exactHeightInput?.value || exactSize.defaultHeight}`,
         } : {}),
         resolution: resolutionSelect?.value || '1K',
+        ...(ui.quality ? { image_quality: imageQualitySelect?.value || undefined } : {}),
         output_format: outputFormatSelect?.value || undefined,
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
@@ -367,6 +370,9 @@ export function restoreSettings(settings) {
 
     const resolutionSelect = document.getElementById('setting-resolution');
     setSelectIfValid(resolutionSelect, settings.resolution, ui.resolution?.options || null);
+
+    const imageQualitySelect = document.getElementById('setting-image-quality');
+    setSelectIfValid(imageQualitySelect, settings.image_quality, ui.quality?.options || null);
 
     const outputFormatSelect = document.getElementById('setting-output-format');
     setSelectIfValid(outputFormatSelect, settings.output_format, ui.outputFormat?.options || null);

@@ -53,6 +53,23 @@ describe('generate routing — exact image size', () => {
         assert.match(normalizeExactImageSize(model, '4096x128').error, /supported/);
     });
 
+    it('enforces GPT Image 2.5 pixel alignment, edge, pixel, and ratio limits', () => {
+        const model = 'evolink/gpt-image-2.5-flare';
+        assert.deepEqual(normalizeExactImageSize(model, '1024x1024'), { value: '1024x1024' });
+        assert.deepEqual(normalizeExactImageSize(model, '3840x2160'), { value: '3840x2160' });
+        assert.deepEqual(normalizeExactImageSize(model, '1536x1024'), { value: '1536x1024' });
+        assert.match(normalizeExactImageSize(model, '1000x1000').error, /multiples of 16/);
+        assert.match(normalizeExactImageSize(model, '3856x2160').error, /outside the supported|3840/);
+        // Within the pixel budget and 16-aligned, but one edge exceeds 3840 px.
+        assert.match(normalizeExactImageSize(model, '3856x1600').error, /3840 pixels per side/);
+        // Below the 655,360 pixel floor.
+        assert.match(normalizeExactImageSize(model, '512x512').error, /outside the supported/);
+        // 4:1 exceeds the 3:1 aspect limit.
+        assert.match(normalizeExactImageSize(model, '2048x512').error, /outside the supported/);
+        // Seedream 5.0 Pro has no alignment rule, so odd sizes still pass there.
+        assert.deepEqual(normalizeExactImageSize('evolink/doubao-seedream-5.0-pro', '1600x1000'), { value: '1600x1000' });
+    });
+
     it('rejects exact dimensions for unsupported models', () => {
         assert.match(normalizeExactImageSize('evolink/z-image-turbo', '1024x1024').error, /not supported/);
         assert.equal(normalizeExactImageSize(model, 'square_hd'), null);

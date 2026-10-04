@@ -3,6 +3,7 @@ const {
     getEvolinkConfig,
     getImageOutputPrice,
     getInputImagePrice,
+    getResolutionMultiplier,
     evolinkCreditsToUsd,
 } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
@@ -18,6 +19,15 @@ const Z_IMAGE_ASPECT_FALLBACK = {
     auto: '1:1',
 };
 
+// GPT Image 2.5 accepts `auto`, 15 aspect ratios, or explicit WxH pixels.
+const GPT_IMAGE_ASPECT_RATIOS = new Set([
+    'auto', '1:1', '1:2', '2:1', '1:3', '3:1', '2:3', '3:2', '3:4', '4:3',
+    '4:5', '5:4', '9:16', '16:9', '9:21', '21:9',
+]);
+const GPT_IMAGE_RESOLUTIONS = ['1K', '2K', '4K'];
+const GPT_IMAGE_QUALITIES = ['low', 'medium', 'high', 'xhigh', 'max'];
+const GPT_IMAGE_1K_PIXELS = 1048576;
+
 function normalizeZImageAspectRatio(ratio) {
     if (Z_IMAGE_TURBO_ASPECT_RATIOS.has(ratio)) return ratio;
     return Z_IMAGE_ASPECT_FALLBACK[ratio] || '1:1';
@@ -26,10 +36,12 @@ function normalizeZImageAspectRatio(ratio) {
 /**
  * Estimated cost of one Evolink image task, in USD.
  * Evolink bills the generated image at its quality tier and, on models such as
- * Seedream 5.0 Pro, each reference image on top of that.
+ * Seedream 5.0 Pro, each reference image on top of that. Token-billed models
+ * (GPT Image 2.5) additionally scale with the resolution tier; `resolution`
+ * is ignored for models without `resolutionMultipliers` in the catalog.
  */
-function getEvolinkImageCostPerImage(model, { quality, inputImageCount = 0 } = {}) {
-    const outputPrice = getImageOutputPrice(model, quality);
+function getEvolinkImageCostPerImage(model, { quality, resolution, inputImageCount = 0 } = {}) {
+    const outputPrice = getImageOutputPrice(model, quality, resolution);
     const billableInputs = Number.isFinite(inputImageCount) && inputImageCount > 0
         ? Math.floor(inputImageCount)
         : 0;
@@ -116,6 +128,85 @@ function buildZImageTurboPayload({ apiModel, prompt, normalizedAspectRatio }) {
     };
 }
 
+function normalizeGptImageAspectRatio(ratio) {
+    return GPT_IMAGE_ASPECT_RATIOS.has(ratio) ? ratio : 'auto';
+}
+
+function normalizeGptImageResolution(resolution, resolutionOptions, resolutionDefault) {
+    const options = Array.isArray(resolutionOptions) && resolutionOptions.length > 0
+        ? resolutionOptions
+        : GPT_IMAGE_RESOLUTIONS;
+    const candidate = typeof resolution === 'string' ? resolution.toUpperCase() : '';
+    if (options.includes(candidate)) return candidate;
+    return options.includes(resolutionDefault) ? resolutionDefault : options[0];
+}
+
+function normalizeGptImageQuality(quality, qualityOptions, qualityDefault) {
+    const options = Array.isArray(qualityOptions) && qualityOptions.length > 0
+        ? qualityOptions
+        : GPT_IMAGE_QUALITIES;
+    const candidate = typeof quality === 'string' ? quality.toLowerCase() : '';
+    if (options.includes(candidate)) return candidate;
+    if (options.includes(qualityDefault)) return qualityDefault;
+    return options.includes('medium') ? 'medium' : options[0];
+}
+
+/**
+ * Resolution tier GPT Image 2.5 is billed at. In ratio mode the requested tier
+ * applies; `auto` lets the model pick (we assume 1K); explicit WxH sizes bill
+ * by pixel count, so pick the tier whose pixel budget the request lands in.
+ */
+function resolveGptImageBilledResolution({ exactImageSize, size, resolution }) {
+    if (typeof exactImageSize === 'string' && exactImageSize) {
+        const [width, height] = exactImageSize.split('x').map((value) => parseInt(value, 10));
+        if (Number.isFinite(width) && Number.isFinite(height)) {
+            const pixels = width * height;
+            if (pixels > GPT_IMAGE_1K_PIXELS * 4) return '4K';
+            if (pixels > GPT_IMAGE_1K_PIXELS) return '2K';
+        }
+        return '1K';
+    }
+    if (size === 'auto') return '1K';
+    return resolution;
+}
+
+/**
+ * Payload for the GPT Image 2.5 route (gpt-image-2.5-sunburst / -flare).
+ * Shares the Seedream endpoint but not its fields: `resolution` only applies in
+ * ratio mode, `quality` is a rendering tier (low…max), and output format is a
+ * top-level field rather than `model_params`.
+ */
+function buildGptImagePayload({
+    apiModel,
+    prompt,
+    normalizedAspectRatio,
+    exactImageSize,
+    resolution,
+    resolutionOptions,
+    resolutionDefault,
+    imageQuality,
+    qualityOptions,
+    qualityDefault,
+    uploadedImageUrls = [],
+    outputFormat,
+    outputFormatOptions,
+}) {
+    const size = exactImageSize || normalizeGptImageAspectRatio(normalizedAspectRatio);
+    const ratioMode = !exactImageSize && size !== 'auto';
+    const normalizedOutputFormat = normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions);
+
+    return {
+        model: apiModel,
+        prompt: prompt.trim(),
+        n: 1,
+        size,
+        ...(ratioMode ? { resolution: normalizeGptImageResolution(resolution, resolutionOptions, resolutionDefault) } : {}),
+        quality: normalizeGptImageQuality(imageQuality, qualityOptions, qualityDefault),
+        ...(normalizedOutputFormat ? { output_format: normalizedOutputFormat } : {}),
+        ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
+    };
+}
+
 async function handleEvolink(ctx) {
     const {
         res,
@@ -125,6 +216,7 @@ async function handleEvolink(ctx) {
         normalizedAspectRatio,
         exactImageSize,
         resolution,
+        image_quality,
         output_format,
         normalizedInputImages,
         enable_web_search,
@@ -147,7 +239,7 @@ async function handleEvolink(ctx) {
             headers: evolinkHeaders,
             body: JSON.stringify({
                 base64_data: dataUrl,
-                file_name: `seedream-reference-${Date.now()}-${index + 1}.jpg`,
+                file_name: `reference-${Date.now()}-${index + 1}.jpg`,
             }),
         });
 
@@ -208,9 +300,31 @@ async function handleEvolink(ctx) {
     };
 
     try {
-        const { variant, apiModel, qualityOptions, qualityDefault, outputFormatOptions } = evolinkConfig;
+        const {
+            variant,
+            apiModel,
+            qualityOptions,
+            qualityDefault,
+            outputFormatOptions,
+            qualityTierOptions,
+            qualityTierDefault,
+        } = evolinkConfig;
+        const isGptImage = variant === 'gpt-image';
+        const gptImageQuality = isGptImage
+            ? normalizeGptImageQuality(image_quality, qualityTierOptions, qualityTierDefault)
+            : null;
+        const gptImageResolution = isGptImage
+            ? resolveGptImageBilledResolution({
+                exactImageSize,
+                size: normalizeGptImageAspectRatio(normalizedAspectRatio),
+                resolution: normalizeGptImageResolution(resolution, qualityOptions, qualityDefault),
+            })
+            : null;
         const costPerImage = getEvolinkImageCostPerImage(model, {
-            quality: resolveBilledQuality({ exactImageSize, resolution, qualityOptions, qualityDefault }),
+            quality: isGptImage
+                ? gptImageQuality
+                : resolveBilledQuality({ exactImageSize, resolution, qualityOptions, qualityDefault }),
+            resolution: gptImageResolution,
             // Every task uploads its own copy of the reference set, and Evolink
             // bills each billable input image per task.
             inputImageCount: variant === 'z-image-turbo' ? 0 : normalizedInputImages.length,
@@ -225,9 +339,27 @@ async function handleEvolink(ctx) {
                     uploadEvolinkReferenceImage(dataUrl, (index * normalizedInputImages.length) + imageIndex)
                 )))
                 : [];
-            const payload = variant === 'z-image-turbo'
-                ? buildZImageTurboPayload({ apiModel, prompt, normalizedAspectRatio })
-                : buildSeedreamPayload({
+            let payload;
+            if (variant === 'z-image-turbo') {
+                payload = buildZImageTurboPayload({ apiModel, prompt, normalizedAspectRatio });
+            } else if (isGptImage) {
+                payload = buildGptImagePayload({
+                    apiModel,
+                    prompt,
+                    normalizedAspectRatio,
+                    exactImageSize,
+                    resolution,
+                    resolutionOptions: qualityOptions,
+                    resolutionDefault: qualityDefault,
+                    imageQuality: image_quality,
+                    qualityOptions: qualityTierOptions,
+                    qualityDefault: qualityTierDefault,
+                    uploadedImageUrls,
+                    outputFormat: output_format,
+                    outputFormatOptions,
+                });
+            } else {
+                payload = buildSeedreamPayload({
                     apiModel,
                     prompt,
                     parsedNumImages: 1,
@@ -241,6 +373,7 @@ async function handleEvolink(ctx) {
                     outputFormatOptions,
                     enableWebSearch: enable_web_search === true,
                 });
+            }
             return createTask(payload, index);
         }));
 
@@ -312,10 +445,15 @@ module.exports = {
     handleEvolink,
     buildSeedreamPayload,
     buildZImageTurboPayload,
+    buildGptImagePayload,
     buildEvolinkProxyUrl,
     getEvolinkImageCostPerImage,
     resolveBilledQuality,
+    resolveGptImageBilledResolution,
     normalizeZImageAspectRatio,
+    normalizeGptImageAspectRatio,
+    normalizeGptImageResolution,
+    normalizeGptImageQuality,
     normalizeSeedreamQuality,
     normalizeSeedreamOutputFormat,
 };

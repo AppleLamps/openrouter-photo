@@ -4,10 +4,15 @@ const {
     buildEvolinkProxyUrl,
     buildSeedreamPayload,
     buildZImageTurboPayload,
+    buildGptImagePayload,
     getEvolinkImageCostPerImage,
     handleEvolink,
     resolveBilledQuality,
+    resolveGptImageBilledResolution,
     normalizeZImageAspectRatio,
+    normalizeGptImageAspectRatio,
+    normalizeGptImageResolution,
+    normalizeGptImageQuality,
     normalizeSeedreamQuality,
     normalizeSeedreamOutputFormat,
 } = require('../api/providers/evolink');
@@ -252,6 +257,224 @@ describe('evolink payload builders', () => {
         assert.equal(resolveBilledQuality({ exactImageSize: '1664x2496', ...tiers }), '2K');
         // No exact size: the requested resolution decides.
         assert.equal(resolveBilledQuality({ resolution: '2K', ...tiers }), '2K');
+    });
+
+    // GPT Image 2.5 (gpt-image-2.5-sunburst / -flare) — evolink.ai/docs
+    // api-manual/image-series/gpt-image-2.5/gpt-image-2.5-image-generation
+    const GPT_IMAGE_TIERS = {
+        resolutionOptions: ['1K', '2K', '4K'],
+        resolutionDefault: '1K',
+        qualityOptions: ['low', 'medium', 'high', 'xhigh', 'max'],
+        qualityDefault: 'medium',
+        outputFormatOptions: ['png', 'jpeg', 'webp'],
+    };
+
+    it('builds a GPT Image 2.5 text-to-image payload in ratio mode', () => {
+        const payload = buildGptImagePayload({
+            apiModel: 'gpt-image-2.5-sunburst',
+            prompt: '  A beautiful colorful sunset over the ocean ',
+            normalizedAspectRatio: '16:9',
+            resolution: '2K',
+            imageQuality: 'high',
+            uploadedImageUrls: [],
+            outputFormat: 'webp',
+            ...GPT_IMAGE_TIERS,
+        });
+
+        assert.deepEqual(payload, {
+            model: 'gpt-image-2.5-sunburst',
+            prompt: 'A beautiful colorful sunset over the ocean',
+            n: 1,
+            size: '16:9',
+            resolution: '2K',
+            quality: 'high',
+            output_format: 'webp',
+        });
+        assert.equal('prompt_priority' in payload, false);
+        assert.equal('model_params' in payload, false);
+    });
+
+    it('omits resolution for GPT Image 2.5 auto and exact-pixel sizes', () => {
+        const auto = buildGptImagePayload({
+            apiModel: 'gpt-image-2.5-flare',
+            prompt: 'a cat',
+            normalizedAspectRatio: 'auto',
+            resolution: '4K',
+            imageQuality: 'low',
+            ...GPT_IMAGE_TIERS,
+        });
+        assert.equal(auto.size, 'auto');
+        assert.equal('resolution' in auto, false);
+        assert.equal(auto.quality, 'low');
+
+        const exact = buildGptImagePayload({
+            apiModel: 'gpt-image-2.5-flare',
+            prompt: 'a cat',
+            normalizedAspectRatio: '16:9',
+            exactImageSize: '3840x2160',
+            resolution: '1K',
+            imageQuality: 'max',
+            ...GPT_IMAGE_TIERS,
+        });
+        assert.equal(exact.size, '3840x2160');
+        assert.equal('resolution' in exact, false);
+        assert.equal(exact.quality, 'max');
+    });
+
+    it('falls back to medium quality, 1K resolution, and auto size for unsupported GPT Image values', () => {
+        const payload = buildGptImagePayload({
+            apiModel: 'gpt-image-2.5-flare',
+            prompt: 'a cat',
+            normalizedAspectRatio: '7:5',
+            resolution: '3K',
+            imageQuality: 'ultra',
+            outputFormat: 'gif',
+            ...GPT_IMAGE_TIERS,
+        });
+        assert.equal(payload.size, 'auto');
+        assert.equal('resolution' in payload, false);
+        assert.equal(payload.quality, 'medium');
+        assert.equal('output_format' in payload, false);
+
+        assert.equal(normalizeGptImageAspectRatio('3:1'), '3:1');
+        assert.equal(normalizeGptImageAspectRatio('9:21'), '9:21');
+        assert.equal(normalizeGptImageAspectRatio('adaptive'), 'auto');
+        assert.equal(normalizeGptImageResolution('2k', ['1K', '2K', '4K'], '1K'), '2K');
+        assert.equal(normalizeGptImageResolution('8K', ['1K', '2K', '4K'], '1K'), '1K');
+        assert.equal(normalizeGptImageQuality('XHIGH', GPT_IMAGE_TIERS.qualityOptions, 'medium'), 'xhigh');
+        assert.equal(normalizeGptImageQuality(undefined, GPT_IMAGE_TIERS.qualityOptions, 'medium'), 'medium');
+    });
+
+    it('attaches uploaded reference images to GPT Image 2.5 edits', () => {
+        const payload = buildGptImagePayload({
+            apiModel: 'gpt-image-2.5-sunburst',
+            prompt: 'replace the background with a studio sweep',
+            normalizedAspectRatio: 'auto',
+            imageQuality: 'medium',
+            uploadedImageUrls: ['https://example.com/product.png', 'https://example.com/logo.png'],
+            ...GPT_IMAGE_TIERS,
+        });
+        assert.deepEqual(payload.image_urls, ['https://example.com/product.png', 'https://example.com/logo.png']);
+    });
+
+    it('derives the billed GPT Image 2.5 resolution tier', () => {
+        assert.equal(resolveGptImageBilledResolution({ size: '16:9', resolution: '2K' }), '2K');
+        assert.equal(resolveGptImageBilledResolution({ size: 'auto', resolution: '4K' }), '1K');
+        assert.equal(resolveGptImageBilledResolution({ exactImageSize: '1024x1024', size: '1:1', resolution: '4K' }), '1K');
+        assert.equal(resolveGptImageBilledResolution({ exactImageSize: '2048x2048', size: '1:1', resolution: '1K' }), '2K');
+        assert.equal(resolveGptImageBilledResolution({ exactImageSize: '3840x2160', size: '1:1', resolution: '1K' }), '4K');
+    });
+
+    // $0.027 per 1K output image tokens (evolink.ai/gpt-image-2-5-sunburst), at
+    // 1024²: low 196, medium 439, high 1,756, xhigh 3,122, max 7,024 tokens.
+    it('prices GPT Image 2.5 by quality tier, resolution tier, and reference images', () => {
+        for (const model of ['evolink/gpt-image-2.5-sunburst', 'evolink/gpt-image-2.5-flare']) {
+            assert.equal(getEvolinkImageCostPerImage(model, { quality: 'low', resolution: '1K' }), 0.0053);
+            assert.equal(getEvolinkImageCostPerImage(model, { quality: 'medium', resolution: '1K' }), 0.0119);
+            assert.equal(getEvolinkImageCostPerImage(model, { quality: 'max', resolution: '1K' }), 0.1896);
+            assert.equal(getEvolinkImageCostPerImage(model, { quality: 'xhigh', resolution: '2K' }).toFixed(4), '0.1686');
+            assert.equal(getEvolinkImageCostPerImage(model), 0.0119);
+            assert.equal(
+                getEvolinkImageCostPerImage(model, { quality: 'medium', resolution: '1K', inputImageCount: 1 }).toFixed(4),
+                '0.0229',
+            );
+        }
+    });
+
+    it('runs GPT Image 2.5 through the documented async task contract', async () => {
+        const createBodies = [];
+        let uploadCount = 0;
+
+        global.fetch = async (url, options = {}) => {
+            if (url === 'https://files-api.evolink.ai/api/v1/files/upload/base64') {
+                uploadCount += 1;
+                return {
+                    ok: true,
+                    json: async () => ({ data: { file_url: `https://files-api.evolink.ai/files/ref-${uploadCount}.png` } }),
+                };
+            }
+
+            if (url === 'https://api.evolink.ai/v1/images/generations') {
+                assert.equal(options.headers.Authorization, 'Bearer evolink-test-key');
+                createBodies.push(JSON.parse(options.body));
+                return {
+                    ok: true,
+                    json: async () => ({
+                        created: 1757156493,
+                        id: 'task-unified-1757156493-imcg5zqt',
+                        model: 'gpt-image-2.5-sunburst',
+                        object: 'image.generation.task',
+                        progress: 0,
+                        status: 'pending',
+                        task_info: { can_cancel: true, estimated_time: 100 },
+                        type: 'image',
+                        usage: { billing_rule: 'per_call', credits_reserved: 2.5, user_group: 'default' },
+                    }),
+                };
+            }
+
+            throw new Error(`Unexpected fetch: ${url}`);
+        };
+
+        const res = makeRes();
+        await handleEvolink({
+            res,
+            model: 'evolink/gpt-image-2.5-sunburst',
+            prompt: 'put the product on a marble counter',
+            parsedNumImages: 1,
+            normalizedAspectRatio: '4:5',
+            resolution: '2K',
+            image_quality: 'high',
+            output_format: 'png',
+            normalizedInputImages: ['data:image/png;base64,aaa'],
+            evolinkKey: 'evolink-test-key',
+        });
+
+        assert.equal(res.statusCode, 202);
+        assert.equal(uploadCount, 1);
+        assert.deepEqual(createBodies, [{
+            model: 'gpt-image-2.5-sunburst',
+            prompt: 'put the product on a marble counter',
+            n: 1,
+            size: '4:5',
+            resolution: '2K',
+            quality: 'high',
+            output_format: 'png',
+            image_urls: ['https://files-api.evolink.ai/files/ref-1.png'],
+        }]);
+        assert.equal(res.body.provider, 'evolink');
+        assert.equal(res.body.media_type, 'image');
+        assert.equal(res.body.request_id, 'task-unified-1757156493-imcg5zqt');
+        // Reserved credits beat the catalog estimate: 2.5 credits × $0.0147.
+        assert.equal(res.body.estimated_cost, 2.5 * 0.0147);
+        assert.equal(res.body.requests[0].credits_reserved, 2.5);
+    });
+
+    it('uses the catalog estimate for GPT Image 2.5 when Evolink reserves no credits', async () => {
+        global.fetch = async (url) => {
+            if (url === 'https://api.evolink.ai/v1/images/generations') {
+                return { ok: true, json: async () => ({ id: 'task-flare-1' }) };
+            }
+            throw new Error(`Unexpected fetch: ${url}`);
+        };
+
+        const res = makeRes();
+        await handleEvolink({
+            res,
+            model: 'evolink/gpt-image-2.5-flare',
+            prompt: 'a lighthouse at dawn',
+            parsedNumImages: 2,
+            normalizedAspectRatio: '16:9',
+            resolution: '2K',
+            image_quality: 'xhigh',
+            normalizedInputImages: [],
+            evolinkKey: 'evolink-test-key',
+        });
+
+        assert.equal(res.statusCode, 202);
+        assert.equal(res.body.requests.length, 2);
+        assert.equal(res.body.requests[0].estimated_cost.toFixed(4), '0.1686');
+        assert.equal(res.body.meta.total_usage.toFixed(4), '0.3372');
     });
 
     it('builds same-origin proxy URLs for Evolink hosted images', () => {

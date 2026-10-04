@@ -141,12 +141,21 @@ function pickTieredAmount(amounts, tier, fallbackTier) {
     return null;
 }
 
+/** Resolution-tier factor for token-billed models (see api/model-catalog.js). */
+export function getResolutionMultiplier(modelId, resolution) {
+    const multipliers = getModelPricing(modelId).resolutionMultipliers;
+    if (!multipliers || typeof multipliers !== 'object') return 1;
+    const factor = Number(multipliers[resolution]);
+    return Number.isFinite(factor) && factor > 0 ? factor : 1;
+}
+
 /** Price of one generated image in USD; supports flat and per-quality tiers. */
-export function getImageOutputPrice(modelId, quality) {
+export function getImageOutputPrice(modelId, quality, resolution) {
     const price = getModelPricing(modelId).price;
     if (!price) return 0;
     if (price.type === 'byQuality') {
-        return pickTieredAmount(price.amounts, quality, price.default) ?? 0;
+        const base = pickTieredAmount(price.amounts, quality, price.default) ?? 0;
+        return base * getResolutionMultiplier(modelId, resolution);
     }
     if (price.type === 'flat' && Number.isFinite(price.amount)) return price.amount;
     return 0;
@@ -167,6 +176,7 @@ export function getUiCapabilities(modelId) {
         aspectRatioOptions: ui.aspectRatioOptions || null,
         exactSize: ui.exactSize || null,
         resolution: ui.resolution || null,
+        quality: ui.quality || null,
         outputFormat: ui.outputFormat || null,
         videoLength: ui.videoLength || null,
         videoQuality: ui.videoQuality || null,

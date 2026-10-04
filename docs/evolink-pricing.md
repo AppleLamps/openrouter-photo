@@ -2,7 +2,8 @@
 
 Rates the spend tracker uses for Evolink models, and where they come from.
 
-**Verified: 2026-08-01** against the Evolink pricing changelog and the per-model route pages.
+**Verified: 2026-08-01** against the Evolink pricing changelog and the per-model route pages
+(GPT Image 2.5 rows added and verified 2026-10-04).
 The corresponding values live in `shared/model-catalog.json`.
 
 ## Credits
@@ -31,9 +32,17 @@ The app prefers `credits_used`, then `credits_reserved`, then the catalog rates 
 | Seedream 5.0 Lite | `evolink/doubao-seedream-5.0-lite` | $0.028 | 1.904 |
 | Seedream 4.5 | `evolink/doubao-seedream-4.5` (+ `/edit`) | $0.03 | 2.04 |
 | Z Image Turbo | `evolink/z-image-turbo` | $0.0038 | 0.26 |
+| GPT Image 2.5 (Sunburst / Flare) — low, 1K | `evolink/gpt-image-2.5-*` | $0.0053 | 0.36 |
+| GPT Image 2.5 — medium, 1K (default) | `evolink/gpt-image-2.5-*` | $0.0119 | 0.81 |
+| GPT Image 2.5 — high, 1K | `evolink/gpt-image-2.5-*` | $0.0474 | 3.22 |
+| GPT Image 2.5 — xhigh, 1K | `evolink/gpt-image-2.5-*` | $0.0843 | 5.73 |
+| GPT Image 2.5 — max, 1K | `evolink/gpt-image-2.5-*` | $0.1896 | 12.9 |
+| GPT Image 2.5 — input image | `evolink/gpt-image-2.5-*` | ~$0.011 each | 0.75 |
 
 Source: [2026-07-26 pricing changelog](https://evolink.ai/changelog) (Seedream range),
-[z-image-turbo route page](https://evolink.ai/z-image-turbo).
+[z-image-turbo route page](https://evolink.ai/z-image-turbo),
+[GPT Image 2.5 Sunburst route page](https://evolink.ai/gpt-image-2-5-sunburst) and
+[GPT Image 2.5 Flare route page](https://evolink.ai/gpt-image-2-5) (verified 2026-10-04).
 
 Notes:
 
@@ -45,6 +54,16 @@ Notes:
   billing — each reference image is charged on top of the output. When an exact `WxH` size is
   requested the `quality` field is omitted from the payload and Evolink derives the tier from the
   pixel count, so `resolveBilledQuality()` mirrors that (≥ 2,097,152 px bills as 2K).
+- GPT Image 2.5 is **token-billed**, not per-image: Evolink charges $0.027 per 1K output image
+  tokens (10% under OpenAI's $0.030), $0.0072 per 1K image input tokens and $0.0045 per 1K text
+  input tokens. Both `gpt-image-2.5-sunburst` and `gpt-image-2.5-flare` use the same rates and
+  parameters. The catalog rows above are the per-image output cost at 1024×1024 for each `quality`
+  tier (low 196, medium 439, high 1,756, xhigh 3,122, max 7,024 output tokens). Larger outputs use
+  more tokens, so `pricing.resolutionMultipliers` scales the 1K figure by 2× for `2K` and 2.8× for
+  `4K` (Evolink's own calculator quotes xhigh 2K at about 2× xhigh 1K). `auto` size is estimated at
+  1K; explicit `WxH` sizes pick the tier from their pixel count. The per-input-image figure is the
+  observed difference between Evolink's "medium 1K with one reference" and "medium 1K" examples.
+  These are only the pre-flight estimate: `credits_reserved` and `credits_used` always win.
 - Every Evolink image task creates one image (`n: 1` per task), so per-task cost is per-image cost.
 
 ## Video (per second of output)

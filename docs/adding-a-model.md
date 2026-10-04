@@ -33,9 +33,10 @@ New model
     ├─ xAI (Grok image / video)
     │     └─ Catalog only → reuse xai-image or xai-video profile + pricing
     │
-    ├─ Evolink image (Seedream, Z Image Turbo, …)
+    ├─ Evolink image (Seedream, Z Image Turbo, GPT Image 2.5, …)
     │     ├─ Seedream 4.5 / 5 Lite (T2I or edit)? → catalog only → reuse evolink-image or evolink-edit
     │     │     (override `evolink.apiModel` and `ui.resolution` on the model entry when quality tiers differ)
+    │     ├─ Another GPT Image route? → catalog only → reuse evolink-gpt-image, override `evolink.apiModel`
     │     └─ New API family (e.g. Z Image Turbo)? → new profile + branch in api/providers/evolink.js
     │
     └─ Evolink video (Seedance 2.0 T2V / I2V, …)
@@ -91,6 +92,8 @@ Profiles define **backend**, **API key**, **UI controls**, **input rules**, and 
 | --- | --- |
 | `aspectRatio: true` | Show aspect ratio dropdown |
 | `resolution: { options, default }` | Show resolution dropdown (Gemini, Evolink Seedream, xAI) |
+| `quality: { options, default }` | Show rendering-quality dropdown, separate from resolution (GPT Image 2.5 `low`…`max`); sent as `image_quality` |
+| `exactSize: { … }` | Allow exact `WxH` pixels; optional `multipleOf` and `maxEdge` add alignment and per-side limits (GPT Image 2.5) |
 | `videoLength: { min, max, default }` | Video duration slider/input |
 | `videoQuality: { options, default }` | Video resolution dropdown |
 | `generateAudio: true` | Toggle for video audio (Seedance) |
@@ -127,6 +130,7 @@ Profiles define **backend**, **API key**, **UI controls**, **input rules**, and 
 | `xai-video` | xai | Grok video (async, text-to-video) |
 | `evolink-image` / `evolink-edit` | evolink | Evolink Seedream (4.5 default; override `apiModel` / resolution per model) |
 | `evolink-z-image` | evolink | Evolink Z Image Turbo (aspect ratio only, async) |
+| `evolink-gpt-image` | evolink | Evolink GPT Image 2.5 Sunburst / Flare (ratio or exact size, 1K/2K/4K, quality tier, up to 16 references) |
 | `evolink-video-seedance2-i2v` | evolink-video | Seedance 2.0 image-to-video (async, 1–2 frames) |
 | `evolink-video-seedance2-t2v` | evolink-video | Seedance 2.0 text-to-video (async, web search) |
 
@@ -257,6 +261,14 @@ Add pricing for every non-OpenRouter model. A model with no pricing silently rec
   "inputImageCost": 0.00225
 }
 
+// Token-billed with a rendering-quality tier at 1K, scaled per resolution tier
+// (GPT Image 2.5: `quality` keys the base price, `resolutionMultipliers` scale 2K/4K)
+"pricing": {
+  "price": { "type": "byQuality", "amounts": { "low": 0.0053, "medium": 0.0119, "high": 0.0474, "xhigh": 0.0843, "max": 0.1896 }, "default": "medium" },
+  "resolutionMultipliers": { "1K": 1, "2K": 2, "4K": 2.8 },
+  "inputImageCost": 0.011
+}
+
 // xAI image
 "pricing": { "perImageOutput": 0.02, "inputImageCost": 0.002 }
 
@@ -266,7 +278,7 @@ Add pricing for every non-OpenRouter model. A model with no pricing silently rec
 ```
 
 Resolve prices through the catalog helpers rather than reading `pricing` directly, so both
-shapes stay supported: `getImageOutputPrice(id, quality)`, `getInputImagePrice(id)` and
+shapes stay supported: `getImageOutputPrice(id, quality, resolution)`, `getInputImagePrice(id)` and
 `getVideoPricePerSecond(id, quality)` (exported from `api/model-catalog.js`, mirrored in
 `js/model-capabilities.js`). An unknown tier falls back to `default`/`defaultQuality`.
 
@@ -295,7 +307,7 @@ npm test
 | --- | --- |
 | `tests/catalog-integrity.test.js` | Model counts, backend/type counts, legacy redirects, edit-model input requirements, no-fal guard |
 | `tests/model-catalog.test.js` | Routing, redirects, Evolink config resolution |
-| `tests/evolink-payload.test.js` | Evolink Seedream and Z Image Turbo payload shape |
+| `tests/evolink-payload.test.js` | Evolink Seedream, Z Image Turbo and GPT Image 2.5 payload shape and cost estimates |
 | `tests/generate-routing.test.js` | Input image validation, provider resolution |
 | `tests/generation-status.test.js` | Generic pending/completed/failed mappings and redacted provider errors |
 | `tests/generation-polling.test.js` | Request normalization, transient retries, timeout, and cancellation |
