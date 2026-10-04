@@ -158,7 +158,7 @@
         "outputFormat": { "options": ["png", "jpeg", "webp"] }
       },
       "output": { "maxImages": 4, "defaultImages": 2 },
-      "input": { "maxImages": 16, "required": false, "promptMaxLength": 32000 },
+      "input": { "maxImages": 16, "required": false, "promptMaxLength": 32000, "promptMaxBytes": 60000 },
       "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.5-flare" }
     },
     "evolink-video-seedance2-i2v": {

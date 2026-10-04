@@ -481,6 +481,13 @@ async function handleGenerate(input, button, retryOptions = null) {
         input.focus();
         return;
     }
+    if (Number.isInteger(inputConstraints.promptMaxBytes)
+        && new TextEncoder().encode(prompt).length > inputConstraints.promptMaxBytes) {
+        isGenerating = false;
+        deps.showError(`Prompt must be ${inputConstraints.promptMaxBytes.toLocaleString('en-US')} bytes or fewer when UTF-8 encoded for this model.`);
+        input.focus();
+        return;
+    }
 
     const selectedFolderInputAtStart = document.getElementById('selected-folder');
     const generationFolderId = retryOptions && 'folderId' in retryOptions

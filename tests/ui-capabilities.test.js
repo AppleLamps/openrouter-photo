@@ -159,6 +159,36 @@ describe('UI capabilities', () => {
     });
 });
 
+describe('exact size validation (frontend mirror)', () => {
+    it('GPT Image 2.5 declares the UTF-8 prompt byte limit', async () => {
+        const { getInputConstraints } = await import('../js/model-capabilities.js');
+        const input = getInputConstraints('evolink/gpt-image-2.5-sunburst');
+        assert.equal(input.promptMaxLength, 32000);
+        assert.equal(input.promptMaxBytes, 60000);
+        assert.equal(getInputConstraints('evolink/doubao-seedream-5.0-pro').promptMaxBytes, undefined);
+    });
+
+    it('rejects a Seedream-valid pair that breaks GPT Image 2.5 alignment, and accepts presets', async () => {
+        const { getUiCapabilities, isExactSizeAllowed } = await import('../js/model-capabilities.js');
+        const gpt = getUiCapabilities('evolink/gpt-image-2.5-flare').exactSize;
+        const seedream = getUiCapabilities('evolink/doubao-seedream-5.0-pro').exactSize;
+
+        // 1600x1000 is fine for Seedream 5.0 Pro but 1000 is not a multiple of 16.
+        assert.equal(isExactSizeAllowed(seedream, 1600, 1000), true);
+        assert.equal(isExactSizeAllowed(gpt, 1600, 1000), false);
+        assert.equal(isExactSizeAllowed(gpt, 1600, 1008), true);
+        assert.equal(isExactSizeAllowed(gpt, 1024, 1024), true);
+        assert.equal(isExactSizeAllowed(gpt, 3840, 2160), true);
+        // Edge cap, pixel floor, and aspect limit.
+        assert.equal(isExactSizeAllowed(gpt, 3856, 1600), false);
+        assert.equal(isExactSizeAllowed(gpt, 512, 512), false);
+        assert.equal(isExactSizeAllowed(gpt, 2048, 512), false);
+        // Garbage input never passes.
+        assert.equal(isExactSizeAllowed(gpt, NaN, 1024), false);
+        assert.equal(isExactSizeAllowed(null, 1024, 1024), false);
+    });
+});
+
 describe('picker visibility', () => {
     it('shows every catalog model in the picker', async () => {
         const { isVisibleInPicker } = await import('../js/model-capabilities.js');

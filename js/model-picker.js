@@ -16,6 +16,7 @@ import {
     getInputConstraints,
     getOutputConstraints,
     resolveCapabilities,
+    isExactSizeAllowed,
 } from './models.js';
 
 /**
@@ -723,11 +724,16 @@ function syncExactSizeOptions(model) {
     const heightInput = document.getElementById('setting-exact-height');
     if (!exactSize || !(modeSelect instanceof HTMLSelectElement)) return;
 
-    if (widthInput instanceof HTMLInputElement && !Number.isInteger(Number(widthInput.value))) {
-        widthInput.value = String(exactSize.defaultWidth);
-    }
-    if (heightInput instanceof HTMLInputElement && !Number.isInteger(Number(heightInput.value))) {
-        heightInput.value = String(exactSize.defaultHeight);
+    // A pair carried over from another model (e.g. Seedream's 1600x1000) may
+    // break this model's alignment, edge, pixel or ratio rules; fall back to
+    // the model's defaults rather than letting the API reject the request.
+    if (widthInput instanceof HTMLInputElement && heightInput instanceof HTMLInputElement) {
+        const width = Number.parseInt(widthInput.value, 10);
+        const height = Number.parseInt(heightInput.value, 10);
+        if (!isExactSizeAllowed(exactSize, width, height)) {
+            widthInput.value = String(exactSize.defaultWidth);
+            heightInput.value = String(exactSize.defaultHeight);
+        }
     }
 
     const step = Number.isInteger(exactSize.multipleOf) && exactSize.multipleOf > 1 ? exactSize.multipleOf : 1;

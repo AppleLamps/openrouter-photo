@@ -47,6 +47,27 @@ describe('generate validation', () => {
         assert.deepEqual(res.body, { error: 'Prompt is required' });
     });
 
+    it('enforces the GPT Image 2.5 UTF-8 byte limit before API key validation', async () => {
+        // 20,001 CJK characters is under the 32,000 code-point cap but 60,003 bytes.
+        const prompt = '夜'.repeat(20001);
+        assert.ok(Array.from(prompt).length < 32000);
+        assert.ok(Buffer.byteLength(prompt, 'utf8') > 60000);
+
+        const res = makeRes();
+        await handler(makeReq({ prompt, model: 'evolink/gpt-image-2.5-sunburst' }), res);
+
+        assert.equal(res.statusCode, 400);
+        assert.match(res.body.error, /60,000 bytes/);
+    });
+
+    it('still enforces the GPT Image 2.5 code-point limit', async () => {
+        const res = makeRes();
+        await handler(makeReq({ prompt: 'a'.repeat(32001), model: 'evolink/gpt-image-2.5-flare' }), res);
+
+        assert.equal(res.statusCode, 400);
+        assert.match(res.body.error, /32000 characters/);
+    });
+
     it('enforces the seedream 5 pro prompt limit before API key validation', async () => {
         const res = makeRes();
 

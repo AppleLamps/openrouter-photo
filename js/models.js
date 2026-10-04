@@ -28,6 +28,7 @@ export {
     getOpenRouterConfig,
     getModelPricing,
     isVisibleInPicker,
+    isExactSizeAllowed,
     ANIMATE_MODEL_ID,
     DEFAULT_MODEL_ID,
     LEGACY_MODEL_REDIRECTS,
