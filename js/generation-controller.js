@@ -667,7 +667,10 @@ async function handleGenerate(input, button, retryOptions = null) {
                     outcome = await pollGenerationRequest(request, pollGenerationStatus, abortSignal);
                 } catch (error) {
                     if (error?.name === 'AbortError') return { aborted: true, error, request, index };
-                    outcome = { status: 'failed', recoverable: true, request, error: error?.message || 'Generation failed.' };
+                    // A task the provider no longer knows about can never be
+                    // resumed, so do not keep it in the journal for a retry.
+                    const recoverable = !isTaskGoneError(error);
+                    outcome = { status: 'failed', recoverable, request, error: error?.message || 'Generation failed.' };
                 }
 
                 if (outcome.status === 'failed') {

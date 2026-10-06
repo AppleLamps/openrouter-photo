@@ -46,6 +46,7 @@ describe('frontend hardening', () => {
         assert.match(controller, /activePendingEntries\.forEach\(\(entry\) => removePendingGeneration\(entry\.request\)\)/);
         assert.match(controller, /label: 'Resuming'/);
         assert.match(controller, /maxElapsed: RESUME_POLL_MAX_ELAPSED_MS/);
+        assert.match(controller, /const recoverable = !isTaskGoneError\(error\);/);
         assert.match(gallery, /errorCardElements\.size > 0/);
     });
 
