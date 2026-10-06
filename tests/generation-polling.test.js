@@ -56,6 +56,26 @@ describe('frontend generation polling', () => {
     });
 });
 
+describe('status error classification', () => {
+    it('treats missing or rejected task ids as gone, but auth and transient errors as recoverable', async () => {
+        const { isTaskGoneError, isRetryablePollError } = await modulePromise;
+        for (const status of [400, 404, 410, 422]) {
+            assert.equal(isTaskGoneError({ status }), true, `status ${status}`);
+            assert.equal(isRetryablePollError({ status }), false, `status ${status}`);
+        }
+        for (const status of [401, 403]) {
+            assert.equal(isTaskGoneError({ status }), false, `status ${status}`);
+            assert.equal(isRetryablePollError({ status }), false, `status ${status}`);
+        }
+        for (const status of [408, 429, 500, 503]) {
+            assert.equal(isTaskGoneError({ status }), false, `status ${status}`);
+            assert.equal(isRetryablePollError({ status }), true, `status ${status}`);
+        }
+        assert.equal(isTaskGoneError(new TypeError('network')), false);
+        assert.equal(isRetryablePollError(new TypeError('network')), true);
+    });
+});
+
 describe('async spend accounting', () => {
     it('prefers the provider-reported cost over the create-time estimate', async () => {
         const { resolveAsyncCost, buildAsyncSpendMeta } = await modulePromise;

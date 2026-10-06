@@ -13,6 +13,8 @@ let emptyStateElement = null;
 
 /** @type {Map<string, { element: HTMLElement, folderId: string|null }>} */
 let placeholderElements = new Map();
+/** @type {Map<string, {element: HTMLElement, folderId: string|null}>} */
+let errorCardElements = new Map();
 
 /** @type {Map<string, number>} */
 let confirmationTimeouts = new Map();
@@ -375,6 +377,12 @@ function renderGallery() {
     // Without this, switching folders mid-generation makes the shimmer disappear
     // and looks like generation was cancelled.
     placeholderElements.forEach(({ element, folderId }) => {
+        if (shouldShowPlaceholderInCurrentView(folderId)) {
+            fragment.appendChild(element);
+        }
+    });
+    // Error cards survive folder switches too, so a failure is never silently lost.
+    errorCardElements.forEach(({ element, folderId }) => {
         if (shouldShowPlaceholderInCurrentView(folderId)) {
             fragment.appendChild(element);
         }
@@ -755,7 +763,7 @@ function showMoveToFolderMenu(anchor) {
 function updateEmptyState() {
     if (!emptyStateElement) return;
 
-    const hasImages = state.getImageCount() > 0 || placeholderElements.size > 0;
+    const hasImages = state.getImageCount() > 0 || placeholderElements.size > 0 || errorCardElements.size > 0;
     emptyStateElement.style.display = hasImages ? 'none' : 'flex';
 }
 
@@ -971,9 +979,11 @@ function removeImageCard(id) {
  * @param {string|null} [folderId=null] - Folder this generation belongs to
  *   (so we know whether to display the placeholder in the current view).
  */
-export function showPlaceholder(placeholderId, folderId = null) {
+export function showPlaceholder(placeholderId, folderId = null, options = {}) {
     if (!galleryElement) return;
     removePlaceholder(placeholderId);
+    const label = typeof options.label === 'string' && options.label.trim() ? options.label.trim() : 'Generating';
+    const ariaLabel = typeof options.ariaLabel === 'string' && options.ariaLabel.trim() ? options.ariaLabel.trim() : `${label} image`;
 
     const placeholder = createElement('div', {
         className: 'gallery__placeholder',
@@ -991,13 +1001,14 @@ export function showPlaceholder(placeholderId, folderId = null) {
         className: 'gallery__placeholder-status',
         role: 'status',
         'aria-live': 'polite',
-        'aria-label': 'Generating image'
+        'aria-label': ariaLabel
     });
     status.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
         + '<path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9L12 2.5z"/>'
         + '<path d="M19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z" opacity="0.8"/></svg>'
-        + '<span>Generating</span>'
+        + '<span class="gallery__placeholder-status-label"></span>'
         + '<span class="gallery__placeholder-status-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+    status.querySelector('.gallery__placeholder-status-label').textContent = label;
 
     placeholder.appendChild(innerShimmer);
     placeholder.appendChild(glowEffect);
@@ -1029,6 +1040,16 @@ export function removePlaceholder(placeholderId) {
 export function removeAllPlaceholders() {
     placeholderElements.forEach(({ element }) => element.remove());
     placeholderElements.clear();
+    errorCardElements.forEach(({ element }) => element.remove());
+    errorCardElements.clear();
+    updateEmptyState();
+}
+
+function dismissErrorCard(placeholderId) {
+    const entry = errorCardElements.get(placeholderId);
+    if (!entry) return;
+    entry.element.remove();
+    errorCardElements.delete(placeholderId);
     updateEmptyState();
 }
 
@@ -1081,7 +1102,7 @@ export function showErrorCard(placeholderId, errorMessage, prompt, onRetry, onDi
             createElement('button', {
                 className: 'gallery__error-card-btn gallery__error-card-btn--retry',
                 onClick: () => {
-                    errorCard.remove();
+                    dismissErrorCard(placeholderId);
                     onRetry();
                 }
             }, 'Retry'),
@@ -1106,10 +1127,11 @@ export function showErrorCard(placeholderId, errorMessage, prompt, onRetry, onDi
             }, 'Copy Error'),
             createElement('button', {
                 className: 'gallery__error-card-btn gallery__error-card-btn--remove',
+                'aria-label': 'Dismiss this error',
+                title: 'Dismiss',
                 onClick: () => {
                     onDismiss();
-                    errorCard.remove();
-                    updateEmptyState();
+                    dismissErrorCard(placeholderId);
                 }
             }, '×')
         ])
@@ -1118,6 +1140,8 @@ export function showErrorCard(placeholderId, errorMessage, prompt, onRetry, onDi
     // Replace placeholder with error card
     placeholder.replaceWith(errorCard);
     placeholderElements.delete(placeholderId);
+    errorCardElements.set(placeholderId, { element: errorCard, folderId: entry.folderId ?? null });
+    updateEmptyState();
 }
 
 /**

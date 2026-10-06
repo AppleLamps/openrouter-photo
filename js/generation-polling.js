@@ -10,6 +10,16 @@ export function isRetryablePollError(error) {
     return status === 408 || status === 429 || status >= 500;
 }
 
+/**
+ * The provider reports that the task no longer exists (or never did), so
+ * checking its status again can never succeed. Distinct from auth errors
+ * (401/403), which a corrected API key can fix.
+ */
+export function isTaskGoneError(error) {
+    const status = Number(error?.status);
+    return status === 400 || status === 404 || status === 410 || status === 422;
+}
+
 export function normalizePendingRequests(response) {
     const shared = {
         provider: response?.provider || 'xai',

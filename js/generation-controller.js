@@ -23,14 +23,28 @@ import {
     updateSettingsForModel,
 } from './model-picker.js';
 import { recordSpend } from './spend-tracker.js';
-import { pendingTaskKey, readPendingGenerations, savePendingGeneration, removePendingGeneration } from './pending-generations.js';
+import {
+    PENDING_GENERATION_MAX_RESUME_FAILURES,
+    markPendingGenerationResumeFailure,
+    pendingTaskKey,
+    prunePendingGenerations,
+    savePendingGeneration,
+    removePendingGeneration,
+} from './pending-generations.js';
 import { showApiKeyPopupForCode } from './settings-keys.js';
 import {
     buildAsyncSpendMeta,
+    isTaskGoneError,
     normalizePendingRequests,
     pollGenerationRequest,
     resolveAsyncCost,
 } from './generation-polling.js';
+
+/**
+ * Resumed tasks were already given the full polling window when they were
+ * started, so a reload only waits a few more minutes before asking the user.
+ */
+const RESUME_POLL_MAX_ELAPSED_MS = 180000;
 
 /** @type {string[]} */
 let promptImageDataUrls = [];
@@ -45,21 +59,35 @@ let isProcessingAttachments = false;
 /** @type {Map<string, {prompt: string, settings: Object}>} */
 let placeholderMetadata = new Map();
 const recoveringTasks = new Set();
+/** Journal entries for the generation currently in flight, so Cancel can drop them. */
+let activePendingEntries = [];
 
 async function recoverPendingGeneration(entry, placeholderId = entry.id) {
     const key = pendingTaskKey(entry.request);
     if (recoveringTasks.has(key)) return;
     recoveringTasks.add(key);
-    showPlaceholder(placeholderId, entry.folderId);
+    showPlaceholder(placeholderId, entry.folderId, { label: 'Resuming', ariaLabel: 'Resuming an unfinished generation' });
+    const forget = () => removePendingGeneration(entry.request);
+    const startOver = () => retryGeneration(entry.prompt, entry.settings, entry.folderId);
+    const checkAgain = () => recoverPendingGeneration(entry, placeholderId);
     try {
         const outcome = entry.result ? { status: 'completed', result: entry.result }
-            : await pollGenerationRequest(entry.request, pollGenerationStatus, null);
+            : await pollGenerationRequest(entry.request, pollGenerationStatus, null, { maxElapsed: RESUME_POLL_MAX_ELAPSED_MS });
         if (outcome.status !== 'completed') {
-            if (!outcome.recoverable) removePendingGeneration(entry.request);
-            showErrorCard(placeholderId, outcome.error, entry.prompt, outcome.recoverable
-                ? () => recoverPendingGeneration(entry, placeholderId)
-                : () => retryGeneration(entry.prompt, entry.settings, entry.folderId),
-                () => removePendingGeneration(entry.request));
+            if (!outcome.recoverable) {
+                forget();
+                showErrorCard(placeholderId, outcome.error, entry.prompt, startOver);
+                return;
+            }
+            const failures = markPendingGenerationResumeFailure(entry.request);
+            if (failures >= PENDING_GENERATION_MAX_RESUME_FAILURES) {
+                forget();
+                showErrorCard(placeholderId,
+                    'This generation never finished and will not be resumed again. Retry starts a new generation.',
+                    entry.prompt, startOver);
+                return;
+            }
+            showErrorCard(placeholderId, `${outcome.error} Retry checks the existing generation.`, entry.prompt, checkAgain, forget);
             return;
         }
         const { usage } = resolveAsyncCost(entry.request, outcome.result);
@@ -83,16 +111,23 @@ async function recoverPendingGeneration(entry, placeholderId = entry.id) {
         else deps.showError('Recovered media could not be saved. Download it before closing this page.');
         removePlaceholder(placeholderId);
     } catch (error) {
-        showErrorCard(placeholderId, `${error.message} Retry checks the existing generation.`, entry.prompt,
-            () => recoverPendingGeneration(entry, placeholderId), () => removePendingGeneration(entry.request));
+        if (isTaskGoneError(error)) {
+            forget();
+            showErrorCard(placeholderId,
+                `${error.message}. The provider no longer has this task, so Retry starts a new generation.`,
+                entry.prompt, startOver);
+            return;
+        }
+        showErrorCard(placeholderId, `${error.message}. Retry checks the existing generation.`, entry.prompt, checkAgain, forget);
     } finally {
         recoveringTasks.delete(key);
     }
 }
 
-/** @type {{ showError: Function, shakeElement: Function, autoResizeTextarea: Function }} */
+/** @type {{ showError: Function, showInfo: Function, shakeElement: Function, autoResizeTextarea: Function }} */
 let deps = {
     showError: () => {},
+    showInfo: () => {},
     shakeElement: () => {},
     autoResizeTextarea: () => {},
 };
@@ -622,6 +657,7 @@ async function handleGenerate(input, button, retryOptions = null) {
             for (const entry of pendingEntries) {
                 if (!savePendingGeneration(entry)) deps.showError('This browser could not save the pending task. Keep this page open until generation finishes.');
             }
+            activePendingEntries = pendingEntries;
             const pollPromises = requests.map(async (request, requestIndex) => {
                 const entry = pendingEntries[requestIndex];
                 const index = Number.isInteger(request.index) ? request.index : requestIndex;
@@ -775,6 +811,7 @@ async function handleGenerate(input, button, retryOptions = null) {
         if (generationAbortController === abortController) {
             isGenerating = false;
             generationAbortController = null;
+            activePendingEntries = [];
             setLoading(input, button, false);
         }
     }
@@ -807,6 +844,13 @@ function handleCancelGeneration() {
         generationAbortController.abort();
         generationAbortController = null;
     }
+    // The user chose to abandon these tasks: forget them so they do not come
+    // back as "Resuming" placeholders on the next page load.
+    if (activePendingEntries.length > 0) {
+        activePendingEntries.forEach((entry) => removePendingGeneration(entry.request));
+        activePendingEntries = [];
+        deps.showInfo('Generation cancelled. Tasks the provider already accepted may still be billed.');
+    }
     isGenerating = false;
 
     const input = document.getElementById('prompt-input');
@@ -819,7 +863,13 @@ function handleCancelGeneration() {
 export function initGenerationController(controllerDeps) {
     deps = { ...deps, ...controllerDeps };
     state.ready.then(async () => {
-        const queue = readPendingGenerations();
+        const { kept: queue, discarded } = prunePendingGenerations();
+        if (discarded > 0) {
+            deps.showInfo(`Dropped ${discarded} unfinished generation${discarded === 1 ? '' : 's'} that could no longer be resumed.`);
+        }
+        if (queue.length > 0) {
+            deps.showInfo(`Resuming ${queue.length} unfinished generation${queue.length === 1 ? '' : 's'} from your last visit.`);
+        }
         await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
             while (queue.length) await recoverPendingGeneration(queue.shift());
         }));

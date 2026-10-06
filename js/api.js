@@ -533,6 +533,8 @@ export async function pollGenerationStatus(requestId, signal = null, meta = {}) 
         const errorData = await response.json().catch(() => ({}));
         const error = new Error(errorData.error || `HTTP error! status: ${response.status}`);
         error.status = response.status;
+        if (errorData.code) error.code = errorData.code;
+        if (errorData.help) error.help = errorData.help;
         throw error;
     }
 
