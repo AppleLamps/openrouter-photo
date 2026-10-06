@@ -894,10 +894,12 @@ function createImageCard(image, preloaded = false) {
     }
 
     if (!preloaded) {
+        // Listeners stay attached: a video is reloaded every time it re-enters
+        // the viewport, so a later success must be able to clear an earlier error.
         const handleLoaded = () => {
-            media.classList.replace('gallery__image--loading', 'gallery__image--loaded');
-            media.removeEventListener('load', handleLoaded);
-            media.removeEventListener('loadeddata', handleLoaded);
+            media.classList.remove('gallery__image--loading');
+            media.classList.add('gallery__image--loaded');
+            card.classList.remove('gallery__card--error');
         };
         media.addEventListener('load', handleLoaded);
         media.addEventListener('loadeddata', handleLoaded);
@@ -1194,6 +1196,11 @@ async function openLightbox(image) {
     // Defensive: ensure any previous swipe/drag state is cleared before opening.
     resetLightboxSwipeState();
 
+    // A load that was abandoned (closed, or navigated to the other media type)
+    // leaves its class on a now-hidden element; clear both before starting.
+    modalImage?.classList.remove('modal__image--loading');
+    modalVideo?.classList.remove('modal__image--loading');
+
     if (image.mediaType === 'video') {
         if (modalVideo) {
             const videoUrl = '';
@@ -1480,6 +1487,8 @@ export function closeLightbox() {
     if (!modal.classList.contains('modal--active')) return;
 
     const modalVideo = modal.querySelector('.modal__image--video');
+    modal.querySelector('.modal__image--photo')?.classList.remove('modal__image--loading');
+    modalVideo?.classList.remove('modal__image--loading');
 
     if (modalVideo instanceof HTMLVideoElement) {
         modalVideo.style.display = 'none';
