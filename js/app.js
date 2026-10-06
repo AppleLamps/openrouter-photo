@@ -141,6 +141,40 @@ function initEmptyStateKeyPrompt() {
 }
 
 /**
+ * Swap the startup skeleton (rendered inline by index.html) for the real gallery.
+ * The first render has already replaced the skeleton cards; this clears the
+ * flags that kept the empty state hidden while IndexedDB was loading.
+ * @param {HTMLElement|null} galleryContainer
+ */
+function finishStartupLoading(galleryContainer) {
+    document.documentElement.removeAttribute('data-gallery-hint');
+    document.documentElement.removeAttribute('data-gallery-skeleton');
+    if (galleryContainer) {
+        galleryContainer.classList.remove('gallery--loading');
+        galleryContainer.removeAttribute('aria-busy');
+        galleryContainer.removeAttribute('aria-label');
+        galleryContainer.querySelectorAll('.gallery__skeleton').forEach((card) => card.remove());
+    }
+}
+
+/**
+ * Show or clear the composer's busy line (e.g. while a prompt is being enhanced).
+ * @param {string|null} text
+ */
+function setComposerStatus(text) {
+    const status = document.getElementById('composer-status');
+    const label = document.getElementById('composer-status-text');
+    if (!status || !label) return;
+    if (text) {
+        label.textContent = text;
+        status.hidden = false;
+    } else {
+        status.hidden = true;
+        label.textContent = '';
+    }
+}
+
+/**
  * Initialize the application
  */
 async function init() {
@@ -170,6 +204,7 @@ async function init() {
     if (galleryContainer && emptyState) {
         initGallery(galleryContainer, emptyState);
     }
+    finishStartupLoading(galleryContainer);
 
     // Initialize lightbox
     initLightbox();
@@ -624,6 +659,7 @@ async function handleEnhance(input, button) {
     // Set loading state
     setEnhanceLoading(button, true);
     input.disabled = true;
+    setComposerStatus('Enhancing your prompt…');
 
     try {
         // Pass attached images so AI can see the photo when enhancing the prompt
@@ -646,6 +682,7 @@ async function handleEnhance(input, button) {
     } finally {
         setEnhanceLoading(button, false);
         input.disabled = false;
+        setComposerStatus(null);
     }
 }
 
@@ -709,6 +746,7 @@ function setupCustomEnhanceModal(input, button) {
         submitBtn.disabled = true;
         cancelBtn.disabled = true;
         submitBtn.textContent = 'Enhancing...';
+        setComposerStatus('Rewriting your prompt…');
 
         try {
             const enhanced = await enhancePrompt(prompt, getAttachedImageUrls(), instructions);
@@ -719,6 +757,7 @@ function setupCustomEnhanceModal(input, button) {
             console.error('Custom enhancement failed:', error);
             showError(error.message || 'Failed to enhance prompt. Please try again.');
         } finally {
+            setComposerStatus(null);
             setEnhanceLoading(button, false);
             input.disabled = false;
             textarea.disabled = false;
@@ -775,6 +814,7 @@ async function handleSurpriseMe(input) {
         setSurpriseLoading(surpriseBtn, true);
     }
     input.disabled = true;
+    setComposerStatus('Dreaming up a prompt…');
 
     try {
         // Get AI-generated random prompt
@@ -782,6 +822,7 @@ async function handleSurpriseMe(input) {
 
         // If another Surprise Me was triggered while we were fetching, bail out
         if (myToken !== _surpriseTypingToken) return;
+        setComposerStatus(null);
 
         // Clear existing text
         input.value = '';
@@ -823,6 +864,7 @@ async function handleSurpriseMe(input) {
             setSurpriseLoading(surpriseBtn, false);
         }
         input.disabled = false;
+        setComposerStatus(null);
     }
 }
 

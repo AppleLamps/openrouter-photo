@@ -50,6 +50,24 @@ describe('frontend hardening', () => {
         assert.match(gallery, /errorCardElements\.size > 0/);
     });
 
+    it('paints a skeleton grid instead of the empty state while a known library loads', () => {
+        const html = read('index.html');
+        const stateSource = read('js/state.js');
+        const app = read('js/app.js');
+        const gallery = read('js/gallery.js');
+        // The hint is written by state.js and read by the inline startup script.
+        assert.match(stateSource, /const IMAGE_COUNT_HINT_KEY = 'ai-image-generator-count'/);
+        assert.match(html, /localStorage\.getItem\('ai-image-generator-count'\)/);
+        assert.match(html, /data-gallery-hint/);
+        // The skeleton styles must be in the inlined critical CSS, not only the async sheets.
+        const critical = html.slice(0, html.indexOf('</style>'));
+        assert.match(critical, /\.gallery__skeleton\{/);
+        assert.match(critical, /html\[data-gallery-hint="has-images"\] \.empty-state\{display:none\}/);
+        assert.match(app, /finishStartupLoading\(galleryContainer\)/);
+        assert.match(gallery, /gallery__card--error/);
+        assert.doesNotMatch(gallery, /src: resolvedSrc,/);
+    });
+
     it('defers video sources until visibility instead of rendering empty URLs', () => {
         const gallery = read('js/gallery.js');
         assert.match(gallery, /preload: 'none'/);

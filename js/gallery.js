@@ -82,13 +82,30 @@ function getLazyObserver() {
             if (!entry.isIntersecting) continue;
             const load = imageId ? state.loadThumbnailUrl(imageId) : Promise.resolve(null);
             load.then(url => {
-                if (el.isConnected && (url || el.dataset.lazySrc)) el.src = url || el.dataset.lazySrc;
-            }).catch(error => console.warn('Could not load thumbnail:', error));
+                if (!el.isConnected) return;
+                const src = url || el.dataset.lazySrc;
+                if (src) el.src = src;
+                else markMediaFailed(el);
+            }).catch(error => {
+                console.warn('Could not load thumbnail:', error);
+                markMediaFailed(el);
+            });
             lazyObserver.unobserve(el);
         }
     }, { rootMargin: '200px' });
 
     return lazyObserver;
+}
+
+/**
+ * A thumbnail that will never arrive: stop the shimmer and show a quiet
+ * "preview unavailable" treatment. The card stays clickable because the
+ * full-size media may still open in the lightbox.
+ * @param {HTMLElement} media
+ */
+function markMediaFailed(media) {
+    media.classList.remove('gallery__image--loading');
+    media.closest('.gallery__card')?.classList.add('gallery__card--error');
 }
 
 function getGalleryPaginationObserver() {
@@ -170,6 +187,25 @@ function resetLightboxSwipeState() {
         stageEl.style.transform = '';
         stageEl.style.transition = '';
     }
+}
+
+/**
+ * Keep the stage's loading state until the media element has actually
+ * finished (or failed) decoding the full-size source, not just received it.
+ * The token guard ignores completions for media the user has already left.
+ */
+function finishLightboxLoad(media, modal, imageId, token, fullUrl) {
+    const settle = () => {
+        if (isCurrentLightboxLoad(modal, imageId, token)) media.classList.remove('modal__image--loading');
+    };
+    if (!fullUrl) {
+        settle();
+        return;
+    }
+    const doneEvent = media instanceof HTMLVideoElement ? 'loadeddata' : 'load';
+    media.addEventListener(doneEvent, settle, { once: true });
+    media.addEventListener('error', settle, { once: true });
+    if (media instanceof HTMLImageElement && media.complete && media.currentSrc === fullUrl) settle();
 }
 
 function isCurrentLightboxLoad(modal, imageId, token) {
@@ -852,7 +888,8 @@ function createImageCard(image, preloaded = false) {
         ? createElement('video', videoAttributes)
         : createElement('img', {
             className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
-            src: resolvedSrc,
+            // An empty src attribute fires a spurious error event, so only set it once known.
+            ...(resolvedSrc ? { src: resolvedSrc } : {}),
             alt: image.prompt,
             decoding: 'async',
             ...(needsLazy ? {} : { loading: 'lazy' })
@@ -876,13 +913,19 @@ function createImageCard(image, preloaded = false) {
     }
 
     if (!preloaded) {
+        // Listeners stay attached: a video is reloaded every time it re-enters
+        // the viewport, so a later success must be able to clear an earlier error.
         const handleLoaded = () => {
-            media.classList.replace('gallery__image--loading', 'gallery__image--loaded');
-            media.removeEventListener('load', handleLoaded);
-            media.removeEventListener('loadeddata', handleLoaded);
+            media.classList.remove('gallery__image--loading');
+            media.classList.add('gallery__image--loaded');
+            card.classList.remove('gallery__card--error');
         };
         media.addEventListener('load', handleLoaded);
         media.addEventListener('loadeddata', handleLoaded);
+        media.addEventListener('error', () => {
+            // Only a real source counts; a cleared src (see renderGallery) also fires error.
+            if (media.getAttribute('src')) markMediaFailed(media);
+        });
     }
 
     const openButton = createElement('button', {
@@ -1172,6 +1215,11 @@ async function openLightbox(image) {
     // Defensive: ensure any previous swipe/drag state is cleared before opening.
     resetLightboxSwipeState();
 
+    // A load that was abandoned (closed, or navigated to the other media type)
+    // leaves its class on a now-hidden element; clear both before starting.
+    modalImage?.classList.remove('modal__image--loading');
+    modalVideo?.classList.remove('modal__image--loading');
+
     if (image.mediaType === 'video') {
         if (modalVideo) {
             const videoUrl = '';
@@ -1375,6 +1423,7 @@ async function openLightbox(image) {
             revokeStaleFullImageUrl(image.id, fullUrl);
             return;
         }
+        finishLightboxLoad(modalVideo, modal, image.id, loadToken, fullUrl);
         if (fullUrl) {
             modalVideo.src = fullUrl;
             modalVideo.load();
@@ -1382,7 +1431,6 @@ async function openLightbox(image) {
                 console.debug('Video autoplay was blocked:', error);
             });
         }
-        modalVideo.classList.remove('modal__image--loading');
     } else if (modalImage) {
         const fullUrl = await state.getFullImageUrl(image.id);
         if (!isCurrentLightboxLoad(modal, image.id, loadToken)) {
@@ -1392,7 +1440,7 @@ async function openLightbox(image) {
         if (fullUrl) {
             modalImage.src = fullUrl;
         }
-        modalImage.classList.remove('modal__image--loading');
+        finishLightboxLoad(modalImage, modal, image.id, loadToken, fullUrl);
     }
 }
 
@@ -1458,6 +1506,8 @@ export function closeLightbox() {
     if (!modal.classList.contains('modal--active')) return;
 
     const modalVideo = modal.querySelector('.modal__image--video');
+    modal.querySelector('.modal__image--photo')?.classList.remove('modal__image--loading');
+    modalVideo?.classList.remove('modal__image--loading');
 
     if (modalVideo instanceof HTMLVideoElement) {
         modalVideo.style.display = 'none';

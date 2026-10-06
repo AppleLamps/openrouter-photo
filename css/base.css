@@ -41,6 +41,8 @@
 
     /* Feedback */
     --toast-info-bg: rgba(58, 40, 7, 0.96);
+    --modal-spinner-track: rgba(255, 255, 255, 0.18);
+    --modal-spinner-head: rgba(255, 255, 255, 0.85);
 
     /* Golden Shimmer */
     --shimmer-start: #f1f3f4;

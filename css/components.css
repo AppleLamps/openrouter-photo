@@ -176,6 +176,34 @@ body.is-modal-open .spend-tracker {
     color: var(--text-muted);
 }
 
+.input-bar__input:disabled {
+    opacity: 0.55;
+    cursor: progress;
+}
+
+/* Busy line under the prompt while it is being enhanced or written */
+.input-bar__status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: -4px 0 10px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.input-bar__status[hidden] {
+    display: none;
+}
+
+.input-bar__status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
 .input-bar__input:focus {
     outline: none;
 }
@@ -2097,6 +2125,33 @@ body.is-settings-open {
     transition: filter 0.3s ease;
 }
 
+/* Spinner that only appears if the full-size media takes a noticeable moment */
+.modal__stage:has(.modal__image--loading)::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 36px;
+    height: 36px;
+    margin: -18px 0 0 -18px;
+    border-radius: 50%;
+    border: 3px solid var(--modal-spinner-track);
+    border-top-color: var(--modal-spinner-head);
+    z-index: 3;
+    pointer-events: none;
+    animation: spin 0.8s linear infinite, modalSpinnerFadeIn 0.2s ease 0.35s both;
+}
+
+@keyframes modalSpinnerFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
 /* OpenRouter Key Modal / Spend Breakdown Modal */
 .openrouter-key-modal {
     position: fixed;
@@ -3394,8 +3449,13 @@ body.is-settings-open {
 
     .input-bar__button--loading,
     .input-bar__button .spin-icon,
-    .input-bar__icon-btn--loading {
+    .input-bar__icon-btn--loading,
+    .input-bar__status-dot {
         animation: none;
+    }
+
+    .modal__stage:has(.modal__image--loading)::after {
+        animation: spin 0.8s linear infinite;
     }
 
     .input-bar__input--flash {
