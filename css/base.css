@@ -39,6 +39,9 @@
     --accent-soft: #eeeeeb;
     --accent-glow: rgba(17, 17, 17, 0.2);
 
+    /* Feedback */
+    --toast-info-bg: rgba(58, 40, 7, 0.96);
+
     /* Golden Shimmer */
     --shimmer-start: #f1f3f4;
     --shimmer-mid: #1a1a1a;
