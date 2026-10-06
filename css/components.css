@@ -35,6 +35,7 @@
 
 .toast--error { background: rgba(153, 27, 27, 0.96); }
 .toast--success { background: rgba(21, 99, 74, 0.96); }
+.toast--info { background: var(--toast-info-bg); }
 .toast--leaving { animation: toastLeave 220ms ease forwards; }
 
 .toast__icon {

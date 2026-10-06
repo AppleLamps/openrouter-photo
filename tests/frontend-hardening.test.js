@@ -38,6 +38,18 @@ describe('frontend hardening', () => {
         assert.match(controller, /resolveCapabilities\(model\)\.evolink\?\.aspectRatios/);
     });
 
+    it('prunes the pending journal on load and forgets cancelled async tasks', () => {
+        const controller = read('js/generation-controller.js');
+        const gallery = read('js/gallery.js');
+        assert.match(controller, /prunePendingGenerations\(\)/);
+        assert.doesNotMatch(controller, /readPendingGenerations/);
+        assert.match(controller, /activePendingEntries\.forEach\(\(entry\) => removePendingGeneration\(entry\.request\)\)/);
+        assert.match(controller, /label: 'Resuming'/);
+        assert.match(controller, /maxElapsed: RESUME_POLL_MAX_ELAPSED_MS/);
+        assert.match(controller, /const recoverable = !isTaskGoneError\(error\);/);
+        assert.match(gallery, /errorCardElements\.size > 0/);
+    });
+
     it('defers video sources until visibility instead of rendering empty URLs', () => {
         const gallery = read('js/gallery.js');
         assert.match(gallery, /preload: 'none'/);

@@ -193,7 +193,7 @@ async function init() {
     }
 
     // Generation controller (generate, cancel, attachments)
-    initGenerationController({ showError, shakeElement, autoResizeTextarea });
+    initGenerationController({ showError, showInfo, shakeElement, autoResizeTextarea });
     const storageQuality = document.getElementById('image-storage-quality');
     if (storageQuality) {
         try { storageQuality.value = localStorage.getItem('image-storage-quality') === 'original' ? 'original' : 'optimized'; } catch {}
@@ -1056,6 +1056,14 @@ function showSuccess(message) {
     showToast(message, 'success', 2500);
 }
 
+/**
+ * Show a neutral status message
+ * @param {string} message
+ */
+function showInfo(message) {
+    showToast(message, 'info', 3500);
+}
+
 function showToast(message, type, duration) {
     const container = document.getElementById('toast-container') || document.body;
     const toast = document.createElement('div');
@@ -1064,7 +1072,7 @@ function showToast(message, type, duration) {
     const icon = document.createElement('span');
     icon.className = 'toast__icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = type === 'error' ? '!' : '✓';
+    icon.textContent = type === 'error' ? '!' : type === 'info' ? 'i' : '✓';
     const text = document.createElement('span');
     text.className = 'toast__message';
     text.textContent = message;
