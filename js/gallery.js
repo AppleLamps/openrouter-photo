@@ -82,13 +82,30 @@ function getLazyObserver() {
             if (!entry.isIntersecting) continue;
             const load = imageId ? state.loadThumbnailUrl(imageId) : Promise.resolve(null);
             load.then(url => {
-                if (el.isConnected && (url || el.dataset.lazySrc)) el.src = url || el.dataset.lazySrc;
-            }).catch(error => console.warn('Could not load thumbnail:', error));
+                if (!el.isConnected) return;
+                const src = url || el.dataset.lazySrc;
+                if (src) el.src = src;
+                else markMediaFailed(el);
+            }).catch(error => {
+                console.warn('Could not load thumbnail:', error);
+                markMediaFailed(el);
+            });
             lazyObserver.unobserve(el);
         }
     }, { rootMargin: '200px' });
 
     return lazyObserver;
+}
+
+/**
+ * A thumbnail that will never arrive: stop the shimmer and show a quiet
+ * "preview unavailable" treatment. The card stays clickable because the
+ * full-size media may still open in the lightbox.
+ * @param {HTMLElement} media
+ */
+function markMediaFailed(media) {
+    media.classList.remove('gallery__image--loading');
+    media.closest('.gallery__card')?.classList.add('gallery__card--error');
 }
 
 function getGalleryPaginationObserver() {
@@ -852,7 +869,8 @@ function createImageCard(image, preloaded = false) {
         ? createElement('video', videoAttributes)
         : createElement('img', {
             className: preloaded ? 'gallery__image gallery__image--loaded' : 'gallery__image gallery__image--loading',
-            src: resolvedSrc,
+            // An empty src attribute fires a spurious error event, so only set it once known.
+            ...(resolvedSrc ? { src: resolvedSrc } : {}),
             alt: image.prompt,
             decoding: 'async',
             ...(needsLazy ? {} : { loading: 'lazy' })
@@ -883,6 +901,10 @@ function createImageCard(image, preloaded = false) {
         };
         media.addEventListener('load', handleLoaded);
         media.addEventListener('loadeddata', handleLoaded);
+        media.addEventListener('error', () => {
+            // Only a real source counts; a cleared src (see renderGallery) also fires error.
+            if (media.getAttribute('src')) markMediaFailed(media);
+        });
     }
 
     const openButton = createElement('button', {

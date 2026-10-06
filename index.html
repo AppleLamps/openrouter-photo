@@ -8,6 +8,19 @@
     <meta name="theme-color" content="#171927">
     <meta name="mobile-web-app-capable" content="yes">
     <title>AI Image Generator</title>
+    <!-- Startup hint: when this browser is known to hold images, keep the first-run
+         empty state hidden and show a skeleton grid until IndexedDB has loaded. -->
+    <script>
+        (function () {
+            try {
+                var count = parseInt(localStorage.getItem('ai-image-generator-count'), 10);
+                if (count > 0) {
+                    document.documentElement.setAttribute('data-gallery-hint', 'has-images');
+                    document.documentElement.setAttribute('data-gallery-skeleton', String(Math.min(count, 12)));
+                }
+            } catch (error) { /* Storage is unavailable; render normally. */ }
+        })();
+    </script>
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
@@ -58,6 +71,11 @@
     .input-bar{position:fixed;bottom:var(--spacing-lg);left:50%;transform:translateX(-50%);width:calc(100% - var(--spacing-xl) * 2);max-width:680px;z-index:var(--z-input-bar)}
     .input-bar__container{display:flex;flex-direction:column;background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.9);border-radius:24px;padding:16px 18px 13px;box-shadow:0 24px 64px rgba(17,17,17,.15),0 4px 14px rgba(17,17,17,.08),inset 0 0 0 1px rgba(205,209,221,.75);-webkit-backdrop-filter:blur(24px) saturate(1.25);backdrop-filter:blur(24px) saturate(1.25)}
     .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(295px,1fr));gap:20px}
+    @media (max-width:600px){.gallery{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}}
+    html[data-gallery-hint="has-images"] .empty-state{display:none}
+    .gallery__skeleton{aspect-ratio:1;border-radius:12px;background:linear-gradient(100deg,var(--bg-tertiary) 30%,var(--bg-secondary) 50%,var(--bg-tertiary) 70%);background-size:220% 100%;animation:gallerySkeleton 1.6s ease-in-out infinite}
+    @keyframes gallerySkeleton{from{background-position:120% 0}to{background-position:-20% 0}}
+    @media (prefers-reduced-motion:reduce){.gallery__skeleton{animation:none}}
     </style>
 
     <!-- Full stylesheets loaded asynchronously to avoid render-blocking -->
@@ -216,6 +234,22 @@
 
             <!-- Gallery Grid -->
             <div id="gallery" class="gallery"></div>
+            <script>
+                (function () {
+                    var count = parseInt(document.documentElement.getAttribute('data-gallery-skeleton'), 10) || 0;
+                    var gallery = document.getElementById('gallery');
+                    if (!count || !gallery) return;
+                    gallery.classList.add('gallery--loading');
+                    gallery.setAttribute('aria-busy', 'true');
+                    gallery.setAttribute('aria-label', 'Loading your gallery');
+                    for (var i = 0; i < count; i++) {
+                        var card = document.createElement('div');
+                        card.className = 'gallery__skeleton';
+                        card.setAttribute('aria-hidden', 'true');
+                        gallery.appendChild(card);
+                    }
+                })();
+            </script>
         </main>
 
         <!-- Toast notification container with aria-live for screen readers -->
@@ -240,6 +274,10 @@
                     <span id="prompt-attachment-status" class="sr-only" aria-live="polite"></span>
                     <textarea id="prompt-input" class="input-bar__input" placeholder="Describe an image to generate..."
                         rows="1"></textarea>
+                </div>
+                <div id="composer-status" class="input-bar__status" role="status" aria-live="polite" hidden>
+                    <span class="input-bar__status-dot" aria-hidden="true"></span>
+                    <span id="composer-status-text" class="input-bar__status-text"></span>
                 </div>
                 <div id="prompt-attachments" class="input-bar__attachments" aria-label="Attached images"></div>
                 <div class="input-bar__actions">

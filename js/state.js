@@ -9,6 +9,8 @@ import { responseToMediaBlob } from './utils.js';
 
 const LEGACY_STORAGE_KEY = 'ai-image-generator-images';
 const FOLDERS_STORAGE_KEY = 'ai-image-generator-folders';
+/** Read by the inline startup script in index.html to decide whether to show a skeleton grid. */
+const IMAGE_COUNT_HINT_KEY = 'ai-image-generator-count';
 const FALLBACK_ID_PREFIX = 'legacy';
 
 /**
@@ -170,7 +172,17 @@ class State {
         this._photoVisibilityMode = null;
 
         // Ready promise for async initialization
-        this.ready = this.init();
+        this.ready = this.init().finally(() => this.persistImageCountHint());
+    }
+
+    /**
+     * Remember how many images this browser holds so the next page load can
+     * paint a skeleton grid instead of flashing the first-run empty state.
+     */
+    persistImageCountHint() {
+        try {
+            localStorage.setItem(IMAGE_COUNT_HINT_KEY, String(this.images.length));
+        } catch { /* The hint is an optimisation only. */ }
     }
 
     /**
@@ -966,6 +978,9 @@ class State {
      * @param {ImageData|null} data - Related data
      */
     notifyListeners(action, data) {
+        if (action === 'add' || action === 'remove' || action === 'clear') {
+            this.persistImageCountHint();
+        }
         this.listeners.forEach(listener => {
             try {
                 listener(action, data);

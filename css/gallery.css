@@ -384,6 +384,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .gallery__skeleton,
+    .gallery__card:has(> .gallery__open-btn > .gallery__image--loading) {
+        animation: none;
+    }
+
     .gallery__card--enter,
     .gallery__card--enter-active,
     .gallery__image--loaded {
@@ -554,6 +559,56 @@
     .gallery {
         grid-template-columns: 1fr;
     }
+}
+
+/* Startup skeleton (also inlined in index.html for the first paint) and the
+   per-card shimmer shown while a lazy thumbnail is still on its way. */
+.gallery__skeleton,
+.gallery__card:has(> .gallery__open-btn > .gallery__image--loading) {
+    background: linear-gradient(100deg, var(--bg-tertiary) 30%, var(--bg-secondary) 50%, var(--bg-tertiary) 70%);
+    background-size: 220% 100%;
+    animation: gallerySkeleton 1.6s ease-in-out infinite;
+}
+
+.gallery__skeleton {
+    aspect-ratio: 1;
+    border-radius: 12px;
+}
+
+@keyframes gallerySkeleton {
+    from {
+        background-position: 120% 0;
+    }
+
+    to {
+        background-position: -20% 0;
+    }
+}
+
+/* A thumbnail that failed to load: quiet label instead of a blank tile */
+.gallery__card--error {
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border-strong);
+    animation: none;
+}
+
+.gallery__card--error .gallery__image {
+    display: none;
+}
+
+.gallery__card--error::after {
+    content: 'Preview unavailable';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-md);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-align: center;
+    pointer-events: none;
 }
 
 /* Image Loading Animation */
