@@ -189,6 +189,25 @@ function resetLightboxSwipeState() {
     }
 }
 
+/**
+ * Keep the stage's loading state until the media element has actually
+ * finished (or failed) decoding the full-size source, not just received it.
+ * The token guard ignores completions for media the user has already left.
+ */
+function finishLightboxLoad(media, modal, imageId, token, fullUrl) {
+    const settle = () => {
+        if (isCurrentLightboxLoad(modal, imageId, token)) media.classList.remove('modal__image--loading');
+    };
+    if (!fullUrl) {
+        settle();
+        return;
+    }
+    const doneEvent = media instanceof HTMLVideoElement ? 'loadeddata' : 'load';
+    media.addEventListener(doneEvent, settle, { once: true });
+    media.addEventListener('error', settle, { once: true });
+    if (media instanceof HTMLImageElement && media.complete && media.currentSrc === fullUrl) settle();
+}
+
 function isCurrentLightboxLoad(modal, imageId, token) {
     return currentLightboxImageId === imageId
         && lightboxLoadToken === token
@@ -1404,6 +1423,7 @@ async function openLightbox(image) {
             revokeStaleFullImageUrl(image.id, fullUrl);
             return;
         }
+        finishLightboxLoad(modalVideo, modal, image.id, loadToken, fullUrl);
         if (fullUrl) {
             modalVideo.src = fullUrl;
             modalVideo.load();
@@ -1411,7 +1431,6 @@ async function openLightbox(image) {
                 console.debug('Video autoplay was blocked:', error);
             });
         }
-        modalVideo.classList.remove('modal__image--loading');
     } else if (modalImage) {
         const fullUrl = await state.getFullImageUrl(image.id);
         if (!isCurrentLightboxLoad(modal, image.id, loadToken)) {
@@ -1421,7 +1440,7 @@ async function openLightbox(image) {
         if (fullUrl) {
             modalImage.src = fullUrl;
         }
-        modalImage.classList.remove('modal__image--loading');
+        finishLightboxLoad(modalImage, modal, image.id, loadToken, fullUrl);
     }
 }
 

@@ -384,11 +384,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .gallery__skeleton,
-    .gallery__card:has(> .gallery__open-btn > .gallery__image--loading) {
-        animation: none;
-    }
-
     .gallery__card--enter,
     .gallery__card--enter-active,
     .gallery__image--loaded {
@@ -582,6 +577,14 @@
 
     to {
         background-position: -20% 0;
+    }
+}
+
+/* Declared after the shimmer rule so it wins at equal specificity */
+@media (prefers-reduced-motion: reduce) {
+    .gallery__skeleton,
+    .gallery__card:has(> .gallery__open-btn > .gallery__image--loading) {
+        animation: none;
     }
 }
 
