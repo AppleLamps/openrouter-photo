@@ -28,8 +28,8 @@ describe('iOS Safari viewport contract', () => {
 
     it('pins the rendered text size so landscape does not inflate it', () => {
         assert.match(read('css/base.css'), /-webkit-text-size-adjust:\s*100%/);
-        // The inlined critical CSS has to agree with base.css.
-        assert.match(html, /-webkit-text-size-adjust:100%/);
+        // The same base rules apply on the first paint and after startup.
+        assert.match(html, /<link rel="stylesheet" href="css\/base\.css">/);
     });
 });
 

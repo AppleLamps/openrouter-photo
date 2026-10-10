@@ -102,27 +102,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    animation: fadeInContent 0.8s ease-out;
     padding: 32px 36px;
     border-radius: 28px;
-}
-
-@keyframes fadeInContent {
-    from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.98);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .empty-state__content {
-        animation: none;
-    }
 }
 
 .empty-state__icon {
