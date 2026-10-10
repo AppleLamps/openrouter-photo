@@ -21,6 +21,7 @@ Be specific and visually interesting. Randomly vary subject, setting, art style,
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
+            signal: AbortSignal.timeout(40000),
             headers: {
                 'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
                 'Content-Type': 'application/json',
@@ -39,7 +40,8 @@ Be specific and visually interesting. Randomly vary subject, setting, art style,
                         content: 'Generate a random creative image prompt.'
                     }
                 ],
-                max_tokens: 300,
+                max_tokens: 600,
+                reasoning: { enabled: false },
                 temperature: 1.2 // Higher temperature for more randomness
             }),
         });
@@ -56,10 +58,13 @@ Be specific and visually interesting. Randomly vary subject, setting, art style,
         const data = await response.json();
 
         // Extract the content from the response
-        const randomPrompt = data.choices?.[0]?.message?.content;
+        const content = data.choices?.[0]?.message?.content;
+        const randomPrompt = typeof content === 'string' ? content.trim()
+            : Array.isArray(content) ? content.map(part => typeof part === 'string' ? part : part?.text || '').join('').trim()
+                : '';
 
         if (!randomPrompt) {
-            return res.status(500).json({ error: 'No content returned from API' });
+            return res.status(502).json({ error: 'OpenRouter returned an empty random prompt. Please try again.' });
         }
 
         return res.status(200).json({

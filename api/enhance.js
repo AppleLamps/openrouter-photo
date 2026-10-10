@@ -10,14 +10,14 @@ function normalizeEnhanceImageUrls(imageUrls) {
         .slice(0, MAX_ENHANCE_IMAGES);
 }
 
-function buildUserContent(enhancementRequest, imageUrls) {
+function buildUserContent(enhancementRequest, imageUrls, detail = 'low') {
     if (!imageUrls.length) return enhancementRequest;
 
     return [
         { type: 'text', text: enhancementRequest },
         ...imageUrls.map((url) => ({
             type: 'image_url',
-            image_url: { url, detail: 'low' }
+            image_url: { url, detail }
         })),
     ];
 }
@@ -55,7 +55,7 @@ function extractEnhancedPrompt(data) {
     return raw;
 }
 
-async function requestOpenRouterEnhancement(req, apiKey, systemPrompt, enhancementRequest, imageUrls) {
+async function requestOpenRouterEnhancement(req, apiKey, systemPrompt, enhancementRequest, imageUrls, recreate = false) {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -73,7 +73,7 @@ async function requestOpenRouterEnhancement(req, apiKey, systemPrompt, enhanceme
                 },
                 {
                     role: 'user',
-                    content: buildUserContent(enhancementRequest, imageUrls)
+                    content: buildUserContent(enhancementRequest, imageUrls, recreate ? 'high' : 'low')
                 }
             ],
             max_tokens: 1000,
@@ -101,20 +101,25 @@ async function requestOpenRouterEnhancement(req, apiKey, systemPrompt, enhanceme
 }
 
 module.exports = withMiddleware(async function handler(req, res) {
-    const { prompt, image_urls, custom_instructions } = req.body;
+    const { prompt, image_urls, custom_instructions, mode } = req.body;
+    const recreate = mode === 'recreate';
+    const normalizedImageUrls = normalizeEnhanceImageUrls(image_urls);
+    if (recreate && !normalizedImageUrls.length) {
+        return res.status(400).json({ error: 'Attach a photo before creating a recreation prompt.' });
+    }
 
-    if (!prompt || typeof prompt !== 'string') {
+    if (!recreate && (!prompt || typeof prompt !== 'string' || !prompt.trim())) {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
     const customInstructions = typeof custom_instructions === 'string'
         ? custom_instructions.trim().slice(0, 2000)
         : '';
-    const enhancementRequest = customInstructions
+    const enhancementRequest = recreate
+        ? 'Write the best standalone image-generation prompt to recreate the first attached photo as faithfully as possible.'
+        : customInstructions
         ? `Original prompt:\n${prompt.trim()}\n\nEnhancement instructions:\n${customInstructions}\n\nRewrite the original prompt according to the enhancement instructions. Preserve the user's core subject and intent unless the instructions explicitly say to change them. Return only the final enhanced prompt.`
         : prompt.trim();
-
-    const normalizedImageUrls = normalizeEnhanceImageUrls(image_urls);
 
     const OPENROUTER_API_KEY = resolveOpenRouterApiKey(req);
 
@@ -130,7 +135,9 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     try {
-        const systemPrompt = `You are the prompt-enhancement engine for a Seedream photo-generation website. Rewrite the user's idea as one concise, generation-ready Seedream prompt. The website has one prompt field, so return only the enhanced prompt as a single plain natural-language paragraph with no label, negative prompt, settings, explanation, Markdown, or alternatives.
+        const systemPrompt = recreate ? `You translate a reference image into a precise image-generation prompt. Analyze the first attached photo and describe only what is visibly present. Return one standalone natural-language paragraph, roughly 150–250 useful words, with no labels, Markdown, commentary, alternatives, or settings.
+
+Describe the subject and visible appearance, clothing, expression, exact pose and hand placement, objects, background and their spatial relationships, composition, orientation, crop, camera viewpoint, perspective, focus, lighting direction and quality, shadows, colors, textures, and the actual photographic or artistic style. Preserve imperfections when visible. Match the source rather than defaulting to a phone photo or adding glamour. Do not infer identity, exact age, invisible details, or camera specifications. Include readable text only when it is clear. Describe the scene directly so the prompt works without the reference; do not merely say "same person" or "match the image". Prioritize the distinctive details needed to faithfully recreate this image.` : `You are the prompt-enhancement engine for a Seedream photo-generation website. Rewrite the user's idea as one concise, generation-ready Seedream prompt. The website has one prompt field, so return only the enhanced prompt as a single plain natural-language paragraph with no label, negative prompt, settings, explanation, Markdown, or alternatives.
 
 ================================================================
 CORE BEHAVIOR
@@ -215,7 +222,7 @@ Before answering, silently confirm that identity and exact age wording are prese
 
 Return only the final enhanced Seedream prompt as one plain paragraph. Do not include "IMAGE PROMPT:", "NEGATIVE PROMPT:", settings, model names, dimensions, API parameters, JSON, Markdown fences, commentary, or any second block.`;
 
-        const attempts = [
+        const attempts = recreate ? [normalizedImageUrls.slice(0, 1)] : [
             normalizedImageUrls,
             ...(normalizedImageUrls.length > 1 ? [normalizedImageUrls.slice(0, 1)] : []),
             ...(normalizedImageUrls.length > 0 ? [[]] : []),
@@ -228,7 +235,8 @@ Return only the final enhanced Seedream prompt as one plain paragraph. Do not in
                 OPENROUTER_API_KEY,
                 systemPrompt,
                 enhancementRequest,
-                attemptImageUrls
+                attemptImageUrls,
+                recreate
             );
 
             if (!result.ok) {

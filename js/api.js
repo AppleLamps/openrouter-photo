@@ -284,22 +284,23 @@ export async function generateImage(prompt, options = {}, signal = null) {
  * @param {string} currentPrompt - The current prompt to enhance
  * @param {string[]} [imageUrls] - Optional array of image data URLs to include for context
  * @param {string} [customInstructions] - Optional user instructions for how to enhance the prompt
+ * @param {'enhance'|'recreate'} [mode] - Enhance text or describe the first attached photo
  * @returns {Promise<string>} The enhanced prompt
  * @throws {Error} If enhancement fails
  */
-export async function enhancePrompt(currentPrompt, imageUrls = [], customInstructions = '') {
-    if (!currentPrompt || typeof currentPrompt !== 'string') {
+export async function enhancePrompt(currentPrompt, imageUrls = [], customInstructions = '', mode = 'enhance') {
+    if (mode !== 'recreate' && (!currentPrompt || typeof currentPrompt !== 'string')) {
         throw new Error('Prompt is required');
     }
 
-    const trimmedPrompt = currentPrompt.trim();
-    if (trimmedPrompt.length === 0) {
+    const trimmedPrompt = typeof currentPrompt === 'string' ? currentPrompt.trim() : '';
+    if (mode !== 'recreate' && trimmedPrompt.length === 0) {
         throw new Error('Prompt cannot be empty');
     }
 
     try {
         const openRouterApiKey = getOpenRouterApiKey();
-        const requestBody = { prompt: trimmedPrompt };
+        const requestBody = { prompt: trimmedPrompt, mode };
 
         // Include image URLs if provided
         if (Array.isArray(imageUrls) && imageUrls.length > 0) {
@@ -325,7 +326,7 @@ export async function enhancePrompt(currentPrompt, imageUrls = [], customInstruc
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            const err = new Error(formatApiTestErrorMessage(errorData, `HTTP error! status: ${response.status}`));
             if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
                 err.code = errorData.code;
                 err.help = errorData.help;
@@ -476,7 +477,7 @@ export async function getRandomPromptFromAI() {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            const err = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            const err = new Error(formatApiTestErrorMessage(errorData, `HTTP error! status: ${response.status}`));
             if (errorData && typeof errorData === 'object' && typeof errorData.code === 'string') {
                 err.code = errorData.code;
                 err.help = errorData.help;
