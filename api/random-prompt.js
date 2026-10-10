@@ -29,7 +29,7 @@ Be specific and visually interesting. Randomly vary subject, setting, art style,
                 'X-Title': 'AI Image Generator'
             },
             body: JSON.stringify({
-                model: 'x-ai/grok-4.1-fast',
+                model: 'x-ai/grok-4.7',
                 messages: [
                     {
                         role: 'system',

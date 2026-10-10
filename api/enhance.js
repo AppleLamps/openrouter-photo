@@ -1,6 +1,6 @@
 const { withMiddleware, redactKey, resolveOpenRouterApiKey } = require('./_middleware');
 
-const ENHANCE_MODEL = 'x-ai/grok-4.5';
+const ENHANCE_MODEL = 'x-ai/grok-4.7';
 const MAX_ENHANCE_IMAGES = 2;
 
 function normalizeEnhanceImageUrls(imageUrls) {
