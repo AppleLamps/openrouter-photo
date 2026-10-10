@@ -3,6 +3,7 @@
  */
 
 import { enhancePrompt, getRandomPromptFromAI } from './api.js';
+import { getRandomPrompt } from './prompts.js';
 import { state } from './state.js';
 import { initScrollLock } from './scroll-lock.js';
 import { initViewportTracking } from './viewport.js';
@@ -192,6 +193,7 @@ async function init() {
     const promptInput = document.getElementById('prompt-input');
     const enhanceBtn = document.getElementById('enhance-btn');
     const customEnhanceBtn = document.getElementById('custom-enhance-btn');
+    const recreateBtn = document.getElementById('recreate-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const settingsPanel = document.getElementById('settings-panel');
     const settingsBackdrop = document.getElementById('settings-backdrop');
@@ -241,6 +243,10 @@ async function init() {
     // Set up enhance button listener
     if (enhanceBtn && promptInput) {
         enhanceBtn.addEventListener('click', () => handleEnhance(promptInput, enhanceBtn));
+    }
+
+    if (recreateBtn && promptInput) {
+        recreateBtn.addEventListener('click', () => handleRecreatePhoto(promptInput, recreateBtn));
     }
 
     // Set up custom enhance button listener
@@ -647,7 +653,33 @@ function closeSettings(button, panel, restoreFocus = true) {
     settingsLastFocusedElement = null;
 }
 
+async function handleRecreatePhoto(input, button) {
+    if (input.disabled) return;
+    const imageUrls = getAttachedImageUrls(1);
+    if (!imageUrls.length) {
+        showError('Attach a photo first, then click Recreate photo.');
+        return;
+    }
+    setEnhanceLoading(button, true);
+    input.disabled = true;
+    setComposerStatus('Writing a prompt to recreate your photo…');
+    try {
+        input.value = await enhancePrompt('', imageUrls, '', 'recreate');
+        flashInput(input);
+    } catch (error) {
+        if (!showApiKeyPopupForCode(error?.code, error?.help)) {
+            showError(error.message || 'Failed to create a recreation prompt. Please try again.');
+        }
+    } finally {
+        setEnhanceLoading(button, false);
+        input.disabled = false;
+        setComposerStatus(null);
+        input.focus();
+    }
+}
+
 async function handleEnhance(input, button) {
+    if (input.disabled) return;
     const prompt = input.value.trim();
 
     if (!prompt) {
@@ -704,6 +736,7 @@ function setupCustomEnhanceModal(input, button) {
     }
 
     const open = () => {
+        if (input.disabled) return;
         if (!input.value.trim()) {
             input.focus();
             shakeElement(input);
@@ -725,6 +758,7 @@ function setupCustomEnhanceModal(input, button) {
     };
 
     const submit = async () => {
+        if (input.disabled) return;
         const prompt = input.value.trim();
         const instructions = textarea.value.trim();
 
@@ -803,6 +837,7 @@ let _surpriseTypingToken = 0;
  * @param {HTMLTextAreaElement} input - Prompt input element
  */
 async function handleSurpriseMe(input) {
+    if (input.disabled) return;
     const surpriseBtn = document.getElementById('surprise-btn');
 
     // Cancel any in-progress typing animation from a previous click
@@ -818,7 +853,11 @@ async function handleSurpriseMe(input) {
 
     try {
         // Get AI-generated random prompt
-        const randomPrompt = await getRandomPromptFromAI();
+        const randomPrompt = await getRandomPromptFromAI().catch((error) => {
+            console.warn('AI random prompt unavailable:', error);
+            showInfo('Using a built-in random prompt. AI prompts require a working OpenRouter key.');
+            return getRandomPrompt();
+        });
 
         // If another Surprise Me was triggered while we were fetching, bail out
         if (myToken !== _surpriseTypingToken) return;

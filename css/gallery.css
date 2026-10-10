@@ -556,7 +556,7 @@
     }
 }
 
-/* Startup skeleton (also inlined in index.html for the first paint) and the
+/* Startup skeleton (loaded before the first paint) and the
    per-card shimmer shown while a lazy thumbnail is still on its way. */
 .gallery__skeleton,
 .gallery__card:has(> .gallery__open-btn > .gallery__image--loading) {

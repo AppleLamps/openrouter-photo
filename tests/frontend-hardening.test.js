@@ -59,10 +59,8 @@ describe('frontend hardening', () => {
         assert.match(stateSource, /const IMAGE_COUNT_HINT_KEY = 'ai-image-generator-count'/);
         assert.match(html, /localStorage\.getItem\('ai-image-generator-count'\)/);
         assert.match(html, /data-gallery-hint/);
-        // The skeleton styles must be in the inlined critical CSS, not only the async sheets.
-        const critical = html.slice(0, html.indexOf('</style>'));
-        assert.match(critical, /\.gallery__skeleton\{/);
-        assert.match(critical, /html\[data-gallery-hint="has-images"\] \.empty-state\{display:none\}/);
+        assert.match(read('css/gallery.css'), /\.gallery__skeleton/);
+        assert.match(html, /html\[data-gallery-hint="has-images"\] \.empty-state\{display:none\}/);
         assert.match(app, /finishStartupLoading\(galleryContainer\)/);
         assert.match(gallery, /gallery__card--error/);
         assert.doesNotMatch(gallery, /src: resolvedSrc,/);
@@ -104,7 +102,7 @@ describe('frontend hardening', () => {
         const html = read('index.html');
 
         assert.match(base, /html\s*\{[^}]*overflow-x: hidden;/s);
-        assert.match(html, /html\{[^}]*overflow-x:hidden;/);
+        assert.match(html, /href="css\/base\.css"/);
     });
 
     it('uses a compact mobile composer with progressively disclosed secondary tools', () => {

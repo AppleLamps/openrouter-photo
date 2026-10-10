@@ -65,7 +65,8 @@ export function initSidebar() {
 
     // Load saved sidebar state on desktop; overlay (narrow) always starts closed
     // so a desktop "open" preference does not trap mobile users behind the sheet.
-    const savedState = localStorage.getItem(SIDEBAR_STATE_KEY);
+    let savedState = null;
+    try { savedState = localStorage.getItem(SIDEBAR_STATE_KEY); } catch {}
     const isMobileOverlay = MOBILE_MQ.matches;
     if (isMobileOverlay) {
         closeSidebar(false);
@@ -191,7 +192,7 @@ export function openSidebar() {
     if (expandButton) {
         expandButton.classList.add('sidebar__expand-btn--hidden');
     }
-    localStorage.setItem(SIDEBAR_STATE_KEY, 'open');
+    try { localStorage.setItem(SIDEBAR_STATE_KEY, 'open'); } catch {}
 }
 
 /**
@@ -207,7 +208,7 @@ export function closeSidebar(persist = true) {
         expandButton.classList.remove('sidebar__expand-btn--hidden');
     }
     if (persist) {
-        localStorage.setItem(SIDEBAR_STATE_KEY, 'closed');
+        try { localStorage.setItem(SIDEBAR_STATE_KEY, 'closed'); } catch {}
     }
 }
 

@@ -127,4 +127,41 @@ describe('enhance prompt API', () => {
 
         assert.equal(prompt, 'enhanced prompt');
     });
+    it('recreates the first photo with high detail and no existing prompt', async () => {
+        let sent;
+        global.fetch = async (_url, options) => {
+            sent = JSON.parse(options.body);
+            return openRouterJsonResponse({ choices: [{ message: { content: 'A red bicycle against a brick wall.' } }] });
+        };
+        const res = makeRes();
+        await handler(makeReq({ mode: 'recreate', image_urls: ['data:image/png;base64,one', 'data:image/png;base64,two'] }), res);
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.enhancedPrompt, 'A red bicycle against a brick wall.');
+        assert.equal(sent.messages[1].content.length, 2);
+        assert.equal(sent.messages[1].content[1].image_url.url, 'data:image/png;base64,one');
+        assert.equal(sent.messages[1].content[1].image_url.detail, 'high');
+        assert.match(sent.messages[0].content, /standalone/);
+    });
+
+    it('rejects recreation without a usable attached photo before calling the provider', async () => {
+        global.fetch = async () => { throw new Error('Must not call provider'); };
+        for (const image_urls of [[], ['https://example.com/photo.png'], ['not-an-image']]) {
+            const res = makeRes();
+            await handler(makeReq({ mode: 'recreate', image_urls }), res);
+            assert.equal(res.statusCode, 400);
+        }
+    });
+
+    it('never drops the photo and invents a text-only recreation on an empty response', async () => {
+        let calls = 0;
+        global.fetch = async () => {
+            calls++;
+            return openRouterJsonResponse({ choices: [{ message: { content: '' } }] });
+        };
+        const res = makeRes();
+        await handler(makeReq({ mode: 'recreate', image_urls: ['data:image/png;base64,one'] }), res);
+        assert.equal(res.statusCode, 502);
+        assert.equal(calls, 1);
+    });
+
 });

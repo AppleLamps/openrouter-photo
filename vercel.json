@@ -6,6 +6,12 @@
     "functions": {
         "api/generate.js": {
             "maxDuration": 120
+        },
+        "api/enhance.js": {
+            "maxDuration": 120
+        },
+        "api/random-prompt.js": {
+            "maxDuration": 60
         }
     },
     "routes": [
