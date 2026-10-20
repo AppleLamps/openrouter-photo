@@ -3,7 +3,7 @@
  * Caches core assets for offline loading
  */
 
-const CACHE_NAME = 'ai-image-gen-v19';
+const CACHE_NAME = 'ai-image-gen-v20';
 
 const CORE_ASSETS = [
     '/',
@@ -32,6 +32,7 @@ const CORE_ASSETS = [
     '/js/models.js',
     '/js/settings-keys.js',
     '/js/spend-tracker.js',
+    '/js/evolink-balance.js',
     '/js/video-polling.js',
     '/shared/model-catalog.json',
     '/public/manifest.json',

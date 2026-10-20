@@ -142,4 +142,49 @@ describe('API key validation error formatting', () => {
             'Evolink API key test failed'
         );
     });
+
+    it('returns the remaining Evolink balance with the key test', async () => {
+        global.fetch = async () => ({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({
+                data: {
+                    token: { remaining_credits: 99416.4429, unlimited_credits: false, used_credits: 583.5571 },
+                    user: { remaining_credits: 1095.3996, used_credits: 135.9048 },
+                },
+                message: '',
+                success: true,
+            }),
+        });
+
+        const res = createResponse();
+        await evolinkHandler(createRequest('/api/test-evolink-key-balance', { 'x-evolink-api-key': 'evolink-key' }), res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.body.ok, true);
+        assert.equal(res.body.credits.remaining_credits, 1095.3996);
+        assert.equal(res.body.credits.limited_by_key, false);
+        assert.ok(Math.abs(res.body.credits.remaining_usd - 1095.3996 * 0.0147) < 1e-9);
+    });
+
+    it('uses the key limit when it is lower than the account balance', () => {
+        const { summarizeEvolinkCredits } = evolinkHandler;
+        const credits = summarizeEvolinkCredits({
+            data: {
+                token: { remaining_credits: 40, unlimited_credits: false, used_credits: 60 },
+                user: { remaining_credits: 1000, used_credits: 100 },
+            },
+        });
+        assert.equal(credits.remaining_credits, 40);
+        assert.equal(credits.limited_by_key, true);
+
+        const unlimited = summarizeEvolinkCredits({
+            data: {
+                token: { remaining_credits: 0, unlimited_credits: true },
+                user: { remaining_credits: 1000 },
+            },
+        });
+        assert.equal(unlimited.remaining_credits, 1000);
+        assert.equal(summarizeEvolinkCredits({ data: {} }), null);
+    });
 });

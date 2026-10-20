@@ -70,6 +70,7 @@
     <link rel="modulepreload" href="js/config.js">
     <link rel="modulepreload" href="js/settings-keys.js">
     <link rel="modulepreload" href="js/spend-tracker.js">
+    <link rel="modulepreload" href="js/evolink-balance.js">
     <link rel="modulepreload" href="js/model-picker.js">
     <link rel="modulepreload" href="js/generation-controller.js">
     <link rel="modulepreload" href="js/model-capabilities.js">
@@ -167,10 +168,14 @@
             })();
         </script>
 
-        <button id="spend-tracker" class="spend-tracker" type="button" aria-label="Total spent"
-            title="Click for cost breakdown">
-            Spent: $0.00
-        </button>
+        <div class="top-pills">
+            <button id="evolink-balance" class="spend-tracker spend-tracker--balance" type="button"
+                aria-label="Evolink balance" hidden></button>
+            <button id="spend-tracker" class="spend-tracker" type="button" aria-label="Total spent"
+                title="Click for cost breakdown">
+                Spent: $0.00
+            </button>
+        </div>
         <!-- Header -->
         <header class="header">
             <h1 class="header__title">✨ AI Image Generator</h1>
