@@ -103,6 +103,14 @@ function getXaiApiKey() {
  * Read the user's Evolink API key from localStorage (if set).
  * @returns {string | null}
  */
+/**
+ * Whether the user has saved an Evolink API key in this browser.
+ * @returns {boolean}
+ */
+export function hasEvolinkApiKey() {
+    return getEvolinkApiKey() !== null;
+}
+
 function getEvolinkApiKey() {
     try {
         const raw = localStorage.getItem(EVOLINK_API_KEY_STORAGE_KEY);
@@ -455,6 +463,18 @@ export async function testEvolinkKey() {
         }
         throw err;
     }
+
+    return response.json().catch(() => ({ ok: true }));
+}
+
+/**
+ * Fetch the remaining Evolink credit balance for the saved key.
+ * @returns {Promise<{ remaining_credits: number, remaining_usd: number|null, limited_by_key: boolean }|null>}
+ *   null when Evolink did not report a balance
+ */
+export async function getEvolinkCredits() {
+    const data = await testEvolinkKey();
+    return data?.credits || null;
 }
 
 /**

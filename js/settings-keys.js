@@ -281,6 +281,7 @@ function wireApiKeyField(field, { showSuccess, showError }) {
                 writeStorage(field.storageKey, input.value);
                 if (status) status.textContent = field.saveStatusSaved;
                 showSuccess(field.savedMessage);
+                window.dispatchEvent(new CustomEvent('api-key-saved', { detail: { id: field.id } }));
             } catch {
                 showError('Failed to save API key (storage unavailable).');
             }
@@ -299,6 +300,7 @@ function wireApiKeyField(field, { showSuccess, showError }) {
                 await field.test();
                 if (status) status.textContent = 'Key works';
                 showSuccess(field.successMessage);
+                window.dispatchEvent(new CustomEvent('api-key-saved', { detail: { id: field.id } }));
             } catch (error) {
                 if (status) status.textContent = '';
                 if (field.requiredErrorCode && error?.code === field.requiredErrorCode && field.popup) {

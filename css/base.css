@@ -43,6 +43,11 @@
     --toast-info-bg: rgba(58, 40, 7, 0.96);
     --modal-spinner-track: rgba(255, 255, 255, 0.18);
     --modal-spinner-head: rgba(255, 255, 255, 0.85);
+    /* Status pills sit on a dark glass background in both themes */
+    --pill-warning-border: rgba(245, 158, 11, 0.85);
+    --pill-warning-text: #fde68a;
+    --pill-error-border: rgba(239, 68, 68, 0.75);
+    --pill-error-text: #fecaca;
 
     /* Golden Shimmer */
     --shimmer-start: #f1f3f4;

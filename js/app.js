@@ -21,6 +21,7 @@ import {
     showApiKeyPopupForCode,
 } from './settings-keys.js';
 import { initSpendTracker } from './spend-tracker.js';
+import { initEvolinkBalance } from './evolink-balance.js';
 import {
     initModelPicker,
     syncModelDropdownUI,
@@ -315,8 +316,9 @@ async function init() {
     initMobileComposerTools();
     initEmptyStateKeyPrompt();
 
-    // Spend tracker
+    // Spend tracker and provider balance
     initSpendTracker();
+    initEvolinkBalance();
 
     // Listen for remix-image event from lightbox
     window.addEventListener('remix-image', handleRemixImage);

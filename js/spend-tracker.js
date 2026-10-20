@@ -135,6 +135,9 @@ export function recordSpend(meta, imagesReturned) {
 
     saveSpendState(spend);
     updateSpendTrackerUI();
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('spend-recorded', { detail: { requests } }));
+    }
 }
 
 function openSpendBreakdownModal() {
