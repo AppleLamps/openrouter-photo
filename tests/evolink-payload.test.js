@@ -381,6 +381,49 @@ describe('evolink payload builders', () => {
         }
     });
 
+    it('keeps started tasks when another task fails to upload its reference image', async () => {
+        let uploadCount = 0;
+        let createCount = 0;
+
+        global.fetch = async (url) => {
+            if (url === 'https://files-api.evolink.ai/api/v1/files/upload/base64') {
+                uploadCount += 1;
+                if (uploadCount === 2) throw new TypeError('fetch failed');
+                return {
+                    ok: true,
+                    json: async () => ({ data: { file_url: `https://files-api.evolink.ai/files/ref-${uploadCount}.png` } }),
+                };
+            }
+
+            if (url === 'https://api.evolink.ai/v1/images/generations') {
+                createCount += 1;
+                return {
+                    ok: true,
+                    json: async () => ({ id: `task-${createCount}` }),
+                };
+            }
+
+            throw new Error(`Unexpected fetch: ${url}`);
+        };
+
+        const res = makeRes();
+        await handleEvolink({
+            res,
+            model: 'evolink/doubao-seedream-4.5',
+            prompt: 'restyle this photo',
+            parsedNumImages: 2,
+            normalizedAspectRatio: '1:1',
+            resolution: '2K',
+            normalizedInputImages: ['data:image/png;base64,aaa'],
+            evolinkKey: 'evolink-test-key',
+        });
+
+        assert.equal(res.statusCode, 202);
+        assert.equal(createCount, 1);
+        assert.deepEqual(res.body.requests.map((request) => request.request_id), ['task-1']);
+        assert.equal(res.body.errors.length, 1);
+    });
+
     it('runs GPT Image 2.5 through the documented async task contract', async () => {
         const createBodies = [];
         let uploadCount = 0;

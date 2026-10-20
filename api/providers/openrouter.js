@@ -2,6 +2,10 @@ const { redactKey } = require('../_middleware');
 const { getOpenRouterConfig } = require('../model-catalog');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+// Leaves headroom under the 120s Vercel maxDuration so already generated
+// images can still be returned when a sibling request hangs.
+const OPENROUTER_GENERATION_DEADLINE_MS = 100000;
+const OPENROUTER_COST_LOOKUP_TIMEOUT_MS = 5000;
 
 function buildOpenRouterPayload({
     model,
@@ -89,8 +93,9 @@ async function fetchGenerationCost(generationId, openRouterApiKey, retries = 2) 
 
     for (let attempt = 0; attempt < retries; attempt++) {
         try {
-            const response = await fetch(`https://openrouter.ai/api/v1/generation?id=${generationId}`, {
+            const response = await fetch(`https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`, {
                 headers: { Authorization: `Bearer ${openRouterApiKey}` },
+                signal: AbortSignal.timeout(OPENROUTER_COST_LOOKUP_TIMEOUT_MS),
             });
 
             if (!response.ok) {
@@ -151,7 +156,9 @@ async function handleOpenRouter(ctx) {
         usage_pending: false,
     });
 
-    const requestSingle = async (options = {}) => {
+    const deadline = AbortSignal.timeout(OPENROUTER_GENERATION_DEADLINE_MS);
+
+    const requestSingleOnce = async (options = {}) => {
         const { includeAspectRatio = true } = options;
         const response = await fetch(OPENROUTER_URL, {
             method: 'POST',
@@ -170,6 +177,7 @@ async function handleOpenRouter(ctx) {
                 openRouterConfig,
                 includeAspectRatio,
             })),
+            signal: deadline,
         });
 
         if (!response.ok) {
@@ -181,9 +189,25 @@ async function handleOpenRouter(ctx) {
         return { ok: true, data };
     };
 
+    // Network failures and timeouts become ordinary failed results so one bad
+    // request in a batch cannot discard images that were already generated.
+    const requestSingle = async (options) => {
+        try {
+            return await requestSingleOnce(options);
+        } catch (error) {
+            if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+                return { ok: false, status: 504, errorText: 'OpenRouter request timed out' };
+            }
+            return { ok: false, status: 502, errorText: error?.message || 'OpenRouter request failed' };
+        }
+    };
+
     const requestSingleWithFallback = async () => {
         const result = await requestSingle({ includeAspectRatio: true });
-        if (!result.ok && openRouterConfig.aspectRatioFallback) {
+        // Only a rejected payload is worth retrying without aspect_ratio; auth,
+        // credit, rate-limit and upstream errors would just bill a second attempt.
+        const isPayloadRejection = result.status === 400 || result.status === 422;
+        if (!result.ok && isPayloadRejection && openRouterConfig.aspectRatioFallback) {
             console.log('Seedream request failed with aspect_ratio, retrying without it...');
             return requestSingle({ includeAspectRatio: false });
         }

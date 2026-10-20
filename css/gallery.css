@@ -29,7 +29,6 @@
     transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.28s ease;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     aspect-ratio: 1;
-    will-change: transform;
     contain: layout style paint;
     content-visibility: auto;
     contain-intrinsic-size: auto 300px;

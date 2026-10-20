@@ -497,7 +497,8 @@ function triggerBlobDownload(blob, filename) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(blobUrl);
+    // Revoking synchronously after click() can cancel the download in some browsers.
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 }
 
 async function loadJSZip() {
@@ -528,31 +529,26 @@ async function getImageBlobForDownload(imageId) {
     await state.ready;
 
     const image = state.getImage(imageId);
-    if (!image || !image.url) return null;
+    // Images restored from IndexedDB have an empty url (their media lives in
+    // IndexedDB), so only the network fallback below needs one.
+    if (!image) return null;
 
-    if (image.mediaType === 'video') {
-        try {
-            const fullUrl = await state.getFullImageUrl(imageId);
-            const response = await fetch(fullUrl || image.url);
-            return await responseToMediaBlob(response);
-        } catch (error) {
-            console.error(`Failed to fetch video ${imageId}:`, error);
-            return null;
-        }
-    }
-
+    // Read stored media straight from IndexedDB. Going through
+    // getFullImageUrl would mint a full-size blob URL per item that nothing
+    // revokes, pinning every downloaded image or video in memory.
     if (!state.useFallback && state.storage) {
         try {
             const blob = await state.storage.getFullImageBlob(imageId);
             if (blob) return blob;
         } catch (error) {
-            console.error(`Failed to read blob for image ${imageId}:`, error);
+            console.error(`Failed to read blob for ${imageId}:`, error);
         }
     }
 
+    const remoteUrl = image.sourceUrl || image.url;
+    if (!remoteUrl) return null;
     try {
-        const fullUrl = await state.getFullImageUrl(imageId);
-        const response = await fetch(fullUrl || image.url);
+        const response = await fetch(remoteUrl);
         return await responseToMediaBlob(response);
     } catch (error) {
         console.error(`Failed to fetch image ${imageId}:`, error);
@@ -1145,8 +1141,8 @@ export function showErrorCard(placeholderId, errorMessage, prompt, onRetry, onDi
             createElement('button', {
                 className: 'gallery__error-card-btn gallery__error-card-btn--retry',
                 onClick: () => {
+                    if (onRetry() === false) return;
                     dismissErrorCard(placeholderId);
-                    onRetry();
                 }
             }, 'Retry'),
             createElement('button', {

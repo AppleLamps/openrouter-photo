@@ -288,6 +288,20 @@ async function addPromptImageFiles(files) {
     }
 }
 
+/**
+ * Clear the composer after a successful generation, but only if the user has
+ * not started a new prompt or changed the attachments while it was running.
+ */
+function clearComposerIfUnchanged(input, prompt, attachmentsAtStart) {
+    if (input.value.trim() === prompt) {
+        input.value = '';
+        deps.autoResizeTextarea(input);
+    }
+    const attachmentsUnchanged = promptImageDataUrls.length === attachmentsAtStart.length
+        && promptImageDataUrls.every((url, index) => url === attachmentsAtStart[index]);
+    if (attachmentsUnchanged) clearPromptAttachments();
+}
+
 function clearPromptAttachments() {
     promptImageDataUrls = [];
     const input = document.getElementById('prompt-image-input');
@@ -504,7 +518,14 @@ function setLoading(input, button, isLoading) {
 
 async function handleGenerate(input, button, retryOptions = null) {
     if (isGenerating || button.disabled) return;
+    // Pasted images are still compressing, or Enhance is rewriting the prompt:
+    // generating now would bill a request with stale inputs.
+    if (isProcessingAttachments || input.disabled) {
+        deps.showInfo('Still preparing your prompt. Try again in a moment.');
+        return;
+    }
     isGenerating = true;
+    const attachmentsAtStart = [...promptImageDataUrls];
 
     const prompt = input.value.trim();
 
@@ -730,9 +751,7 @@ async function handleGenerate(input, button, retryOptions = null) {
                 deps.showError(`${successCount} generation${successCount === 1 ? '' : 's'} completed; ${failureCount} failed. Successful results were kept.`);
             }
             if (successCount > 0) {
-                input.value = '';
-                deps.autoResizeTextarea(input);
-                clearPromptAttachments();
+                clearComposerIfUnchanged(input, prompt, attachmentsAtStart);
             }
             if (outcomes.length === 0 && failureCount === 0) {
                 throw new Error('Generation did not return any task IDs.');
@@ -760,9 +779,7 @@ async function handleGenerate(input, button, retryOptions = null) {
                 placeholderMetadata.delete(id);
             });
 
-            input.value = '';
-            deps.autoResizeTextarea(input);
-            clearPromptAttachments();
+            clearComposerIfUnchanged(input, prompt, attachmentsAtStart);
 
         } else {
             placeholderIds.forEach(id => {
@@ -820,9 +837,19 @@ async function handleGenerate(input, button, retryOptions = null) {
     }
 }
 
-async function retryGeneration(prompt, settings, folderId = null) {
+/**
+ * @returns {boolean} false when the retry was refused, so callers can keep the error card.
+ */
+function retryGeneration(prompt, settings, folderId = null) {
     const input = document.getElementById('prompt-input');
     const button = document.getElementById('generate-btn');
+
+    // Check before touching the composer: overwriting the prompt, settings and
+    // attachments only to have handleGenerate bail out would lose the user's draft.
+    if (isGenerating) {
+        deps.showInfo('Finish or cancel the current generation before retrying.');
+        return false;
+    }
 
     if (input && button) {
         const retrySettings = settings && typeof settings === 'object' ? { ...settings } : {};
@@ -834,12 +861,13 @@ async function retryGeneration(prompt, settings, folderId = null) {
         restoreSettings(retrySettings);
         setPromptAttachments(retryImageUrls);
         deps.autoResizeTextarea(input);
-        await handleGenerate(input, button, {
+        handleGenerate(input, button, {
             settings: retrySettings,
             imageUrls: retryImageUrls,
             folderId,
-        });
+        }).catch((error) => console.error('Retry failed:', error));
     }
+    return true;
 }
 
 function handleCancelGeneration() {

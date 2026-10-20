@@ -55,6 +55,9 @@ export class ImageStorage {
 
             request.onsuccess = () => {
                 this.db = request.result;
+                // Release the connection when a newer tab upgrades the schema,
+                // otherwise that tab's open() stays blocked behind this one.
+                this.db.onversionchange = () => this.db.close();
                 resolve();
             };
 
@@ -117,6 +120,8 @@ export class ImageStorage {
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            // Quota failures at commit abort the transaction without firing onerror.
+            tx.onabort = () => reject(tx.error || new DOMException('Transaction aborted', 'AbortError'));
         });
     }
 
@@ -192,6 +197,7 @@ export class ImageStorage {
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new DOMException('Transaction aborted', 'AbortError'));
         });
     }
 
@@ -225,6 +231,7 @@ export class ImageStorage {
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new DOMException('Transaction aborted', 'AbortError'));
         });
     }
 
@@ -243,6 +250,7 @@ export class ImageStorage {
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new DOMException('Transaction aborted', 'AbortError'));
         });
     }
 
@@ -307,6 +315,7 @@ export class ImageStorage {
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new DOMException('Transaction aborted', 'AbortError'));
         });
     }
 
@@ -329,6 +338,7 @@ export class ImageStorage {
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new DOMException('Transaction aborted', 'AbortError'));
         });
     }
 
@@ -359,6 +369,7 @@ export class ImageStorage {
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error || new DOMException('Transaction aborted', 'AbortError'));
         });
     }
 

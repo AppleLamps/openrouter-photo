@@ -3,7 +3,7 @@
  * Caches core assets for offline loading
  */
 
-const CACHE_NAME = 'ai-image-gen-v18';
+const CACHE_NAME = 'ai-image-gen-v19';
 
 const CORE_ASSETS = [
     '/',
@@ -49,7 +49,8 @@ async function cacheAssets(cache, urls) {
     const results = await Promise.allSettled(
         urls.map(async (url) => {
             try {
-                const response = await fetch(url);
+                // Bypass the HTTP cache so a new worker never precaches stale files.
+                const response = await fetch(url, { cache: 'reload' });
                 if (response.ok) {
                     await cache.put(url, response);
                     return { url, success: true };
@@ -131,8 +132,11 @@ self.addEventListener('fetch', (event) => {
                 // Cache successful responses for static assets
                 if (networkResponse.ok && isStaticAsset(url.pathname)) {
                     const responseToCache = networkResponse.clone();
-                    caches.open(CACHE_NAME)
-                        .then((cache) => cache.put(request, responseToCache));
+                    // Keep the worker alive until the write lands.
+                    event.waitUntil(
+                        caches.open(CACHE_NAME)
+                            .then((cache) => cache.put(request, responseToCache))
+                    );
                 }
                 return networkResponse;
             })
@@ -154,6 +158,7 @@ function isStaticAsset(pathname) {
     return pathname.endsWith('.html') ||
         pathname.endsWith('.css') ||
         pathname.endsWith('.js') ||
+        pathname.endsWith('.json') ||
         pathname.endsWith('.png') ||
         pathname.endsWith('.jpg') ||
         pathname.endsWith('.svg') ||
