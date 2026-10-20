@@ -111,7 +111,8 @@ export async function generateThumbnail(imageBlob, maxSize = 512) {
             const tryWebP = () => {
                 canvas.toBlob(
                     (blob) => {
-                        if (blob) {
+                        // Browsers without a WebP encoder return a PNG instead of null.
+                        if (blob && blob.type === 'image/webp') {
                             resolve(blob);
                         } else {
                             // Fallback to JPEG if WebP not supported
@@ -168,7 +169,7 @@ export async function compressFullImage(imageBlob, quality = 0.92) {
             // Try WebP first, fallback to JPEG
             canvas.toBlob(
                 (webpBlob) => {
-                    if (webpBlob && webpBlob.size < imageBlob.size) {
+                    if (webpBlob && webpBlob.type === 'image/webp' && webpBlob.size < imageBlob.size) {
                         resolve(webpBlob);
                     } else {
                         canvas.toBlob(

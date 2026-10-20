@@ -119,7 +119,8 @@ export async function downloadImage(url, filename) {
         link.click();
         document.body.removeChild(link);
 
-        URL.revokeObjectURL(blobUrl);
+        // Revoking synchronously after click() can cancel the download in some browsers.
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
         return true;
     } catch (error) {
         console.error('Failed to download image:', error);

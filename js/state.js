@@ -503,7 +503,8 @@ class State {
             let fullBlob;
             if (isHostedImage) {
                 // Fetch hosted image URL (e.g., from Fal CDN) and convert to blob
-                const imgResponse = await fetch(imageData.url);
+                // Bounded so one stalled CDN request cannot hold up the save queue.
+                const imgResponse = await fetch(imageData.url, { signal: AbortSignal.timeout(60000) });
                 if (!imgResponse.ok) throw new Error(`Failed to fetch image: ${imgResponse.status}`);
                 fullBlob = await imgResponse.blob();
             } else {
@@ -580,6 +581,11 @@ class State {
         try {
             const blob = await this.storage.getFullImageBlob(id);
             if (!blob) return image?.sourceUrl || image?.url || null;
+
+            // A concurrent call may have created the URL while this read was
+            // pending; reuse it so the one on screen stays tracked for revoking.
+            const concurrentUrl = this.blobUrls.get(`${id}-full`);
+            if (concurrentUrl) return concurrentUrl;
 
             const url = createBlobUrl(blob);
             this.blobUrls.set(`${id}-full`, url);

@@ -42,10 +42,8 @@
     <meta name="apple-mobile-web-app-title" content="AI Image Gen">
     <link rel="apple-touch-icon" href="/public/icon-192.svg">
 
-    <!-- Preconnect to API domains -->
-    <link rel="preconnect" href="https://openrouter.ai">
-    <link rel="preconnect" href="https://api.x.ai">
-    <link rel="preconnect" href="https://api.evolink.ai">
+    <!-- Provider APIs are called from /api on the server, so the browser only
+         needs a DNS hint for the media host it may load from directly. -->
     <link rel="dns-prefetch" href="https://files-api.evolink.ai">
 
     <!-- Load the complete cascade before first paint: async CSS changed the
@@ -77,6 +75,10 @@
     <link rel="modulepreload" href="js/model-capabilities.js">
     <link rel="modulepreload" href="js/models.js">
     <link rel="modulepreload" href="js/prompts.js">
+    <link rel="modulepreload" href="js/scroll-lock.js">
+    <link rel="modulepreload" href="js/viewport.js">
+    <link rel="modulepreload" href="js/generation-polling.js">
+    <link rel="modulepreload" href="js/pending-generations.js">
 
     <!-- Favicon -->
     <link rel="icon"
