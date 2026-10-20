@@ -81,6 +81,32 @@ describe('image proxy allowlist', () => {
         assert.equal(res.headers['content-type'], 'image/jpeg');
         assert.equal(Buffer.isBuffer(res.body), true);
         assert.equal(res.body.toString(), 'jpeg-bytes');
+        assert.equal(res.headers['x-content-type-options'], 'nosniff');
+        assert.match(res.headers['content-security-policy'], /sandbox/);
+    });
+
+    it('refuses SVG and other non-raster content so scripts cannot run on the app origin', async () => {
+        const imageUrl = 'https://attacker.tos-ap-southeast-1.volces.com/x.svg';
+        let cancelled = false;
+        global.fetch = async () => ({
+            ok: true,
+            status: 200,
+            headers: {
+                get(name) {
+                    return name.toLowerCase() === 'content-type' ? 'image/svg+xml' : null;
+                },
+            },
+            body: { cancel: async () => { cancelled = true; } },
+        });
+
+        const res = makeRes();
+        await handler(makeReq(imageUrl), res);
+
+        assert.equal(res.statusCode, 415);
+        assert.equal(cancelled, true);
+        assert.equal(handler.isAllowedImageContentType('image/png; charset=binary'), true);
+        assert.equal(handler.isAllowedImageContentType('image/svg+xml'), false);
+        assert.equal(handler.isAllowedImageContentType('text/html'), false);
     });
 
     it('blocks redirects that leave the image host allowlist', async () => {

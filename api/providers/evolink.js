@@ -330,7 +330,7 @@ async function handleEvolink(ctx) {
             inputImageCount: variant === 'z-image-turbo' ? 0 : normalizedInputImages.length,
         });
 
-        const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, async (_, index) => {
+        const startTask = async (index) => {
             // Each output is a separate Evolink task. Upload an independent
             // reference set for every task so concurrent edits cannot consume
             // or otherwise interfere with a shared set of uploaded URLs.
@@ -375,7 +375,23 @@ async function handleEvolink(ctx) {
                 });
             }
             return createTask(payload, index);
-        }));
+        };
+
+        // A failed upload or network error for one task must not discard the
+        // sibling tasks that already started (and are already billed), so
+        // every failure becomes a per-index error entry instead of a rejection.
+        const taskResults = await Promise.all(Array.from({ length: parsedNumImages }, (_, index) => (
+            startTask(index).catch((error) => {
+                if (!error?.payload) console.error('Evolink task error:', redactKey(error));
+                return {
+                    error: {
+                        status: error?.status || 502,
+                        payload: error?.payload || { error: 'Failed to start Evolink image task' },
+                    },
+                    index,
+                };
+            })
+        )));
 
         const requests = taskResults
             .filter((result) => !result.error)

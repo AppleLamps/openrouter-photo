@@ -3,6 +3,26 @@ const { withMiddleware } = require('./_middleware');
 const MAX_IMAGE_PROXY_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_PROXY_REDIRECTS = 3;
 const IMAGE_PROXY_TIMEOUT_MS = 15000;
+// Raster formats only: SVG can carry script, and this endpoint serves the
+// response from the app's own origin where the API keys live.
+const ALLOWED_IMAGE_PROXY_TYPES = new Set([
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/avif',
+]);
+
+function isAllowedImageContentType(contentType) {
+    if (typeof contentType !== 'string') return false;
+    const mimeType = contentType.split(';')[0].trim().toLowerCase();
+    return ALLOWED_IMAGE_PROXY_TYPES.has(mimeType);
+}
+
+function discardBody(upstream) {
+    upstream.body?.cancel?.().catch(() => {});
+}
 
 function normalizeProxyUrl(value) {
     const candidate = Array.isArray(value) ? value[0] : value;
@@ -120,18 +140,21 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
     if (!upstream.ok) {
         clearTimeout(timeout);
+        discardBody(upstream);
         return res.status(upstream.status).json({ error: 'Failed to fetch image' });
     }
 
     const contentLength = Number.parseInt(upstream.headers.get('content-length') || '', 10);
     if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_PROXY_BYTES) {
         clearTimeout(timeout);
+        discardBody(upstream);
         return res.status(413).json({ error: 'Image is too large to proxy' });
     }
 
     const contentType = upstream.headers.get('content-type');
-    if (!contentType || !contentType.toLowerCase().startsWith('image/')) {
+    if (!isAllowedImageContentType(contentType)) {
         clearTimeout(timeout);
+        discardBody(upstream);
         return res.status(415).json({ error: 'Unsupported proxied content type' });
     }
 
@@ -154,6 +177,8 @@ module.exports = withMiddleware(async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     res.setHeader('Cache-Control', 'private, max-age=86400');
     return res.status(200).send(bytes);
 }, { methods: ['GET'], skipBodyParse: true });
@@ -161,4 +186,5 @@ module.exports = withMiddleware(async function handler(req, res) {
 module.exports.isAllowedImageProxyUrl = isAllowedImageProxyUrl;
 module.exports.fetchAllowedImage = fetchAllowedImage;
 module.exports.readBodyWithLimit = readBodyWithLimit;
+module.exports.isAllowedImageContentType = isAllowedImageContentType;
 module.exports.MAX_IMAGE_PROXY_BYTES = MAX_IMAGE_PROXY_BYTES;

@@ -109,9 +109,16 @@ async function handleXai(ctx) {
             // xAI edit batches can apply the references inconsistently across
             // outputs. Give every requested edit its own complete request so
             // every result receives the same attached-photo context.
+            // A thrown request (network error) becomes a failed result so it
+            // cannot discard sibling edits that already succeeded and were billed.
+            const requestImagesSafely = (count) => requestImages(count).catch((error) => ({
+                ok: false,
+                status: 502,
+                errorText: error?.message || 'xAI request failed',
+            }));
             const results = hasInputImages && parsedNumImages > 1
-                ? await Promise.all(Array.from({ length: parsedNumImages }, () => requestImages(1)))
-                : [await requestImages(parsedNumImages)];
+                ? await Promise.all(Array.from({ length: parsedNumImages }, () => requestImagesSafely(1)))
+                : [await requestImagesSafely(parsedNumImages)];
             const successfulResults = results.filter((result) => result.ok);
             if (successfulResults.length === 0) {
                 const firstFailure = results[0];
