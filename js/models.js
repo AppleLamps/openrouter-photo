@@ -30,6 +30,7 @@ export {
     isVisibleInPicker,
     isExactSizeAllowed,
     ANIMATE_MODEL_ID,
+    VIDEO_EDIT_MODEL_ID,
     DEFAULT_MODEL_ID,
     LEGACY_MODEL_REDIRECTS,
 } from './model-capabilities.js';
@@ -80,6 +81,11 @@ export function getModelCostLabel(modelId) {
 export function getModelInputLabel(modelId) {
     const input = getInputConstraints(modelId);
     const maxImages = Number.isInteger(input?.maxImages) ? input.maxImages : 0;
+    if (input?.video?.required) {
+        const seconds = Number(input.video.maxSeconds);
+        const videoLabel = Number.isFinite(seconds) ? `Video required · max ${seconds}s` : 'Video required';
+        return maxImages > 0 ? `${videoLabel} · ${maxImages} refs` : videoLabel;
+    }
     if (maxImages <= 0) return 'Text only';
     if (input.required) return `Image required · max ${maxImages}`;
     return `Up to ${maxImages} image${maxImages === 1 ? '' : 's'}`;
@@ -113,7 +119,7 @@ export const CAPABILITY_TABS = [
     { id: 'all', label: 'All', types: null },
     { id: 'image', label: 'Image', types: ['image'] },
     { id: 'edit', label: 'Edit', types: ['edit'] },
-    { id: 'video', label: 'Video', types: ['text-to-video', 'image-to-video'] },
+    { id: 'video', label: 'Video', types: ['text-to-video', 'image-to-video', 'video-to-video'] },
 ];
 
 export const TYPE_PILL_LABEL = {
@@ -121,6 +127,7 @@ export const TYPE_PILL_LABEL = {
     edit: 'Edit',
     'text-to-video': 'Text → Video',
     'image-to-video': 'Image → Video',
+    'video-to-video': 'Video → Video',
 };
 
 export const TIER_LABEL = {

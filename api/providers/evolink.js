@@ -65,11 +65,16 @@ const SEEDREAM_2K_PIXEL_THRESHOLD = 2097152;
  * `quality` field is omitted from the payload and Evolink derives the tier from
  * the pixel count, so mirror that here instead of using the UI resolution.
  */
-function resolveBilledQuality({ exactImageSize, resolution, qualityOptions, qualityDefault }) {
+function resolveBilledQuality({ exactImageSize, resolution, qualityOptions, qualityDefault, pixelThreshold }) {
     if (typeof exactImageSize === 'string' && exactImageSize) {
         const [width, height] = exactImageSize.split('x').map((value) => parseInt(value, 10));
         if (Number.isFinite(width) && Number.isFinite(height)) {
-            return width * height >= SEEDREAM_2K_PIXEL_THRESHOLD ? '2K' : '1K';
+            const pixels = width * height;
+            // Seedream 5.5 bills sizes up to 2,610,000 px at the standard price.
+            if (Number.isFinite(pixelThreshold) && pixelThreshold > 0) {
+                return pixels > pixelThreshold ? '2K' : '1K';
+            }
+            return pixels >= SEEDREAM_2K_PIXEL_THRESHOLD ? '2K' : '1K';
         }
     }
     return normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault);
@@ -98,6 +103,8 @@ function buildSeedreamPayload({
     aspectRatioOptions = null,
     sendN = true,
     outputFormatField = 'model_params',
+    background = null,
+    backgroundOptions = [],
 }) {
     const quality = normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault);
     const allowedRatios = Array.isArray(aspectRatioOptions) && aspectRatioOptions.length > 0
@@ -107,7 +114,13 @@ function buildSeedreamPayload({
         ? normalizedAspectRatio
         : 'auto';
     const supportsWebSearch = apiModel === 'doubao-seedream-5.0-lite';
-    const normalizedOutputFormat = normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions);
+    const normalizedBackground = Array.isArray(backgroundOptions) && backgroundOptions.includes(background)
+        ? background
+        : null;
+    // A transparent result is always PNG and the API rejects JPEG with it.
+    const normalizedOutputFormat = normalizedBackground === 'transparent'
+        ? 'png'
+        : normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions);
     const topLevelOutputFormat = outputFormatField === 'top-level';
     const modelParams = {
         ...(normalizedOutputFormat && !topLevelOutputFormat ? { output_format: normalizedOutputFormat } : {}),
@@ -122,6 +135,7 @@ function buildSeedreamPayload({
         ...(!exactImageSize ? { quality } : {}),
         prompt_priority: 'standard',
         ...(normalizedOutputFormat && topLevelOutputFormat ? { output_format: normalizedOutputFormat } : {}),
+        ...(normalizedBackground && normalizedBackground !== 'auto' ? { background: normalizedBackground } : {}),
         ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
         ...(Object.keys(modelParams).length > 0 ? { model_params: modelParams } : {}),
     };
@@ -174,6 +188,7 @@ function buildNanoBananaPayload({
     resolutionDefault,
     aspectRatioOptions,
     uploadedImageUrls = [],
+    enableWebSearch = false,
 }) {
     return {
         model: apiModel,
@@ -181,6 +196,8 @@ function buildNanoBananaPayload({
         size: pickAllowed(normalizedAspectRatio, aspectRatioOptions, 'auto'),
         quality: normalizeSeedreamQuality(resolution, resolutionOptions, resolutionDefault),
         ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
+        // Billed per search ($0.0126 each); off unless the user turns it on.
+        ...(enableWebSearch === true ? { model_params: { web_search: true } } : {}),
     };
 }
 
@@ -283,6 +300,7 @@ async function handleEvolink(ctx) {
         resolution,
         image_quality,
         output_format,
+        background,
         normalizedInputImages,
         enable_web_search,
         evolinkKey,
@@ -376,6 +394,8 @@ async function handleEvolink(ctx) {
             aspectRatioOptions,
             sendN,
             outputFormatField,
+            backgroundOptions,
+            exactSizeTierThreshold,
         } = evolinkConfig;
         const isGptImage = variant === 'gpt-image';
         const gptImageQuality = isGptImage
@@ -391,7 +411,9 @@ async function handleEvolink(ctx) {
         const costPerImage = getEvolinkImageCostPerImage(model, {
             quality: isGptImage
                 ? gptImageQuality
-                : resolveBilledQuality({ exactImageSize, resolution, qualityOptions, qualityDefault }),
+                : resolveBilledQuality({
+                    exactImageSize, resolution, qualityOptions, qualityDefault, pixelThreshold: exactSizeTierThreshold,
+                }),
             resolution: gptImageResolution,
             // Every task uploads its own copy of the reference set, and Evolink
             // bills each billable input image per task.
@@ -439,6 +461,7 @@ async function handleEvolink(ctx) {
                     uploadedImageUrls,
                     outputFormat: output_format,
                     outputFormatOptions,
+                    enableWebSearch: enable_web_search === true,
                 });
             } else {
                 payload = buildSeedreamPayload({
@@ -457,6 +480,8 @@ async function handleEvolink(ctx) {
                     aspectRatioOptions,
                     sendN,
                     outputFormatField,
+                    background,
+                    backgroundOptions,
                 });
             }
             return createTask(payload, index);

@@ -267,7 +267,7 @@
             <div class="input-bar__container">
                 <div class="input-bar__input-row">
                     <label for="prompt-image-input" class="sr-only">Attach images</label>
-                    <input id="prompt-image-input" class="input-bar__file-input" type="file" accept="image/*" multiple aria-label="Attach images">
+                    <input id="prompt-image-input" class="input-bar__file-input" type="file" accept="image/*,video/mp4" multiple aria-label="Attach images or an MP4 video">
                     <button id="prompt-image-btn" class="input-bar__icon-btn" title="Attach images"
                         aria-label="Attach images">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -643,6 +643,15 @@
                     <p class="settings-hint">Available formats vary by image model.</p>
                 </div>
 
+                <!-- Background -->
+                <div class="settings-group settings-group--hidden" id="background-group">
+                    <label class="settings-label" for="setting-background">Background</label>
+                    <select id="setting-background" class="settings-select" aria-label="Background">
+                        <option value="auto" selected>Auto</option>
+                    </select>
+                    <p class="settings-hint">Transparent outputs a PNG with a real alpha channel.</p>
+                </div>
+
 
 
                 <!-- Video Length -->
@@ -688,7 +697,7 @@
                         <input type="checkbox" id="setting-web-search-switch" checked>
                         <span>Web search</span>
                     </label>
-                    <p class="settings-hint">Allows supported models to use current web information.</p>
+                    <p class="settings-hint" id="web-search-hint">Allows supported models to use current web information.</p>
                 </div>
 
                 <!-- FlashHead Voice -->
@@ -726,6 +735,11 @@
                 <div class="settings-group settings-group--hidden" id="image-to-video-hint-group">
                     <p class="settings-hint">Use the image attachment button to attach the <strong>start frame</strong>
                         (required). Attach a second image as the <strong>end frame</strong> (optional).</p>
+                </div>
+
+                <div class="settings-group settings-group--hidden" id="video-input-hint-group">
+                    <p class="settings-hint">Attach an <strong>MP4</strong> with the attachment button, or open a video in
+                        your gallery and choose <strong>Edit video</strong>. Images you attach are used as references.</p>
                 </div>
 
                 <!-- Photo Visibility Mode -->

@@ -15,6 +15,7 @@ import {
     getUiCapabilities,
     getInputConstraints,
     getOutputConstraints,
+    getModelPricing,
     resolveCapabilities,
     isExactSizeAllowed,
 } from './models.js';
@@ -622,9 +623,10 @@ function syncVideoQualityOptions(model) {
         videoQualitySelect.appendChild(option);
     });
 
-    videoQualitySelect.value = videoQuality.options.includes(currentValue)
-        ? currentValue
-        : videoQuality.default;
+    // Upscale must target a resolution above the input, so a carried-over
+    // 720p from another model would be rejected: start from its own default.
+    const keepCurrent = !videoQuality.preferDefault && videoQuality.options.includes(currentValue);
+    videoQualitySelect.value = keepCurrent ? currentValue : videoQuality.default;
 }
 
 function syncImageResolutionOptions(model) {
@@ -693,6 +695,18 @@ function syncAspectRatioOptions(model) {
         : aspectRatioOptions?.default || '3:4';
 }
 
+const WEB_SEARCH_HINT = 'Allows supported models to use current web information.';
+
+/** Models that bill each search (Nano Banana 2.1) say so under the toggle. */
+function syncWebSearchHint(model) {
+    const hint = document.getElementById('web-search-hint');
+    if (!hint) return;
+    const perSearch = Number(getModelPricing(model)?.webSearchCost);
+    hint.textContent = Number.isFinite(perSearch) && perSearch > 0
+        ? `${WEB_SEARCH_HINT} Billed $${perSearch} per search on top of the image; one image can run several searches.`
+        : WEB_SEARCH_HINT;
+}
+
 function syncOutputFormatOptions(model) {
     const outputFormatSelect = document.getElementById('setting-output-format');
     if (!(outputFormatSelect instanceof HTMLSelectElement)) return;
@@ -715,6 +729,63 @@ function syncOutputFormatOptions(model) {
     outputFormatSelect.value = outputFormat.options.includes(currentValue)
         ? currentValue
         : outputFormat.default || '';
+}
+
+/**
+ * Keep the video length input inside the selected model's range, and use the
+ * model's own label (Gemini Omni Extend counts seconds added, not total).
+ */
+function syncVideoLengthInput(model) {
+    const { videoLength } = getUiCapabilities(model);
+    const input = document.getElementById('setting-xai-video-length');
+    const label = document.querySelector('label[for="setting-xai-video-length"]');
+    if (!videoLength || !(input instanceof HTMLInputElement)) return;
+    input.min = String(videoLength.min);
+    input.max = String(videoLength.max);
+    const current = Number.parseInt(input.value, 10);
+    if (!Number.isInteger(current) || current < videoLength.min || current > videoLength.max) {
+        input.value = String(videoLength.default);
+    }
+    if (label) label.textContent = videoLength.label || 'Video Length (seconds)';
+}
+
+const BACKGROUND_LABELS = { auto: 'Auto', transparent: 'Transparent', opaque: 'Opaque' };
+
+function syncBackgroundOptions(model) {
+    const backgroundSelect = document.getElementById('setting-background');
+    if (!(backgroundSelect instanceof HTMLSelectElement)) return;
+
+    const { background } = getUiCapabilities(model);
+    if (!background) return;
+
+    const currentValue = backgroundSelect.value;
+    backgroundSelect.innerHTML = '';
+    background.options.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = BACKGROUND_LABELS[value] || value;
+        backgroundSelect.appendChild(option);
+    });
+    backgroundSelect.value = background.options.includes(currentValue)
+        ? currentValue
+        : background.default || background.options[0];
+    syncTransparentOutputFormat();
+}
+
+/**
+ * A transparent background only comes back as PNG, so lock the output format
+ * to PNG while it is selected instead of letting the API reject JPEG.
+ */
+function syncTransparentOutputFormat() {
+    const backgroundGroup = document.getElementById('background-group');
+    const backgroundSelect = document.getElementById('setting-background');
+    const outputFormatSelect = document.getElementById('setting-output-format');
+    if (!(backgroundSelect instanceof HTMLSelectElement) || !(outputFormatSelect instanceof HTMLSelectElement)) return;
+    const transparent = !backgroundGroup?.classList.contains('settings-group--hidden')
+        && backgroundSelect.value === 'transparent';
+    const hasPng = Array.from(outputFormatSelect.options).some((option) => option.value === 'png');
+    if (transparent && hasPng) outputFormatSelect.value = 'png';
+    outputFormatSelect.disabled = transparent && hasPng;
 }
 
 function syncExactSizeOptions(model) {
@@ -860,8 +931,12 @@ export function updateSettingsForModel(model) {
     syncImageQualityOptions(model);
     syncAspectRatioOptions(model);
     syncOutputFormatOptions(model);
+    document.getElementById('background-group')?.classList.toggle('settings-group--hidden', !ui.background);
+    syncBackgroundOptions(model);
+    if (!ui.background) syncTransparentOutputFormat();
     syncExactSizeOptions(model);
     syncVideoQualityOptions(model);
+    syncVideoLengthInput(model);
 
     aspectRatioGroup?.classList.toggle('settings-group--hidden', !ui.aspectRatio);
     imageQualityGroup?.classList.toggle('settings-group--hidden', !ui.quality);
@@ -874,6 +949,7 @@ export function updateSettingsForModel(model) {
     webSearchGroup?.classList.toggle('settings-group--hidden', !ui.webSearch);
     flashheadSettingsGroup?.classList.toggle('settings-group--hidden', !ui.flashhead);
     imageToVideoHintGroup?.classList.toggle('settings-group--hidden', !ui.imageToVideoHint);
+    document.getElementById('video-input-hint-group')?.classList.toggle('settings-group--hidden', !ui.videoInputHint);
 
     const input = getInputConstraints(model);
     if (promptInput instanceof HTMLTextAreaElement) {
@@ -901,8 +977,9 @@ export function updateSettingsForModel(model) {
             ?? (resolveCapabilities(model).evolink?.defaultContentFilter !== false);
     }
     if (ui.webSearch && webSearchSwitch instanceof HTMLInputElement) {
-        webSearchSwitch.checked = remembered?.webSearch ?? true;
+        webSearchSwitch.checked = remembered?.webSearch ?? ui.webSearchDefault;
     }
+    syncWebSearchHint(model);
     activeSettingsModel = model;
 }
 
@@ -912,4 +989,5 @@ export function initModelPicker() {
     initFolderSelectorDropdown();
     document.getElementById('setting-size-mode')?.addEventListener('change', updateExactSizeVisibility);
     document.getElementById('setting-aspect-ratio')?.addEventListener('change', updateResolutionVisibility);
+    document.getElementById('setting-background')?.addEventListener('change', syncTransparentOutputFormat);
 }

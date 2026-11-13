@@ -128,6 +128,9 @@ function getEvolinkConfig(modelId) {
         sendN: evolink.sendN !== false,
         // Seedream 5.0 takes output_format inside model_params; 5.5 takes it top-level.
         outputFormatField: evolink.outputFormatField === 'top-level' ? 'top-level' : 'model_params',
+        backgroundOptions: Array.isArray(caps.ui?.background?.options) ? caps.ui.background.options : [],
+        // Pixel count at which an exact WxH size bills at the 2K tier.
+        exactSizeTierThreshold: Number(caps.pricing?.exactSizeTierThreshold) || null,
         qualityOptions,
         qualityDefault,
         outputFormatOptions,
@@ -229,8 +232,12 @@ function getUiCapabilities(modelId) {
         generateAudio: Boolean(ui.generateAudio),
         contentFilter: Boolean(ui.contentFilter),
         webSearch: Boolean(ui.webSearch),
+        // Models that bill per search (Nano Banana 2.1) start with search off.
+        webSearchDefault: ui.webSearchDefault !== false,
+        background: ui.background || null,
         flashhead: Boolean(ui.flashhead),
         imageToVideoHint: Boolean(ui.imageToVideoHint),
+        videoInputHint: Boolean(ui.videoInputHint),
     };
 }
 

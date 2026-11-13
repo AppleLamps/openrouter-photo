@@ -12,6 +12,8 @@ import { formatBytes } from './image-utils.js';
 import { initSidebar } from './sidebar.js';
 import {
     ANIMATE_MODEL_ID,
+    VIDEO_EDIT_MODEL_ID,
+    findModelById,
     DEFAULT_MODEL_ID,
     getApiKey,
 } from './models.js';
@@ -34,6 +36,7 @@ import {
     initGenerationController,
     restoreSettings,
     setPromptAttachments,
+    attachGalleryVideo,
 } from './generation-controller.js';
 
 let storageIndicatorQueued = false;
@@ -325,6 +328,7 @@ async function init() {
 
     // Listen for animate-image event from lightbox
     window.addEventListener('animate-image', handleAnimateImage);
+    window.addEventListener('edit-video', handleEditVideo);
     window.addEventListener('media-download-summary', (event) => {
         const { completed = 0, failed = 0 } = event.detail || {};
         showError(`${completed} file${completed === 1 ? '' : 's'} downloaded; ${failed} failed and were skipped.`);
@@ -961,6 +965,48 @@ function handleRemixImage(event) {
     closeLightbox();
 
     // 5. Flash input to indicate readiness
+    if (promptInput) {
+        flashInput(promptInput);
+        promptInput.focus();
+    }
+}
+
+/**
+ * Handle edit-video event from lightbox: attach the video, switch to Gemini
+ * Omni Edit (Extend and Upscale are next to it in the Video tab), and focus
+ * the prompt so the user can describe the change.
+ * @param {CustomEvent} event - Custom event with the gallery video
+ */
+async function handleEditVideo(event) {
+    const video = event.detail;
+    if (!video) return;
+
+    closeLightbox();
+
+    const promptInput = document.getElementById('prompt-input');
+    if (promptInput) {
+        promptInput.value = '';
+        autoResizeTextarea(promptInput);
+    }
+
+    const modelSelect = document.getElementById('setting-model');
+    const currentModel = modelSelect?.value || '';
+    // Keep Extend / Upscale if the user is already on one of the video-to-video routes.
+    const keepCurrent = findModelById(currentModel)?.type === 'video-to-video';
+    if (modelSelect && !keepCurrent) {
+        modelSelect.value = VIDEO_EDIT_MODEL_ID;
+        syncModelDropdownUI();
+        updateSettingsForModel(VIDEO_EDIT_MODEL_ID);
+    }
+    const numImagesSelect = document.getElementById('setting-num-images');
+    if (numImagesSelect) {
+        numImagesSelect.value = '1';
+        syncNumImagesDropdownUI();
+    }
+
+    setPromptAttachments([]);
+    await attachGalleryVideo(video);
+
     if (promptInput) {
         flashInput(promptInput);
         promptInput.focus();

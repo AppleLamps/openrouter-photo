@@ -2,7 +2,14 @@
  * Image/video generation flow, prompt attachments, and settings restore
  */
 
-import { generateImage, pollGenerationStatus } from './api.js';
+import { generateImage, hasEvolinkApiKey, pollGenerationStatus, uploadVideoToEvolink } from './api.js';
+import {
+    VIDEO_ATTACHMENT_MAX_BYTES,
+    getVideoInputError,
+    isMp4File,
+    readVideoMetadata,
+    resolveVideoInputUrl,
+} from './video-input.js';
 import {
     PROMPT_ATTACHMENTS_MAX,
     PROMPT_ATTACHMENT_MAX_BYTES,
@@ -48,6 +55,12 @@ const RESUME_POLL_MAX_ELAPSED_MS = 180000;
 
 /** @type {string[]} */
 let promptImageDataUrls = [];
+
+/**
+ * The one video attached for video-to-video models. See video-input.js for its shape.
+ * @type {object|null}
+ */
+let promptVideo = null;
 
 /** @type {boolean} */
 let isGenerating = false;
@@ -137,6 +150,38 @@ export function renderPromptAttachments() {
     if (!container) return;
 
     container.innerHTML = '';
+
+    if (promptVideo) {
+        const wrap = document.createElement('div');
+        wrap.className = 'input-bar__attachment input-bar__attachment--video';
+
+        const video = document.createElement('video');
+        video.src = promptVideo.previewUrl;
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = 'metadata';
+        video.setAttribute('aria-label', `Attached video: ${promptVideo.name}`);
+
+        const badge = document.createElement('span');
+        badge.className = 'input-bar__attachment-badge';
+        badge.textContent = Number.isFinite(promptVideo.duration) ? `${Math.round(promptVideo.duration)}s` : 'Video';
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'input-bar__attachment-remove';
+        remove.setAttribute('aria-label', 'Remove attached video');
+        remove.textContent = '✕';
+        remove.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setPromptVideo(null);
+        });
+
+        wrap.appendChild(video);
+        wrap.appendChild(badge);
+        wrap.appendChild(remove);
+        container.appendChild(wrap);
+    }
 
     promptImageDataUrls.forEach((url, index) => {
         const wrap = document.createElement('div');
@@ -232,7 +277,14 @@ function getImageConstraintError({ width, height }, constraints) {
 }
 
 async function addPromptImageFiles(files) {
-    const list = Array.from(files || []).filter((f) => f && f.type && f.type.startsWith('image/'));
+    const all = Array.from(files || []);
+    const videoFile = all.find(isMp4File);
+    if (videoFile && !isProcessingAttachments) {
+        await attachVideoFile(videoFile);
+    } else if (!videoFile && all.some((f) => f?.type?.startsWith('video/'))) {
+        deps.showError('Only MP4 videos can be attached.');
+    }
+    const list = all.filter((f) => f && f.type && f.type.startsWith('image/'));
     if (list.length === 0 || isProcessingAttachments) return;
 
     const button = document.getElementById('prompt-image-btn');
@@ -292,7 +344,7 @@ async function addPromptImageFiles(files) {
  * Clear the composer after a successful generation, but only if the user has
  * not started a new prompt or changed the attachments while it was running.
  */
-function clearComposerIfUnchanged(input, prompt, attachmentsAtStart) {
+function clearComposerIfUnchanged(input, prompt, attachmentsAtStart, videoAtStart = null) {
     if (input.value.trim() === prompt) {
         input.value = '';
         deps.autoResizeTextarea(input);
@@ -300,6 +352,7 @@ function clearComposerIfUnchanged(input, prompt, attachmentsAtStart) {
     const attachmentsUnchanged = promptImageDataUrls.length === attachmentsAtStart.length
         && promptImageDataUrls.every((url, index) => url === attachmentsAtStart[index]);
     if (attachmentsUnchanged) clearPromptAttachments();
+    if (videoAtStart && promptVideo === videoAtStart) setPromptVideo(null);
 }
 
 function clearPromptAttachments() {
@@ -312,6 +365,76 @@ function clearPromptAttachments() {
 export function setPromptAttachments(urls) {
     promptImageDataUrls = Array.isArray(urls) ? urls.filter((u) => typeof u === 'string') : [];
     renderPromptAttachments();
+}
+
+/** Replace (or clear, with null) the attached video. */
+export function setPromptVideo(attachment) {
+    if (promptVideo?.ownsPreviewUrl && promptVideo.previewUrl !== attachment?.previewUrl) {
+        URL.revokeObjectURL(promptVideo.previewUrl);
+    }
+    promptVideo = attachment || null;
+    renderPromptAttachments();
+}
+
+export function getPromptVideo() {
+    return promptVideo;
+}
+
+async function buildVideoAttachment({ blob = null, remoteUrl = null, remoteCreatedAt = null, name }) {
+    const ownsPreviewUrl = Boolean(blob);
+    const previewUrl = blob ? URL.createObjectURL(blob) : remoteUrl;
+    if (!previewUrl) throw new Error('This video has no playable source.');
+    try {
+        const meta = await readVideoMetadata(previewUrl);
+        return {
+            blob, remoteUrl, remoteCreatedAt, uploadedUrl: null, uploadedAt: null,
+            previewUrl, ownsPreviewUrl, name, ...meta,
+        };
+    } catch (error) {
+        if (ownsPreviewUrl) URL.revokeObjectURL(previewUrl);
+        throw error;
+    }
+}
+
+/** Attach an MP4 the user picked. */
+export async function attachVideoFile(file) {
+    if (!isMp4File(file)) {
+        deps.showError('Only MP4 videos can be attached.');
+        return false;
+    }
+    if (file.size > VIDEO_ATTACHMENT_MAX_BYTES) {
+        deps.showError(`Video "${file.name}" is too large (max ${Math.round(VIDEO_ATTACHMENT_MAX_BYTES / (1024 * 1024))}MB).`);
+        return false;
+    }
+    try {
+        setPromptVideo(await buildVideoAttachment({ blob: file, name: file.name || 'video.mp4' }));
+        return true;
+    } catch (error) {
+        deps.showError(error.message || 'This video could not be read.');
+        return false;
+    }
+}
+
+/**
+ * Attach a gallery video. Prefers the copy saved in this browser, so it still
+ * works after the provider's link has expired.
+ */
+export async function attachGalleryVideo(item) {
+    if (!item) return false;
+    try {
+        const blob = !state.useFallback ? await state.storage.getFullImageBlob(item.id) : null;
+        const remoteUrl = typeof item.sourceUrl === 'string' && /^https:\/\//i.test(item.sourceUrl) ? item.sourceUrl : null;
+        setPromptVideo(await buildVideoAttachment({
+            blob: blob instanceof Blob ? blob : null,
+            remoteUrl,
+            remoteCreatedAt: Number.isFinite(item.createdAt) ? item.createdAt : null,
+            name: 'Gallery video',
+        }));
+        return true;
+    } catch (error) {
+        deps.showError(error.message || 'This video could not be attached.');
+        return false;
+    }
 }
 
 /**
@@ -375,6 +498,7 @@ function getGenerationSettings() {
         resolution: resolutionSelect?.value || '1K',
         ...(ui.quality ? { image_quality: imageQualitySelect?.value || undefined } : {}),
         output_format: outputFormatSelect?.value || undefined,
+        ...(ui.background ? { background: document.getElementById('setting-background')?.value || undefined } : {}),
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
         generate_audio_switch: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
@@ -436,6 +560,13 @@ export function restoreSettings(settings) {
 
     const outputFormatSelect = document.getElementById('setting-output-format');
     setSelectIfValid(outputFormatSelect, settings.output_format, ui.outputFormat?.options || null);
+
+    const backgroundSelect = document.getElementById('setting-background');
+    if (ui.background && backgroundSelect instanceof HTMLSelectElement) {
+        setSelectIfValid(backgroundSelect, settings.background, ui.background.options);
+        // Re-applies the PNG lock for a restored transparent background.
+        backgroundSelect.dispatchEvent(new Event('change'));
+    }
 
     const exactMatch = typeof settings.image_size === 'string' && settings.image_size.match(/^(\d+)x(\d+)$/);
     const sizeModeSelect = document.getElementById('setting-size-mode');
@@ -526,8 +657,17 @@ async function handleGenerate(input, button, retryOptions = null) {
     }
     isGenerating = true;
     const attachmentsAtStart = [...promptImageDataUrls];
+    const videoAtStart = promptVideo;
 
-    const prompt = input.value.trim();
+    const retrySettings = retryOptions?.settings && typeof retryOptions.settings === 'object'
+        ? { ...retryOptions.settings }
+        : null;
+    const settings = retrySettings || getGenerationSettings();
+    const numImages = settings.num_images;
+    const inputConstraints = resolveCapabilities(settings.model).input || {};
+
+    // Upscale takes no prompt; keep a label so the gallery item has a caption.
+    const prompt = input.value.trim() || (inputConstraints.promptOptional ? inputConstraints.defaultPrompt || 'Video' : '');
 
     if (!prompt) {
         isGenerating = false;
@@ -536,12 +676,19 @@ async function handleGenerate(input, button, retryOptions = null) {
         return;
     }
 
-    const retrySettings = retryOptions?.settings && typeof retryOptions.settings === 'object'
-        ? { ...retryOptions.settings }
-        : null;
-    const settings = retrySettings || getGenerationSettings();
-    const numImages = settings.num_images;
-    const inputConstraints = resolveCapabilities(settings.model).input || {};
+    // Video-to-video models need the attached video (or, on retry, the URL it was sent as).
+    const videoConstraints = inputConstraints.video?.required ? inputConstraints.video : null;
+    const retryVideoUrl = typeof retrySettings?.video_url === 'string' ? retrySettings.video_url : null;
+    if (videoConstraints && !retryVideoUrl) {
+        const videoError = promptVideo
+            ? getVideoInputError(promptVideo, videoConstraints, settings.xai_video_quality)
+            : 'Attach an MP4 video for this model, or open a gallery video and choose Edit video.';
+        if (videoError) {
+            isGenerating = false;
+            deps.showError(videoError);
+            return;
+        }
+    }
     if (Number.isInteger(inputConstraints.promptMaxLength) && Array.from(prompt).length > inputConstraints.promptMaxLength) {
         isGenerating = false;
         deps.showError(`Prompt must be ${inputConstraints.promptMaxLength} characters or fewer for this model.`);
@@ -591,11 +738,31 @@ async function handleGenerate(input, button, retryOptions = null) {
             }
         }
 
+        let videoFields = {};
+        if (videoConstraints) {
+            if (retryVideoUrl) {
+                videoFields = { video_url: retryVideoUrl, video_duration: retrySettings.video_duration };
+            } else {
+                deps.showInfo('Preparing your video…');
+                const videoUrl = await resolveVideoInputUrl(promptVideo, {
+                    upload: uploadVideoToEvolink,
+                    canUpload: hasEvolinkApiKey(),
+                    signal: abortSignal,
+                });
+                if (abortSignal.aborted) return;
+                videoFields = {
+                    video_url: videoUrl,
+                    ...(Number.isFinite(promptVideo.duration) ? { video_duration: Math.ceil(promptVideo.duration) } : {}),
+                };
+            }
+        }
+
         const requestSettings = {
             ...settings,
             ...(attachedImageUrls.length > 0
                 ? { image_urls: attachedImageUrls }
                 : {}),
+            ...videoFields,
         };
 
         for (let i = 0; i < numImages; i++) {
@@ -616,6 +783,8 @@ async function handleGenerate(input, button, retryOptions = null) {
         const storableSettings = { ...settings };
         delete storableSettings.image_url;
         delete storableSettings.image_urls;
+        delete storableSettings.video_url;
+        delete storableSettings.video_duration;
         const generationCreatedAt = Date.now();
         const saveGeneratedImage = async (image, index, id = generateId()) => {
                 const mediaType = image.media_type || image.mediaType || 'image';
@@ -751,7 +920,7 @@ async function handleGenerate(input, button, retryOptions = null) {
                 deps.showError(`${successCount} generation${successCount === 1 ? '' : 's'} completed; ${failureCount} failed. Successful results were kept.`);
             }
             if (successCount > 0) {
-                clearComposerIfUnchanged(input, prompt, attachmentsAtStart);
+                clearComposerIfUnchanged(input, prompt, attachmentsAtStart, videoAtStart);
             }
             if (outcomes.length === 0 && failureCount === 0) {
                 throw new Error('Generation did not return any task IDs.');
@@ -779,7 +948,7 @@ async function handleGenerate(input, button, retryOptions = null) {
                 placeholderMetadata.delete(id);
             });
 
-            clearComposerIfUnchanged(input, prompt, attachmentsAtStart);
+            clearComposerIfUnchanged(input, prompt, attachmentsAtStart, videoAtStart);
 
         } else {
             placeholderIds.forEach(id => {

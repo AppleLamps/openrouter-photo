@@ -1366,6 +1366,7 @@ async function openLightbox(image) {
         if (existingAnimateBtn) {
             existingAnimateBtn.remove();
         }
+        actionsContainer.querySelector('.modal__edit-video-btn')?.remove();
 
         // Create Remix button
         const remixBtn = createElement('button', {
@@ -1390,6 +1391,17 @@ async function openLightbox(image) {
             // Add video icon SVG
             animateBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>Animate`;
             actionsContainer.appendChild(animateBtn);
+        } else {
+            // Edit video: attach this video for Gemini Omni edit / extend / upscale.
+            const editVideoBtn = createElement('button', {
+                className: 'modal__button modal__button--accent modal__edit-video-btn',
+                title: 'Edit, extend or upscale this video',
+                onClick: () => {
+                    window.dispatchEvent(new CustomEvent('edit-video', { detail: image }));
+                }
+            });
+            editVideoBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>Edit video`;
+            actionsContainer.appendChild(editVideoBtn);
         }
     }
 

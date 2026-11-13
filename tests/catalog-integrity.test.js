@@ -18,7 +18,7 @@ const MODEL_IDS = catalog.models.map((m) => m.id);
 describe('catalog integrity — structure', () => {
     it('has unique model ids', () => {
         assert.equal(new Set(MODEL_IDS).size, MODEL_IDS.length);
-        assert.equal(MODEL_IDS.length, 44);
+        assert.equal(MODEL_IDS.length, 47);
     });
 
     it('every model references a valid profile', () => {
@@ -69,7 +69,7 @@ describe('catalog integrity — routing', () => {
         assert.equal(byBackend.openrouter.length, 17);
         assert.equal(byBackend['openrouter-video'].length, 2);
         assert.equal(byBackend.evolink.length, 13);
-        assert.equal(byBackend['evolink-video'].length, 9);
+        assert.equal(byBackend['evolink-video'].length, 12);
         assert.equal(byBackend.xai.length, 3);
     });
 
@@ -152,6 +152,7 @@ describe('catalog integrity — model types', () => {
             edit: 1,
             'text-to-video': 6,
             'image-to-video': 6,
+            'video-to-video': 3,
         });
     });
 });

@@ -184,8 +184,12 @@ export function getUiCapabilities(modelId) {
         generateAudio: Boolean(ui.generateAudio),
         contentFilter: Boolean(ui.contentFilter),
         webSearch: Boolean(ui.webSearch),
+        // Models that bill per search (Nano Banana 2.1) start with search off.
+        webSearchDefault: ui.webSearchDefault !== false,
+        background: ui.background || null,
         flashhead: Boolean(ui.flashhead),
         imageToVideoHint: Boolean(ui.imageToVideoHint),
+        videoInputHint: Boolean(ui.videoInputHint),
     };
 }
 
@@ -215,4 +219,5 @@ export function isExactSizeAllowed(exactSize, width, height) {
 export const DEFAULT_MODEL_ID = defaultModelId;
 export const LEGACY_MODEL_REDIRECTS = legacyRedirects;
 export const ANIMATE_MODEL_ID = defaults?.animateModelId || 'evolink/seedance-2.0/image-to-video';
+export const VIDEO_EDIT_MODEL_ID = defaults?.videoEditModelId || 'evolink/gemini-omni-1.2-flash/video-edit';
 export const CATALOG_MODELS = models;

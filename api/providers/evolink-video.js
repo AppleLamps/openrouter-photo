@@ -53,6 +53,22 @@ function estimateVideoCost(model, duration, quality, contentFilter = true) {
 }
 
 /**
+ * Payload for Gemini Omni video edit / extend / upscale. Output length and
+ * aspect ratio follow the input video, so only extend sends a duration (the
+ * seconds to add) and none of them send aspect_ratio. Upscale takes no prompt.
+ */
+function buildVideoToVideoPayload({ apiModel, prompt, evolink, duration, quality, videoUrl, referenceImageUrls = [] }) {
+    return {
+        model: apiModel,
+        ...(evolink.sendPrompt === false ? {} : { prompt: prompt.trim() }),
+        video_urls: [videoUrl],
+        quality,
+        ...(evolink.sendDuration === true ? { duration } : {}),
+        ...(referenceImageUrls.length > 0 ? { image_urls: referenceImageUrls } : {}),
+    };
+}
+
+/**
  * Evolink Seedance 2.0 video (text-to-video and image-to-video).
  * Async: create a task, return 202 + request_id so the client polls /api/video-status?provider=evolink.
  */
@@ -70,6 +86,8 @@ async function handleEvolinkVideo(ctx) {
         content_filter_switch,
         enable_web_search,
         evolinkKey,
+        inputVideoUrl = null,
+        inputVideoDuration = null,
     } = ctx;
 
     const caps = modelCaps || resolveCapabilities(model);
@@ -77,6 +95,11 @@ async function handleEvolinkVideo(ctx) {
     const apiModel = evolink.apiModel || 'seedance-2.0-text-to-video';
     const videoUi = caps.ui || {};
     const isImageToVideo = caps.type === 'image-to-video';
+    const isVideoToVideo = evolink.videoInput === true;
+
+    if (isVideoToVideo && !inputVideoUrl) {
+        return res.status(400).json({ error: 'This model needs an attached MP4 video. Attach one and try again.' });
+    }
 
     if (isImageToVideo && (!Array.isArray(normalizedInputImages) || normalizedInputImages.length === 0)) {
         return res.status(400).json({
@@ -121,8 +144,10 @@ async function handleEvolinkVideo(ctx) {
 
     try {
         // Seedance 2.0 i2v accepts 1 image (first frame) or 2 images (first + last frame).
-        const imageUrls = isImageToVideo
-            ? await Promise.all(normalizedInputImages.slice(0, 2).map(uploadEvolinkReferenceImage))
+        // Video-to-video routes take optional reference images instead.
+        const referenceLimit = isVideoToVideo ? (caps.input?.maxImages ?? 0) : 2;
+        const imageUrls = (isImageToVideo || isVideoToVideo) && Array.isArray(normalizedInputImages)
+            ? await Promise.all(normalizedInputImages.slice(0, referenceLimit).map(uploadEvolinkReferenceImage))
             : [];
 
         const durationLimits = videoUi.videoLength || { min: 4, max: 15, default: 5 };
@@ -147,7 +172,15 @@ async function handleEvolinkVideo(ctx) {
             ? content_filter_switch
             : evolink.defaultContentFilter !== false;
 
-        const payload = {
+        const payload = isVideoToVideo ? buildVideoToVideoPayload({
+            apiModel,
+            prompt,
+            evolink,
+            duration,
+            quality,
+            videoUrl: inputVideoUrl,
+            referenceImageUrls: imageUrls,
+        }) : {
             model: apiModel,
             prompt: prompt.trim(),
             duration,
@@ -190,8 +223,12 @@ async function handleEvolinkVideo(ctx) {
         const creditsReserved = createData?.usage?.credits_reserved ?? null;
         // Evolink reserves the exact credits it will charge; fall back to the
         // catalog per-second rate for the requested resolution.
+        // Edit and upscale output as long as the input; extend bills the added seconds.
+        const billedSeconds = isVideoToVideo && evolink.sendDuration !== true
+            ? inputVideoDuration ?? 5
+            : duration;
         const estimatedCost = evolinkCreditsToUsd(creditsReserved)
-            ?? estimateVideoCost(model, duration, quality, contentFilter);
+            ?? estimateVideoCost(model, billedSeconds, quality, contentFilter);
         const request = {
             index: 0,
             request_id: taskId,
@@ -238,4 +275,5 @@ module.exports = {
     normalizeVideoQuality,
     estimateVideoCost,
     buildFrameFields,
+    buildVideoToVideoPayload,
 };

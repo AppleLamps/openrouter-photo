@@ -77,6 +77,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         resolution,
         image_quality,
         output_format,
+        background,
         xai_video_length,
         xai_video_quality,
         generate_audio_switch,
@@ -85,6 +86,8 @@ module.exports = withMiddleware(async function handler(req, res) {
         flashhead_voice,
         flashhead_stability,
         image_urls = [],
+        video_url,
+        video_duration,
     } = req.body;
 
     const model = normalizeModelId(requestedModel);
@@ -148,6 +151,22 @@ module.exports = withMiddleware(async function handler(req, res) {
         return res.status(inputError.status).json({ error: inputError.error });
     }
 
+    // Video-to-video routes read the source video from a public HTTPS URL
+    // (an Evolink upload or the provider's own result link). The server only
+    // forwards the URL; it never fetches it.
+    const videoConstraints = getInputConstraints(model).video;
+    let inputVideoUrl = null;
+    if (videoConstraints?.required) {
+        if (typeof video_url !== 'string' || video_url.length > 2048 || !/^https:\/\/[^\s]+$/i.test(video_url)) {
+            return res.status(400).json({ error: 'This model needs an attached MP4 video. Attach one and try again.' });
+        }
+        inputVideoUrl = video_url;
+    }
+    const parsedVideoDuration = Number(video_duration);
+    const inputVideoDuration = Number.isFinite(parsedVideoDuration) && parsedVideoDuration > 0 && parsedVideoDuration <= 60
+        ? parsedVideoDuration
+        : null;
+
     const ctx = {
         req,
         res,
@@ -160,6 +179,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         resolution,
         image_quality,
         output_format,
+        background,
         normalizedInputImages,
         xai_video_length,
         xai_video_quality,
@@ -171,6 +191,8 @@ module.exports = withMiddleware(async function handler(req, res) {
         openRouterApiKey,
         xaiKey,
         evolinkKey,
+        inputVideoUrl,
+        inputVideoDuration,
     };
 
     switch (modelCaps.backend) {

@@ -1,6 +1,6 @@
 # AI Image & Video Generator
 
-A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports **44 models** across OpenRouter, xAI, and Evolink.
+A modern, lightweight AI image and video generator. Built with vanilla JavaScript (ES Modules) and deployable to Vercel with zero build configuration. Supports **47 models** across OpenRouter, xAI, and Evolink.
 
 ![No Build Tools](https://img.shields.io/badge/Build-None%20Required-green)
 ![Vercel Ready](https://img.shields.io/badge/Deploy-Vercel-black)
@@ -14,7 +14,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 - **Seedance 2.0 Mini I2V** — In the model picker's Video tab, select Seedance 2.0 Mini labeled Image → Video and attach one start frame or two start/end frames. Supports 4–15 seconds, 480p/720p, and audio. Relaxed filtering is on by default (+10%); re-enable Standard content filter in Settings to turn it off.
 
-- **Multi-Model Support** — 44 catalog-driven models (31 image, 1 edit, 12 video)
+- **Multi-Model Support** — 47 catalog-driven models (31 image, 1 edit, 15 video)
 - **Batch Generation** — Create 1–4 images per request (video models produce 1)
 - **Configurable Output** — Aspect ratio, resolution, video length/quality, and model-specific options from the catalog
 - **Video Generation** — Text-to-video via xAI Grok and Evolink Seedance 2.0, Gemini Omni 1.2 Flash, and MiniMax H3 Max Turbo; image-to-video via Evolink Seedance 2.0, HappyHorse 1.0, Gemini Omni 1.2 Flash, and MiniMax H3 Max Turbo
@@ -27,6 +27,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 - **Auto Compression** — Accepted uploads are processed sequentially and re-encoded at up to 768px, JPEG 75%
 - **Model Interpretation** — Describe changes and let compatible edit models apply them
 - **Image-to-Video** — Use attached images as start frame (and optional end frame) for I2V models
+- **Video-to-Video** — Attach an MP4 (or click **Edit video** on a gallery video) to edit, extend or upscale it with Gemini Omni 1.2 Flash. The browser uploads the video straight to Evolink's file store with your saved Evolink key, so it never passes through the serverless request limit
 
 ### Prompt Tools
 
@@ -69,7 +70,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 | Provider | Models | Types | API Key |
 | --- | --- | --- | --- |
 | **Black Forest Labs** | Flux 2 Pro / Max / Flex | Image | OpenRouter |
-| **Google** | Gemini 3 Pro Image, Gemini 2.5 Flash Image (OpenRouter); Nano Banana 2.1, Gemini Omni 1.2 Flash (T2V + I2V) (Evolink) | Image, Edit, Video | OpenRouter / Evolink |
+| **Google** | Gemini 3 Pro Image, Gemini 2.5 Flash Image (OpenRouter); Nano Banana 2.1, Gemini Omni 1.2 Flash (T2V, I2V, video edit / extend / upscale) (Evolink) | Image, Edit, Video | OpenRouter / Evolink |
 | **OpenAI** | GPT-5 Image, GPT-5 Image Mini, GPT-5.4 Image 2 (OpenRouter); GPT Image 2.5 / 2.6 Sunburst, GPT Image 2.5 / 2.6 Flare (Evolink) | Image, Edit | OpenRouter / Evolink |
 | **ByteDance** | Seedream 4.5 (OpenRouter + Evolink), Seedream 4.5 Edit, Seedream 5 Lite, Seedream 5.0 Pro, Seedream 5.0 Flash, Seedream 5.5, Seedance 2.0 and 2.0 Mini (T2V + I2V) | Image, Edit, Video | OpenRouter / Evolink |
 | **MiniMax** | MiniMax H3 Image, MiniMax H3 Max Turbo (T2V + I2V) | Image, Edit, Video | Evolink |
@@ -77,7 +78,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 | **HappyHorse** | HappyHorse 1.0 | Image-to-Video | Evolink |
 | **xAI** | Grok Image, Grok Image Quality, Grok Video | Image, Video | xAI |
 
-**Totals:** 44 models — 19 OpenRouter (17 image + 2 video), 22 Evolink (13 image + 9 video), 3 xAI. By type: 31 image, 1 edit, 12 video (6 text-to-video, 6 image-to-video).
+**Totals:** 47 models — 19 OpenRouter (17 image + 2 video), 25 Evolink (13 image + 12 video), 3 xAI. By type: 31 image, 1 edit, 15 video (6 text-to-video, 6 image-to-video, 3 video-to-video).
 
 ---
 
