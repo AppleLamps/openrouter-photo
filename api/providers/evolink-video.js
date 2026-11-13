@@ -5,8 +5,9 @@ const { formatEvolinkError } = require('./format-errors');
 const EVOLINK_VIDEO_ASPECT_RATIOS = new Set(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive']);
 const EVOLINK_VIDEO_QUALITIES = ['480p', '720p', '1080p'];
 
-function normalizeVideoAspectRatio(ratio, fallback = 'adaptive') {
-    if (typeof ratio === 'string' && EVOLINK_VIDEO_ASPECT_RATIOS.has(ratio)) return ratio;
+function normalizeVideoAspectRatio(ratio, fallback = 'adaptive', allowed = null) {
+    const options = Array.isArray(allowed) && allowed.length > 0 ? new Set(allowed) : EVOLINK_VIDEO_ASPECT_RATIOS;
+    if (typeof ratio === 'string' && options.has(ratio)) return ratio;
     return fallback;
 }
 
@@ -14,6 +15,22 @@ function normalizeVideoDuration(value, limits) {
     const parsed = parseInt(value, 10);
     if (Number.isFinite(parsed) && parsed >= limits.min && parsed <= limits.max) return parsed;
     return limits.default;
+}
+
+/**
+ * Frame fields for an image-to-video request. Most routes take `image_urls`
+ * (first frame, optional last frame); MiniMax H3 takes `image_start` and
+ * `image_end` instead.
+ */
+function buildFrameFields(imageUrls, imageInput) {
+    if (!Array.isArray(imageUrls) || imageUrls.length === 0) return {};
+    if (imageInput === 'start-end') {
+        return {
+            image_start: imageUrls[0],
+            ...(imageUrls[1] ? { image_end: imageUrls[1] } : {}),
+        };
+    }
+    return { image_urls: imageUrls };
 }
 
 function normalizeVideoQuality(value, options, fallback) {
@@ -109,7 +126,12 @@ async function handleEvolinkVideo(ctx) {
             : [];
 
         const durationLimits = videoUi.videoLength || { min: 4, max: 15, default: 5 };
-        const duration = normalizeVideoDuration(xai_video_length, durationLimits);
+        let duration = normalizeVideoDuration(xai_video_length, durationLimits);
+        // Gemini Omni caps first+last-frame transitions at a shorter length.
+        const endFrameMax = Number(evolink.maxDurationWithEndFrame);
+        if (imageUrls.length > 1 && Number.isFinite(endFrameMax) && duration > endFrameMax) {
+            duration = endFrameMax;
+        }
         const qualityOptions = videoUi.videoQuality?.options || EVOLINK_VIDEO_QUALITIES;
         const quality = normalizeVideoQuality(
             xai_video_quality,
@@ -135,12 +157,13 @@ async function handleEvolinkVideo(ctx) {
                       aspect_ratio: normalizeVideoAspectRatio(
                           normalizedAspectRatio,
                           evolink.defaultAspectRatio || '16:9',
+                          evolink.aspectRatios,
                       ),
                   }
                 : {}),
             ...(supportsGenerateAudio ? { generate_audio: generate_audio_switch !== false } : {}),
             ...(supportsContentFilter ? { content_filter: contentFilter } : {}),
-            ...(isImageToVideo ? { image_urls: imageUrls } : {}),
+            ...(isImageToVideo ? buildFrameFields(imageUrls, evolink.imageInput) : {}),
             ...(!isImageToVideo && evolink.supportsWebSearch && enable_web_search === true
                 ? { model_params: { web_search: true } }
                 : {}),
@@ -214,4 +237,5 @@ module.exports = {
     normalizeVideoDuration,
     normalizeVideoQuality,
     estimateVideoCost,
+    buildFrameFields,
 };

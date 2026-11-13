@@ -162,6 +162,42 @@
       "input": { "maxImages": 16, "required": false, "promptMaxLength": 32000, "promptMaxBytes": 60000 },
       "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.5-flare" }
     },
+    "evolink-minimax-image": {
+      "apiKey": "evolink",
+      "backend": "evolink",
+      "ui": {
+        "aspectRatio": true,
+        "aspectRatioOptions": {
+          "options": ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3"],
+          "default": "auto"
+        },
+        "resolution": { "options": ["1K", "2K", "4K"], "default": "2K" },
+        "outputFormat": { "options": ["jpeg", "png", "webp"] }
+      },
+      "output": { "maxImages": 4, "defaultImages": 2 },
+      "input": {
+        "maxImages": 16,
+        "required": false,
+        "promptMaxLength": 32000,
+        "imageConstraints": { "minWidth": 128, "minHeight": 128, "maxWidth": 8192, "maxHeight": 8192, "minAspectRatio": 0.25, "maxAspectRatio": 4 }
+      },
+      "evolink": { "variant": "minimax-image", "apiModel": "minimax-h3-image" }
+    },
+    "evolink-nano-banana": {
+      "apiKey": "evolink",
+      "backend": "evolink",
+      "ui": {
+        "aspectRatio": true,
+        "aspectRatioOptions": {
+          "options": ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9", "4:1", "1:4", "8:1", "1:8"],
+          "default": "auto"
+        },
+        "resolution": { "options": ["1K", "2K", "4K"], "default": "2K" }
+      },
+      "output": { "maxImages": 4, "defaultImages": 2 },
+      "input": { "maxImages": 14, "required": false },
+      "evolink": { "variant": "nano-banana", "apiModel": "gemini-nano-banana-2.1" }
+    },
     "evolink-video-seedance2-i2v": {
       "apiKey": "evolink",
       "backend": "evolink-video",
@@ -246,6 +282,87 @@
         "variant": "happyhorse1-i2v",
         "apiModel": "happyhorse-1.0-image-to-video"
       }
+    },
+    "evolink-video-gemini-omni-t2v": {
+      "apiKey": "evolink",
+      "backend": "evolink-video",
+      "ui": {
+        "aspectRatio": true,
+        "aspectRatioOptions": { "options": ["auto", "16:9", "9:16"], "default": "auto" },
+        "videoLength": { "min": 3, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["360p", "720p", "1080p", "4k"], "default": "720p" }
+      },
+      "output": { "maxImages": 1, "defaultImages": 1 },
+      "input": { "maxImages": 0, "required": false },
+      "async": true,
+      "evolink": {
+        "variant": "gemini-omni-t2v",
+        "apiModel": "gemini-omni-1.2-flash-text-to-video",
+        "aspectRatios": ["auto", "16:9", "9:16"],
+        "defaultAspectRatio": "auto"
+      }
+    },
+    "evolink-video-gemini-omni-i2v": {
+      "apiKey": "evolink",
+      "backend": "evolink-video",
+      "ui": {
+        "aspectRatio": true,
+        "aspectRatioOptions": { "options": ["auto", "16:9", "9:16"], "default": "auto" },
+        "videoLength": { "min": 3, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["360p", "720p", "1080p", "4k"], "default": "720p" },
+        "imageToVideoHint": true
+      },
+      "output": { "maxImages": 1, "defaultImages": 1 },
+      "input": { "maxImages": 2, "required": true },
+      "async": true,
+      "evolink": {
+        "variant": "gemini-omni-i2v",
+        "apiModel": "gemini-omni-1.2-flash-image-to-video",
+        "aspectRatios": ["auto", "16:9", "9:16"],
+        "defaultAspectRatio": "auto",
+        "maxDurationWithEndFrame": 10
+      }
+    },
+    "evolink-video-minimax-h3-turbo-t2v": {
+      "apiKey": "evolink",
+      "backend": "evolink-video",
+      "ui": {
+        "aspectRatio": true,
+        "aspectRatioOptions": { "options": ["16:9", "21:9", "4:3", "1:1", "3:4", "9:16"], "default": "16:9" },
+        "videoLength": { "min": 5, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["480p", "768p"], "default": "768p" }
+      },
+      "output": { "maxImages": 1, "defaultImages": 1 },
+      "input": { "maxImages": 0, "required": false, "promptMaxLength": 7000 },
+      "async": true,
+      "evolink": {
+        "variant": "minimax-h3-t2v",
+        "apiModel": "minimax-h3-max-turbo-text-to-video",
+        "aspectRatios": ["16:9", "21:9", "4:3", "1:1", "3:4", "9:16"],
+        "defaultAspectRatio": "16:9"
+      }
+    },
+    "evolink-video-minimax-h3-turbo-i2v": {
+      "apiKey": "evolink",
+      "backend": "evolink-video",
+      "ui": {
+        "videoLength": { "min": 5, "max": 15, "default": 5 },
+        "videoQuality": { "options": ["480p", "768p"], "default": "768p" },
+        "imageToVideoHint": true
+      },
+      "output": { "maxImages": 1, "defaultImages": 1 },
+      "input": {
+        "maxImages": 2,
+        "required": true,
+        "promptMaxLength": 7000,
+        "imageConstraints": { "minWidth": 256, "minHeight": 256, "maxWidth": 5760, "maxHeight": 5760, "minAspectRatio": 0.4, "maxAspectRatio": 2.5 }
+      },
+      "async": true,
+      "evolink": {
+        "variant": "minimax-h3-i2v",
+        "apiModel": "minimax-h3-max-turbo-image-to-video",
+        "imageInput": "start-end"
+      }
     }
   },
   "models": [
@@ -255,14 +372,23 @@
     { "id": "evolink/doubao-seedream-5.0-lite", "name": "Seedream 5 Lite", "provider": "Bytedance", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-image", "pricing": { "price": { "type": "flat", "amount": 0.028 } }, "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-lite" }, "capabilities": { "ui": { "resolution": { "options": ["2K", "3K"], "default": "3K" }, "webSearch": true } } },
     { "id": "evolink/doubao-seedream-5.0-pro", "name": "Seedream 5.0 Pro", "provider": "Bytedance", "type": "image", "modes": ["image", "edit"], "tier": "quality", "via": "Evolink", "profile": "evolink-image", "pricing": { "price": { "type": "byQuality", "amounts": { "1K": 0.03375, "2K": 0.0675 }, "default": "1K" }, "inputImageCost": 0.00225 }, "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-pro" }, "capabilities": { "ui": { "aspectRatioOptions": { "options": ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "auto" }, "exactSize": { "defaultWidth": 1024, "defaultHeight": 1024, "minPixels": 1048576, "maxPixels": 4194304, "minAspectRatio": 0.0625, "maxAspectRatio": 16, "presets": ["1024x1024", "2048x2048", "832x1248", "1664x2496", "1248x832", "2496x1664", "896x1184", "1728x2304", "1184x896", "2304x1728", "960x1200", "1792x2240", "1200x960", "2240x1792", "768x1376", "1440x2560", "1376x768", "2560x1440", "1568x672", "3024x1296"] }, "resolution": { "options": ["1K", "2K"], "default": "1K" }, "outputFormat": { "options": ["png", "jpeg"] } }, "input": { "maxImages": 10, "required": false, "promptMaxLength": 2000, "imageConstraints": { "minWidth": 15, "minHeight": 15, "maxWidth": 6000, "maxHeight": 6000, "minAspectRatio": 0.0625, "maxAspectRatio": 16 } } } },
     { "id": "evolink/doubao-seedream-5.0-flash", "name": "Seedream 5.0 Flash", "provider": "Bytedance", "type": "image", "modes": ["image", "edit"], "tier": "balanced", "via": "Evolink", "profile": "evolink-image", "pricing": { "price": { "type": "flat", "amount": 0.027 } }, "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.0-flash" }, "capabilities": { "ui": { "aspectRatioOptions": { "options": ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "auto" }, "resolution": { "options": ["1K", "1.5K", "2K"], "default": "1K" }, "outputFormat": { "options": ["png", "jpeg"] } }, "input": { "maxImages": 10, "required": false, "promptMaxLength": 4000, "imageConstraints": { "minWidth": 15, "minHeight": 15, "maxWidth": 6000, "maxHeight": 6000, "minAspectRatio": 0.0625, "maxAspectRatio": 16 } } } },
+    { "id": "evolink/doubao-seedream-5.5", "name": "Seedream 5.5", "provider": "Bytedance", "type": "image", "modes": ["image", "edit"], "tier": "balanced", "via": "Evolink", "profile": "evolink-image", "pricing": { "price": { "type": "byQuality", "amounts": { "1K": 0.016, "1.5K": 0.016, "2K": 0.028 }, "default": "1K" }, "inputImageCost": 0.0064 }, "evolink": { "variant": "seedream", "apiModel": "doubao-seedream-5.5", "sendN": false, "outputFormatField": "top-level" }, "capabilities": { "ui": { "aspectRatioOptions": { "options": ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "9:21"], "default": "auto" }, "resolution": { "options": ["1K", "1.5K", "2K"], "default": "1K" }, "outputFormat": { "options": ["png", "jpeg"] } }, "input": { "maxImages": 10, "required": false, "imageConstraints": { "minWidth": 15, "minHeight": 15, "maxWidth": 6000, "maxHeight": 6000, "minAspectRatio": 0.0625, "maxAspectRatio": 16 } } } },
+    { "id": "evolink/minimax-h3-image", "name": "MiniMax H3 Image", "provider": "MiniMax", "type": "image", "modes": ["image", "edit"], "tier": "balanced", "via": "Evolink", "profile": "evolink-minimax-image", "pricing": { "price": { "type": "byQuality", "amounts": { "1K": 0.026, "2K": 0.026, "4K": 0.074 }, "default": "2K" }, "inputImageCost": 0.0155 } },
+    { "id": "evolink/gemini-nano-banana-2.1", "name": "Nano Banana 2.1", "provider": "Google", "type": "image", "modes": ["image", "edit"], "tier": "quality", "via": "Evolink", "profile": "evolink-nano-banana", "pricing": { "price": { "type": "byQuality", "amounts": { "1K": 0.0306, "2K": 0.04536, "4K": 0.10206 }, "default": "2K" }, "inputImageCost": 0.00151 } },
     { "id": "evolink/z-image-turbo", "name": "Z Image Turbo", "provider": "Tongyi", "type": "image", "tier": "fast", "via": "Evolink", "profile": "evolink-z-image", "pricing": { "price": { "type": "flat", "amount": 0.0038 } } },
     { "id": "evolink/gpt-image-2.5-sunburst", "name": "GPT Image 2.5 Sunburst", "provider": "OpenAI", "type": "image", "modes": ["image", "edit"], "tier": "quality", "via": "Evolink", "profile": "evolink-gpt-image", "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.5-sunburst" }, "pricing": { "price": { "type": "byQuality", "amounts": { "low": 0.0053, "medium": 0.0119, "high": 0.0474, "xhigh": 0.0843, "max": 0.1896 }, "default": "medium" }, "resolutionMultipliers": { "1K": 1, "2K": 2, "4K": 2.8 }, "inputImageCost": 0.011 } },
     { "id": "evolink/gpt-image-2.5-flare", "name": "GPT Image 2.5 Flare", "provider": "OpenAI", "type": "image", "modes": ["image", "edit"], "tier": "balanced", "via": "Evolink", "profile": "evolink-gpt-image", "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.5-flare" }, "pricing": { "price": { "type": "byQuality", "amounts": { "low": 0.0053, "medium": 0.0119, "high": 0.0474, "xhigh": 0.0843, "max": 0.1896 }, "default": "medium" }, "resolutionMultipliers": { "1K": 1, "2K": 2, "4K": 2.8 }, "inputImageCost": 0.011 } },
+    { "id": "evolink/gpt-image-2.6-sunburst", "name": "GPT Image 2.6 Sunburst", "provider": "OpenAI", "type": "image", "modes": ["image", "edit"], "tier": "quality", "via": "Evolink", "profile": "evolink-gpt-image", "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.6-sunburst" }, "pricing": { "price": { "type": "byQuality", "amounts": { "low": 0.0247, "medium": 0.0435, "high": 0.0527, "xhigh": 0.0937, "max": 0.2107 }, "default": "medium" }, "resolutionMultipliers": { "1K": 1, "2K": 2.03, "4K": 3.38 }, "inputImageCost": 0.0123 } },
+    { "id": "evolink/gpt-image-2.6-flare", "name": "GPT Image 2.6 Flare", "provider": "OpenAI", "type": "image", "modes": ["image", "edit"], "tier": "balanced", "via": "Evolink", "profile": "evolink-gpt-image", "evolink": { "variant": "gpt-image", "apiModel": "gpt-image-2.6-flare" }, "pricing": { "price": { "type": "byQuality", "amounts": { "low": 0.0247, "medium": 0.0435, "high": 0.0527, "xhigh": 0.0937, "max": 0.2107 }, "default": "medium" }, "resolutionMultipliers": { "1K": 1, "2K": 2.03, "4K": 3.38 }, "inputImageCost": 0.0123 } },
     { "id": "evolink/seedance-2.0/image-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "image-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-i2v", "pricing": { "pricePerSecond": { "480p": 0.092, "720p": 0.199, "1080p": 0.496 }, "defaultQuality": "720p" } },
     { "id": "evolink/seedance-2.0/text-to-video", "name": "Seedance 2.0", "provider": "Bytedance", "type": "text-to-video", "tier": "quality", "via": "Evolink", "profile": "evolink-video-seedance2-t2v", "pricing": { "pricePerSecond": { "480p": 0.092, "720p": 0.199, "1080p": 0.496 }, "defaultQuality": "720p" } },
     { "id": "evolink/seedance-2.0-mini/text-to-video", "name": "Seedance 2.0 Mini", "provider": "Bytedance", "type": "text-to-video", "tier": "fast", "via": "Evolink", "profile": "evolink-video-seedance2-mini-t2v", "pricing": { "pricePerSecond": { "480p": 0.046, "720p": 0.099 }, "defaultQuality": "720p", "relaxedContentMultiplier": 1.1 } },
     { "id": "evolink/seedance-2.0-mini/image-to-video", "name": "Seedance 2.0 Mini", "provider": "Bytedance", "type": "image-to-video", "tier": "fast", "via": "Evolink", "profile": "evolink-video-seedance2-mini-t2v", "evolink": { "variant": "seedance2-mini-i2v", "apiModel": "seedance-2.0-mini-image-to-video", "defaultAspectRatio": "adaptive" }, "capabilities": { "ui": { "imageToVideoHint": true }, "input": { "maxImages": 2, "required": true, "imageConstraints": { "minWidth": 300, "minHeight": 300, "maxWidth": 6000, "maxHeight": 6000, "minAspectRatio": 0.4, "maxAspectRatio": 2.5 } } }, "pricing": { "pricePerSecond": { "480p": 0.046, "720p": 0.099 }, "defaultQuality": "720p", "relaxedContentMultiplier": 1.1 } },
     { "id": "evolink/happyhorse-1.0/image-to-video", "name": "HappyHorse 1.0", "provider": "HappyHorse", "type": "image-to-video", "tier": "balanced", "via": "Evolink", "profile": "evolink-video-happyhorse1-i2v", "pricing": { "pricePerSecond": { "720p": 0.13880769, "1080p": 0.24680124 }, "defaultQuality": "720p" } },
+    { "id": "evolink/gemini-omni-1.2-flash/text-to-video", "name": "Gemini Omni 1.2 Flash", "provider": "Google", "type": "text-to-video", "tier": "balanced", "via": "Evolink", "profile": "evolink-video-gemini-omni-t2v", "pricing": { "pricePerSecond": { "360p": 0.0225, "720p": 0.0642, "1080p": 0.0955, "4k": 0.1893 }, "defaultQuality": "720p" } },
+    { "id": "evolink/gemini-omni-1.2-flash/image-to-video", "name": "Gemini Omni 1.2 Flash", "provider": "Google", "type": "image-to-video", "tier": "balanced", "via": "Evolink", "profile": "evolink-video-gemini-omni-i2v", "pricing": { "pricePerSecond": { "360p": 0.0225, "720p": 0.0642, "1080p": 0.0955, "4k": 0.1893 }, "defaultQuality": "720p" } },
+    { "id": "evolink/minimax-h3-max-turbo/text-to-video", "name": "MiniMax H3 Max Turbo", "provider": "MiniMax", "type": "text-to-video", "tier": "fast", "via": "Evolink", "profile": "evolink-video-minimax-h3-turbo-t2v", "pricing": { "pricePerSecond": 0.038 } },
+    { "id": "evolink/minimax-h3-max-turbo/image-to-video", "name": "MiniMax H3 Max Turbo", "provider": "MiniMax", "type": "image-to-video", "tier": "fast", "via": "Evolink", "profile": "evolink-video-minimax-h3-turbo-i2v", "pricing": { "pricePerSecond": 0.038 } },
     { "id": "black-forest-labs/flux.2-pro", "name": "Flux 2 Pro", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
     { "id": "black-forest-labs/flux.2-max", "name": "Flux 2 Max", "provider": "Black Forest Labs", "type": "image", "tier": "quality", "profile": "openrouter-image" },
     { "id": "black-forest-labs/flux.2-flex", "name": "Flux 2 Flex", "provider": "Black Forest Labs", "type": "image", "tier": "balanced", "profile": "openrouter-image" },

@@ -95,27 +95,92 @@ function buildSeedreamPayload({
     outputFormat,
     outputFormatOptions,
     enableWebSearch = false,
+    aspectRatioOptions = null,
+    sendN = true,
+    outputFormatField = 'model_params',
 }) {
     const quality = normalizeSeedreamQuality(resolution, qualityOptions, qualityDefault);
-    const normalizedSize = EVOLINK_SEEDREAM_ASPECT_RATIOS.has(normalizedAspectRatio)
+    const allowedRatios = Array.isArray(aspectRatioOptions) && aspectRatioOptions.length > 0
+        ? new Set(aspectRatioOptions)
+        : EVOLINK_SEEDREAM_ASPECT_RATIOS;
+    const normalizedSize = allowedRatios.has(normalizedAspectRatio)
         ? normalizedAspectRatio
         : 'auto';
     const supportsWebSearch = apiModel === 'doubao-seedream-5.0-lite';
     const normalizedOutputFormat = normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions);
+    const topLevelOutputFormat = outputFormatField === 'top-level';
     const modelParams = {
-        ...(normalizedOutputFormat ? { output_format: normalizedOutputFormat } : {}),
+        ...(normalizedOutputFormat && !topLevelOutputFormat ? { output_format: normalizedOutputFormat } : {}),
         ...(supportsWebSearch && enableWebSearch ? { tools: [{ type: 'web_search' }] } : {}),
     };
 
     return {
         model: apiModel,
         prompt: prompt.trim(),
-        n: parsedNumImages,
+        ...(sendN ? { n: parsedNumImages } : {}),
         size: exactImageSize || normalizedSize,
         ...(!exactImageSize ? { quality } : {}),
         prompt_priority: 'standard',
+        ...(normalizedOutputFormat && topLevelOutputFormat ? { output_format: normalizedOutputFormat } : {}),
         ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
         ...(Object.keys(modelParams).length > 0 ? { model_params: modelParams } : {}),
+    };
+}
+
+function pickAllowed(value, options, fallback) {
+    if (typeof value === 'string' && Array.isArray(options) && options.includes(value)) return value;
+    return fallback;
+}
+
+/**
+ * Payload for MiniMax H3 Image. `size` takes `auto` or a ratio; `resolution`
+ * (1K/2K/4K) sets the pixel budget for both. One image per task, like every
+ * other Evolink image route here.
+ */
+function buildMinimaxImagePayload({
+    apiModel,
+    prompt,
+    normalizedAspectRatio,
+    resolution,
+    resolutionOptions,
+    resolutionDefault,
+    aspectRatioOptions,
+    uploadedImageUrls = [],
+    outputFormat,
+    outputFormatOptions,
+}) {
+    const normalizedOutputFormat = normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions);
+    return {
+        model: apiModel,
+        prompt: prompt.trim(),
+        n: 1,
+        size: pickAllowed(normalizedAspectRatio, aspectRatioOptions, 'auto'),
+        resolution: normalizeSeedreamQuality(resolution, resolutionOptions, resolutionDefault),
+        ...(normalizedOutputFormat ? { output_format: normalizedOutputFormat } : {}),
+        ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
+    };
+}
+
+/**
+ * Payload for Nano Banana 2.1. `size` is the aspect ratio and `quality` is
+ * the 1K/2K/4K output tier (billed per tier).
+ */
+function buildNanoBananaPayload({
+    apiModel,
+    prompt,
+    normalizedAspectRatio,
+    resolution,
+    resolutionOptions,
+    resolutionDefault,
+    aspectRatioOptions,
+    uploadedImageUrls = [],
+}) {
+    return {
+        model: apiModel,
+        prompt: prompt.trim(),
+        size: pickAllowed(normalizedAspectRatio, aspectRatioOptions, 'auto'),
+        quality: normalizeSeedreamQuality(resolution, resolutionOptions, resolutionDefault),
+        ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
     };
 }
 
@@ -308,6 +373,9 @@ async function handleEvolink(ctx) {
             outputFormatOptions,
             qualityTierOptions,
             qualityTierDefault,
+            aspectRatioOptions,
+            sendN,
+            outputFormatField,
         } = evolinkConfig;
         const isGptImage = variant === 'gpt-image';
         const gptImageQuality = isGptImage
@@ -358,6 +426,20 @@ async function handleEvolink(ctx) {
                     outputFormat: output_format,
                     outputFormatOptions,
                 });
+            } else if (variant === 'minimax-image' || variant === 'nano-banana') {
+                const build = variant === 'minimax-image' ? buildMinimaxImagePayload : buildNanoBananaPayload;
+                payload = build({
+                    apiModel,
+                    prompt,
+                    normalizedAspectRatio,
+                    resolution,
+                    resolutionOptions: qualityOptions,
+                    resolutionDefault: qualityDefault,
+                    aspectRatioOptions,
+                    uploadedImageUrls,
+                    outputFormat: output_format,
+                    outputFormatOptions,
+                });
             } else {
                 payload = buildSeedreamPayload({
                     apiModel,
@@ -372,6 +454,9 @@ async function handleEvolink(ctx) {
                     outputFormat: output_format,
                     outputFormatOptions,
                     enableWebSearch: enable_web_search === true,
+                    aspectRatioOptions,
+                    sendN,
+                    outputFormatField,
                 });
             }
             return createTask(payload, index);
@@ -462,6 +547,8 @@ module.exports = {
     buildSeedreamPayload,
     buildZImageTurboPayload,
     buildGptImagePayload,
+    buildMinimaxImagePayload,
+    buildNanoBananaPayload,
     buildEvolinkProxyUrl,
     getEvolinkImageCostPerImage,
     resolveBilledQuality,

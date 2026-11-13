@@ -115,9 +115,19 @@ function getEvolinkConfig(modelId) {
     // separate from the 1K/2K/4K resolution tier.
     const qualityTierOptions = caps.ui?.quality?.options || [];
     const qualityTierDefault = caps.ui?.quality?.default || qualityTierOptions[0] || null;
+    // Per-model ratio allowlist (e.g. Seedream 5.5 adds 9:21); null keeps the
+    // variant's built-in list.
+    const aspectRatioOptions = Array.isArray(caps.ui?.aspectRatioOptions?.options)
+        ? caps.ui.aspectRatioOptions.options
+        : null;
     return {
         variant: evolink.variant || 'seedream',
         apiModel: evolink.apiModel || 'doubao-seedream-4.5',
+        aspectRatioOptions,
+        // Seedream 5.5 returns one image per request and rejects `n`.
+        sendN: evolink.sendN !== false,
+        // Seedream 5.0 takes output_format inside model_params; 5.5 takes it top-level.
+        outputFormatField: evolink.outputFormatField === 'top-level' ? 'top-level' : 'model_params',
         qualityOptions,
         qualityDefault,
         outputFormatOptions,
