@@ -5,7 +5,8 @@
     "scripts": {
         "dev": "node server.js",
         "start": "node server.js",
-        "test": "node --test"
+        "test": "node --test",
+        "models:readme": "node scripts/model-table.mjs --write"
     },
     "dependencies": {
         "dotenv": "^17.2.3",

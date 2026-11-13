@@ -24,7 +24,10 @@ const {
 
 describe('model catalog — identity & redirects', () => {
     it('normalizes legacy grok pro alias', () => {
-        assert.equal(normalizeModelId('grok-imagine-image-pro'), 'grok-imagine-image-quality');
+        assert.equal(normalizeModelId('grok-imagine-image-pro'), 'grok-imagine-image-2.0');
+        // xAI retired grok-imagine-image-quality on 2026-11-02 in favour of Image 2.0.
+        assert.equal(normalizeModelId('grok-imagine-image-quality'), 'grok-imagine-image-2.0');
+        assert.equal(normalizeModelId('x-ai/grok-imagine-image-quality'), 'x-ai/grok-imagine-image-2.0');
     });
 
     it('redirects legacy seedance 2.0 paths to the evolink video model', () => {
@@ -151,18 +154,18 @@ describe('model catalog — evolink config', () => {
         const cfg = getEvolinkConfig('evolink/doubao-seedream-5.0-lite');
         assert.equal(cfg.variant, 'seedream');
         assert.equal(cfg.apiModel, 'doubao-seedream-5.0-lite');
-        assert.deepEqual(cfg.qualityOptions, ['2K', '3K']);
+        assert.deepEqual(cfg.qualityOptions, ['2K', '3K', '4K']);
     });
 
     it('assigns seedream 5 pro api model, quality, and output format options', () => {
         const cfg = getEvolinkConfig('evolink/doubao-seedream-5.0-pro');
         assert.equal(cfg.variant, 'seedream');
         assert.equal(cfg.apiModel, 'doubao-seedream-5.0-pro');
-        assert.deepEqual(cfg.qualityOptions, ['1K', '2K']);
+        assert.deepEqual(cfg.qualityOptions, ['1K', '1.5K', '2K']);
         assert.equal(cfg.qualityDefault, '1K');
         assert.deepEqual(cfg.outputFormatOptions, ['png', 'jpeg']);
         const input = getInputConstraints('evolink/doubao-seedream-5.0-pro');
-        assert.equal(input.promptMaxLength, 2000);
+        assert.equal(input.promptMaxLength, 4000);
         assert.equal(input.imageConstraints.minWidth, 15);
     });
 
@@ -225,9 +228,9 @@ describe('model catalog — evolink config', () => {
 
 describe('model catalog — pricing', () => {
     it('exposes xai image pricing', () => {
-        const pricing = getModelPricing('grok-imagine-image-quality');
-        assert.equal(pricing.perImageOutput, 0.07);
-        assert.equal(pricing.inputImageCost, 0.002);
+        const pricing = getModelPricing('grok-imagine-image-2.0');
+        assert.equal(pricing.perImageOutput, 0.04);
+        assert.equal(pricing.inputImageCost, 0.01);
     });
 
     it('exposes xai video per-second pricing', () => {

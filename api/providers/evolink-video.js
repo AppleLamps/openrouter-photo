@@ -1,6 +1,7 @@
 const { redactKey } = require('../_middleware');
 const { resolveCapabilities, getModelPricing, getVideoPricePerSecond, evolinkCreditsToUsd } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
+const { applyExtraOptions } = require('../extra-options');
 
 const EVOLINK_VIDEO_ASPECT_RATIOS = new Set(['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive']);
 const EVOLINK_VIDEO_QUALITIES = ['480p', '720p', '1080p'];
@@ -88,6 +89,7 @@ async function handleEvolinkVideo(ctx) {
         evolinkKey,
         inputVideoUrl = null,
         inputVideoDuration = null,
+        extraOptions = {},
     } = ctx;
 
     const caps = modelCaps || resolveCapabilities(model);
@@ -145,7 +147,9 @@ async function handleEvolinkVideo(ctx) {
     try {
         // Seedance 2.0 i2v accepts 1 image (first frame) or 2 images (first + last frame).
         // Video-to-video routes take optional reference images instead.
-        const referenceLimit = isVideoToVideo ? (caps.input?.maxImages ?? 0) : 2;
+        const referenceLimit = isVideoToVideo
+            ? (caps.input?.maxImages ?? 0)
+            : Math.min(2, caps.input?.maxImages ?? 2); // HappyHorse takes a single frame
         const imageUrls = (isImageToVideo || isVideoToVideo) && Array.isArray(normalizedInputImages)
             ? await Promise.all(normalizedInputImages.slice(0, referenceLimit).map(uploadEvolinkReferenceImage))
             : [];
@@ -197,10 +201,13 @@ async function handleEvolinkVideo(ctx) {
             ...(supportsGenerateAudio ? { generate_audio: generate_audio_switch !== false } : {}),
             ...(supportsContentFilter ? { content_filter: contentFilter } : {}),
             ...(isImageToVideo ? buildFrameFields(imageUrls, evolink.imageInput) : {}),
+            // Seedance rejects web search together with relaxed content filtering.
             ...(!isImageToVideo && evolink.supportsWebSearch && enable_web_search === true
+                && !(supportsContentFilter && contentFilter === false)
                 ? { model_params: { web_search: true } }
                 : {}),
         };
+        applyExtraOptions(payload, caps.ui?.extraOptions, extraOptions);
 
         const createResponse = await fetch('https://api.evolink.ai/v1/videos/generations', {
             method: 'POST',

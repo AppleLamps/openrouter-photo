@@ -97,8 +97,30 @@ Profiles define **backend**, **API key**, **UI controls**, **input rules**, and 
 | `videoLength: { min, max, default }` | Video duration slider/input |
 | `videoQuality: { options, default }` | Video resolution dropdown |
 | `generateAudio: true` | Toggle for video audio (Seedance) |
-| `webSearch: true` | Web-search toggle (Seedream 5 Lite, Seedance 2.0 T2V) |
+| `aspectRatioOptions: { options, default }` | Limit the ratio dropdown to what the model accepts; Evolink/OpenRouter/xAI payloads also drop ratios outside this list |
+| `outputFormat: { options }` | Output format dropdown (`png`, `jpeg`, `webp`) |
+| `background: { options, default }` | Background dropdown (`auto` / `transparent` / `opaque`); transparent keeps the format on PNG or WebP |
+| `webSearch: true` | Web-search toggle (Seedream 5 Lite, Seedance 2.0 T2V, Nano Banana 2.1); `webSearchDefault: false` starts it off |
+| `contentFilter: true` | Standard / relaxed content filter toggle (Seedance); pair with `evolink.supportsContentFilter` and `pricing.relaxedContentMultiplier` |
+| `extraOptions: [ … ]` | Model-specific settings rendered automatically (see below) |
 | `imageToVideoHint: true` | Hint that attachments are used as start/end frames |
+| `videoInputHint: true` | Hint that the model takes an attached MP4 (video-to-video) |
+
+### Extra options (`ui.extraOptions`)
+
+Anything a provider accepts that is not one of the shared controls above is declared as an extra option. The settings panel renders it, remembers the value per model, sends it as `extra_options`, and `api/extra-options.js` validates it and writes it to the request field named by `param` (dotted paths nest, e.g. `model_params.thinking_level`). A value equal to `default` is not sent, so the provider's own default applies.
+
+```json
+"extraOptions": [
+  { "preset": "seed", "max": 4294967295 },
+  { "key": "complexity", "type": "select", "label": "Planning depth", "param": "complexity", "default": "high",
+    "options": [{ "value": "high", "label": "High" }, { "value": "low", "label": "Low" }], "hint": "No extra cost." },
+  { "key": "fast_mode", "type": "toggle", "label": "Fast mode", "param": "prompt_priority",
+    "default": false, "onValue": "fast", "offValue": "standard" }
+]
+```
+
+Types are `number` (with `min` / `max`; blank means "not set"), `toggle` and `select`. Shared definitions live in the top-level `optionPresets` (currently `seed`) and are referenced with `{ "preset": "seed" }`, overriding fields such as `min` / `max` per model. Providers call `applyExtraOptions(payload, caps.ui.extraOptions, ctx.extraOptions)` after building their payload.
 
 ### Input rules
 
@@ -123,9 +145,8 @@ Profiles define **backend**, **API key**, **UI controls**, **input rules**, and 
 
 | Profile | Backend | Use for |
 | --- | --- | --- |
-| `openrouter-image` | openrouter | Generic OR image models |
-| `openrouter-seedream` | openrouter | Seedream via OpenRouter |
-| `openrouter-gemini` | openrouter | Gemini with resolution |
+| `openrouter-images` | openrouter | OpenRouter image models via the Image API (`/api/v1/images`). Set `ui` from the model's `supported_parameters` at `https://openrouter.ai/api/v1/images/models`, and `input.maxImages` from `input_references.max` |
+| `openrouter-image` / `openrouter-seedream` / `openrouter-gemini` | openrouter | Chat-completions only (kept for models the Image API does not list) |
 | `xai-image` | xai | Grok image |
 | `xai-video` | xai | Grok video (async, text-to-video) |
 | `evolink-image` / `evolink-edit` | evolink | Evolink Seedream (4.5 default; override `apiModel` / resolution per model) |
@@ -153,7 +174,7 @@ Copy an existing entry and change `id`, `name`, and `profile` if needed:
 }
 ```
 
-Gemini models use `"profile": "openrouter-gemini"` for aspect ratio + 1K/2K/4K resolution.
+Prefer `"profile": "openrouter-images"` and copy the model's accepted values from `https://openrouter.ai/api/v1/images/models` into `capabilities.ui` (aspect ratios, resolution, quality, output format, background, `{ "preset": "seed" }` when `seed` is listed). If the Image API answers 404/405 for a model, the provider falls back to chat completions; give Gemini models `"openrouter": { "gemini": true, "imageConfig": true }` so that fallback still requests images.
 
 ### 2. Evolink Seedream — same family, different API model (catalog only)
 
@@ -238,7 +259,7 @@ When an old client uses a different id string, or a removed model should map to 
 
 ```json
 "legacyRedirects": {
-  "grok-imagine-image-pro": "grok-imagine-image-quality",
+  "grok-imagine-image-quality": "grok-imagine-image-2.0",
   "fal-ai/bytedance/seedance-2.0/image-to-video": "evolink/seedance-2.0/image-to-video",
   "bytedance/seedance-2.0/image-to-video": "evolink/seedance-2.0/image-to-video"
 }
@@ -313,6 +334,8 @@ npm test
 | `tests/generation-polling.test.js` | Request normalization, transient retries, timeout, and cancellation |
 | `tests/pwa-assets.test.js` | Startup import graph, offline manifest, service-worker serving |
 | `tests/ui-capabilities.test.js` | Settings panel flags per profile, picker visibility |
+| `tests/extra-options.test.js` | Extra options, OpenRouter Image API payloads and fallback, xAI Image 2.0 |
+| `tests/readme-models.test.js` | README model tables match the catalog (`npm run models:readme` regenerates them) |
 
 After tests pass, manually verify:
 

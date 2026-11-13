@@ -772,9 +772,12 @@ function syncBackgroundOptions(model) {
     syncTransparentOutputFormat();
 }
 
+/** Output formats that keep an alpha channel. */
+const ALPHA_FORMATS = new Set(['png', 'webp']);
+
 /**
- * A transparent background only comes back as PNG, so lock the output format
- * to PNG while it is selected instead of letting the API reject JPEG.
+ * A transparent background needs PNG or WebP. While it is selected, disable
+ * the other formats and move off JPEG instead of letting the API reject it.
  */
 function syncTransparentOutputFormat() {
     const backgroundGroup = document.getElementById('background-group');
@@ -783,9 +786,124 @@ function syncTransparentOutputFormat() {
     if (!(backgroundSelect instanceof HTMLSelectElement) || !(outputFormatSelect instanceof HTMLSelectElement)) return;
     const transparent = !backgroundGroup?.classList.contains('settings-group--hidden')
         && backgroundSelect.value === 'transparent';
-    const hasPng = Array.from(outputFormatSelect.options).some((option) => option.value === 'png');
-    if (transparent && hasPng) outputFormatSelect.value = 'png';
-    outputFormatSelect.disabled = transparent && hasPng;
+    const options = Array.from(outputFormatSelect.options);
+    const hasAlphaFormat = options.some((option) => ALPHA_FORMATS.has(option.value));
+    options.forEach((option) => {
+        option.disabled = transparent && hasAlphaFormat && !ALPHA_FORMATS.has(option.value);
+    });
+    if (transparent && hasAlphaFormat && !ALPHA_FORMATS.has(outputFormatSelect.value)) {
+        outputFormatSelect.value = options.some((option) => option.value === 'png') ? 'png' : 'webp';
+    }
+    outputFormatSelect.disabled = false;
+}
+
+/** Values the user picked for each model's extra options, so switching models keeps them. */
+const extraOptionValues = new Map();
+
+function extraOptionControlId(key) {
+    return `setting-extra-${key.replace(/[^a-z0-9_-]/gi, '-')}`;
+}
+
+/** Read the current extra-option values from the rendered controls. */
+export function readExtraOptionValues(model) {
+    const values = {};
+    for (const definition of getUiCapabilities(model).extraOptions) {
+        const control = document.getElementById(extraOptionControlId(definition.key));
+        if (!control) continue;
+        if (definition.type === 'toggle' && control instanceof HTMLInputElement) {
+            values[definition.key] = control.checked;
+        } else if (definition.type === 'number' && control instanceof HTMLInputElement) {
+            const trimmed = control.value.trim();
+            if (trimmed !== '') values[definition.key] = Number(trimmed);
+        } else if (control instanceof HTMLSelectElement) {
+            values[definition.key] = control.value;
+        }
+    }
+    return values;
+}
+
+/** Put saved values back into the rendered controls (used when restoring settings). */
+export function applyExtraOptionValues(model, values) {
+    if (!values || typeof values !== 'object') return;
+    for (const definition of getUiCapabilities(model).extraOptions) {
+        if (!(definition.key in values)) continue;
+        const control = document.getElementById(extraOptionControlId(definition.key));
+        const value = values[definition.key];
+        if (definition.type === 'toggle' && control instanceof HTMLInputElement) {
+            control.checked = value === true;
+        } else if (definition.type === 'number' && control instanceof HTMLInputElement) {
+            control.value = Number.isSafeInteger(value) ? String(value) : '';
+        } else if (control instanceof HTMLSelectElement
+            && Array.from(control.options).some((option) => option.value === value)) {
+            control.value = value;
+        }
+    }
+}
+
+function renderExtraOptions(model) {
+    const container = document.getElementById('extra-options-container');
+    if (!container) return;
+    container.innerHTML = '';
+    const remembered = extraOptionValues.get(model) || {};
+
+    for (const definition of getUiCapabilities(model).extraOptions) {
+        const id = extraOptionControlId(definition.key);
+        const group = document.createElement('div');
+        group.className = 'settings-group settings-group--extra';
+        const hint = document.createElement('p');
+        hint.className = 'settings-hint';
+        hint.textContent = definition.hint || '';
+
+        if (definition.type === 'toggle') {
+            const label = document.createElement('label');
+            label.className = 'settings-checkbox';
+            label.htmlFor = id;
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = id;
+            input.checked = remembered[definition.key] ?? Boolean(definition.default);
+            const text = document.createElement('span');
+            text.textContent = definition.label;
+            label.append(input, text);
+            group.appendChild(label);
+        } else {
+            const label = document.createElement('label');
+            label.className = 'settings-label';
+            label.htmlFor = id;
+            label.textContent = definition.label;
+            group.appendChild(label);
+            if (definition.type === 'number') {
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.id = id;
+                input.className = 'settings-input';
+                input.inputMode = 'numeric';
+                input.step = '1';
+                if (Number.isFinite(definition.min)) input.min = String(definition.min);
+                if (Number.isFinite(definition.max)) input.max = String(definition.max);
+                input.placeholder = definition.placeholder || '';
+                const value = remembered[definition.key];
+                input.value = Number.isSafeInteger(value) ? String(value) : '';
+                group.appendChild(input);
+            } else {
+                const select = document.createElement('select');
+                select.id = id;
+                select.className = 'settings-select';
+                (definition.options || []).forEach((option) => {
+                    const entry = typeof option === 'object' ? option : { value: option, label: option };
+                    const el = document.createElement('option');
+                    el.value = entry.value;
+                    el.textContent = entry.label || entry.value;
+                    select.appendChild(el);
+                });
+                const value = remembered[definition.key] ?? definition.default;
+                if (Array.from(select.options).some((option) => option.value === value)) select.value = value;
+                group.appendChild(select);
+            }
+        }
+        if (definition.hint) group.appendChild(hint);
+        container.appendChild(group);
+    }
 }
 
 function syncExactSizeOptions(model) {
@@ -911,6 +1029,7 @@ export function updateSettingsForModel(model) {
             contentFilter: contentFilterSwitch instanceof HTMLInputElement ? contentFilterSwitch.checked : true,
             webSearch: webSearchSwitch instanceof HTMLInputElement ? webSearchSwitch.checked : true,
         });
+        extraOptionValues.set(activeSettingsModel, readExtraOptionValues(activeSettingsModel));
     }
 
     const ui = getUiCapabilities(model);
@@ -934,6 +1053,7 @@ export function updateSettingsForModel(model) {
     document.getElementById('background-group')?.classList.toggle('settings-group--hidden', !ui.background);
     syncBackgroundOptions(model);
     if (!ui.background) syncTransparentOutputFormat();
+    renderExtraOptions(model);
     syncExactSizeOptions(model);
     syncVideoQualityOptions(model);
     syncVideoLengthInput(model);

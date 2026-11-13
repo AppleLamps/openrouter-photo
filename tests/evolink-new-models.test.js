@@ -104,12 +104,18 @@ describe('new Evolink image models', () => {
         assert.equal(res.body.estimated_cost.toFixed(4), '0.0224');
     });
 
-    it('existing Seedream 5.0 payloads are unchanged', async () => {
-        const { bodies } = await runImage('evolink/doubao-seedream-5.0-pro', { resolution: '1K', output_format: 'png' });
+    it('Seedream 5.0 Pro sends output_format top-level, as documented', async () => {
+        const { bodies } = await runImage('evolink/doubao-seedream-5.0-pro', { resolution: '1.5K', output_format: 'png' });
         assert.deepEqual(bodies[0], {
-            model: 'doubao-seedream-5.0-pro', prompt: 'a lighthouse at dusk', n: 1, size: '16:9', quality: '1K',
-            prompt_priority: 'standard', model_params: { output_format: 'png' },
+            model: 'doubao-seedream-5.0-pro', prompt: 'a lighthouse at dusk', n: 1, size: '16:9', quality: '1.5K',
+            prompt_priority: 'standard', output_format: 'png',
         });
+    });
+
+    it('Seedream 5.0 Lite keeps output_format in model_params', async () => {
+        const { bodies } = await runImage('evolink/doubao-seedream-5.0-lite', { resolution: '4K', output_format: 'png' });
+        assert.equal(bodies[0].quality, '4K');
+        assert.deepEqual(bodies[0].model_params, { output_format: 'png' });
     });
 
     it('MiniMax H3 Image sends size + resolution and falls back to auto for unknown ratios', async () => {

@@ -1,7 +1,11 @@
 const { redactKey } = require('../_middleware');
-const { getOpenRouterConfig } = require('../model-catalog');
+const { getOpenRouterConfig, resolveCapabilities } = require('../model-catalog');
+const { applyExtraOptions } = require('../extra-options');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+// Dedicated Image API: accepts aspect_ratio, resolution, quality, output_format,
+// background, seed and input_references per model (see /api/v1/images/models).
+const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
 // Leaves headroom under the 120s Vercel maxDuration so already generated
 // images can still be returned when a sibling request hangs.
 const OPENROUTER_GENERATION_DEADLINE_MS = 100000;
@@ -45,7 +49,60 @@ function buildOpenRouterPayload({
     return payload;
 }
 
+function pickAllowed(value, options) {
+    return typeof value === 'string' && Array.isArray(options) && options.includes(value) ? value : null;
+}
+
+/**
+ * Payload for POST /api/v1/images. Only fields the catalog lists for the model
+ * are sent, with values from its allowed set; `auto` values are left to the
+ * provider.
+ */
+function buildOpenRouterImagesPayload({
+    model,
+    prompt,
+    normalizedAspectRatio,
+    resolution,
+    imageQuality,
+    outputFormat,
+    background,
+    normalizedInputImages = [],
+    ui = {},
+    extraOptions = {},
+}) {
+    const aspectRatio = ui.aspectRatio ? pickAllowed(normalizedAspectRatio, ui.aspectRatioOptions?.options) : null;
+    const tier = pickAllowed(resolution, ui.resolution?.options);
+    const quality = pickAllowed(imageQuality, ui.quality?.options);
+    const normalizedBackground = pickAllowed(background, ui.background?.options);
+    let format = pickAllowed(outputFormat, ui.outputFormat?.options);
+    // Transparent output needs an alpha-capable format.
+    if (normalizedBackground === 'transparent' && format && !['png', 'webp'].includes(format)) format = 'png';
+
+    const payload = {
+        model,
+        prompt: prompt.trim(),
+        n: 1,
+        ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+        ...(tier ? { resolution: tier } : {}),
+        ...(quality && quality !== 'auto' ? { quality } : {}),
+        ...(format ? { output_format: format } : {}),
+        ...(normalizedBackground && normalizedBackground !== 'auto' ? { background: normalizedBackground } : {}),
+        ...(normalizedInputImages.length > 0
+            ? { input_references: normalizedInputImages.map((url) => ({ type: 'image_url', image_url: { url } })) }
+            : {}),
+    };
+    return applyExtraOptions(payload, ui.extraOptions, extraOptions);
+}
+
 function extractImageUrls(openRouterJson) {
+    // Image API: { data: [{ b64_json, media_type }] }
+    if (Array.isArray(openRouterJson?.data)) {
+        return openRouterJson.data
+            .map((item) => (typeof item?.b64_json === 'string' && item.b64_json
+                ? `data:${typeof item.media_type === 'string' ? item.media_type : 'image/png'};base64,${item.b64_json}`
+                : null))
+            .filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
+    }
     const message = openRouterJson?.choices?.[0]?.message;
     const images = message?.images;
     if (!Array.isArray(images)) return [];
@@ -55,6 +112,7 @@ function extractImageUrls(openRouterJson) {
 }
 
 function extractUsageNumber(openRouterJson) {
+    if (typeof openRouterJson?.usage?.cost === 'number') return openRouterJson.usage.cost;
     if (typeof openRouterJson?.usage?.total_cost === 'number') return openRouterJson.usage.total_cost;
     if (typeof openRouterJson?.usage === 'number') return openRouterJson.usage;
     return 0;
@@ -141,11 +199,19 @@ async function handleOpenRouter(ctx) {
         parsedNumImages,
         normalizedAspectRatio,
         resolution,
+        image_quality,
+        output_format,
+        background,
         normalizedInputImages,
         openRouterApiKey,
+        extraOptions = {},
     } = ctx;
 
     const openRouterConfig = getOpenRouterConfig(model);
+    const modelUi = resolveCapabilities(model).ui || {};
+    // Falls back to chat completions for the rest of this request if the
+    // Image API does not know the model (404/405).
+    let useImagesApi = openRouterConfig.imagesApi === true;
 
     const extractUsageMeta = (openRouterJson) => ({
         model: openRouterJson?.model || model,
@@ -158,16 +224,45 @@ async function handleOpenRouter(ctx) {
 
     const deadline = AbortSignal.timeout(OPENROUTER_GENERATION_DEADLINE_MS);
 
+    const requestHeaders = {
+        Authorization: `Bearer ${openRouterApiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': req.headers.referer || 'http://localhost',
+        'X-Title': 'AI Image Generator',
+    };
+
     const requestSingleOnce = async (options = {}) => {
         const { includeAspectRatio = true } = options;
+        if (useImagesApi) {
+            const imagesResponse = await fetch(OPENROUTER_IMAGES_URL, {
+                method: 'POST',
+                headers: requestHeaders,
+                body: JSON.stringify(buildOpenRouterImagesPayload({
+                    model,
+                    prompt,
+                    normalizedAspectRatio,
+                    resolution,
+                    imageQuality: image_quality,
+                    outputFormat: output_format,
+                    background,
+                    normalizedInputImages,
+                    ui: modelUi,
+                    extraOptions,
+                })),
+                signal: deadline,
+            });
+            if (imagesResponse.status === 404 || imagesResponse.status === 405) {
+                console.warn(`OpenRouter Image API unavailable for ${model}; using chat completions.`);
+                useImagesApi = false;
+            } else if (!imagesResponse.ok) {
+                return { ok: false, status: imagesResponse.status, errorText: await imagesResponse.text() };
+            } else {
+                return { ok: true, data: await imagesResponse.json() };
+            }
+        }
         const response = await fetch(OPENROUTER_URL, {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${openRouterApiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': req.headers.referer || 'http://localhost',
-                'X-Title': 'AI Image Generator',
-            },
+            headers: requestHeaders,
             body: JSON.stringify(buildOpenRouterPayload({
                 model,
                 prompt,
@@ -318,4 +413,4 @@ async function handleOpenRouter(ctx) {
     }
 }
 
-module.exports = { handleOpenRouter, buildOpenRouterPayload, calculateBilledUsage };
+module.exports = { handleOpenRouter, buildOpenRouterPayload, buildOpenRouterImagesPayload, calculateBilledUsage, extractImageUrls };

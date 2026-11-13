@@ -17,15 +17,17 @@ describe('UI capabilities', () => {
     });
 
     it('OpenRouter Grok image uses OpenRouter controls without replacing direct xAI', () => {
-        const ui = getUiCapabilities('x-ai/grok-imagine-image-quality');
+        const ui = getUiCapabilities('x-ai/grok-imagine-image-2.0');
         assert.equal(ui.aspectRatio, true);
         assert.deepEqual(ui.resolution?.options, ['1K', '2K']);
-        assert.equal(getOutputConstraints('x-ai/grok-imagine-image-quality').maxImages, 4);
+        assert.deepEqual(ui.quality?.options, ['low', 'medium']);
+        assert.equal(getOutputConstraints('x-ai/grok-imagine-image-2.0').maxImages, 4);
     });
 
-    it('grok video exposes video length and quality only', () => {
+    it('grok video exposes aspect ratio, video length and quality', () => {
         const ui = getUiCapabilities('grok-imagine-video');
-        assert.equal(ui.aspectRatio, false);
+        assert.equal(ui.aspectRatio, true);
+        assert.deepEqual(ui.aspectRatioOptions.options, ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9', '5:2']);
         assert.equal(ui.resolution, null);
         assert.ok(ui.videoLength);
         assert.deepEqual(ui.videoQuality?.options, ['480p', '720p']);
@@ -109,10 +111,10 @@ describe('UI capabilities', () => {
         assert.equal(ui.generateAudio, false);
     });
 
-    it('evolink seedream 5 lite exposes 2K and 3K resolution', () => {
+    it('evolink seedream 5 lite exposes 2K, 3K and 4K resolution', () => {
         const ui = getUiCapabilities('evolink/doubao-seedream-5.0-lite');
         assert.equal(ui.aspectRatio, true);
-        assert.deepEqual(ui.resolution?.options, ['2K', '3K']);
+        assert.deepEqual(ui.resolution?.options, ['2K', '3K', '4K']);
         assert.equal(ui.resolution?.default, '3K');
         assert.equal(ui.webSearch, true);
     });
@@ -125,11 +127,12 @@ describe('UI capabilities', () => {
             '4:5', '5:4', '9:16', '16:9', '21:9',
         ]);
         assert.equal(ui.aspectRatioOptions?.default, 'auto');
-        assert.deepEqual(ui.resolution?.options, ['1K', '2K']);
+        // Evolink: 1.5K costs the same as 1K and looks better.
+        assert.deepEqual(ui.resolution?.options, ['1K', '1.5K', '2K']);
         assert.equal(ui.resolution?.default, '1K');
         assert.deepEqual(ui.outputFormat?.options, ['png', 'jpeg']);
         assert.equal(ui.exactSize?.defaultWidth, 1024);
-        assert.equal(ui.exactSize?.maxPixels, 4194304);
+        assert.equal(ui.exactSize?.maxPixels, 4624220);
         assert.equal(ui.webSearch, false);
     });
 

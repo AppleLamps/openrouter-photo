@@ -39,6 +39,7 @@ async function handleXai(ctx) {
         parsedNumImages,
         normalizedAspectRatio,
         resolution,
+        image_quality,
         normalizedInputImages,
         xai_video_length,
         xai_video_quality,
@@ -57,14 +58,23 @@ async function handleXai(ctx) {
 
     try {
         if (isXaiImageModel) {
-            const normalizedXaiAspectRatio =
-                typeof normalizedAspectRatio === 'string' && normalizedAspectRatio.trim() !== ''
-                    ? normalizedAspectRatio.trim()
-                    : null;
+            const imageUi = modelCaps.ui || {};
+            const allowedRatios = imageUi.aspectRatioOptions?.options || null;
+            const requestedRatio = typeof normalizedAspectRatio === 'string' ? normalizedAspectRatio.trim() : '';
+            const normalizedXaiAspectRatio = requestedRatio && (!allowedRatios || allowedRatios.includes(requestedRatio))
+                ? requestedRatio
+                : null;
+            // xAI takes lower-case tiers: "1k", "1.5k" (Image 2.0) or "2k".
+            const allowedResolutions = imageUi.resolution?.options || ['1K', '2K'];
             const normalizedXaiResolution =
-                typeof resolution === 'string' && ['1K', '2K'].includes(resolution)
+                typeof resolution === 'string' && allowedResolutions.includes(resolution)
                     ? resolution.toLowerCase()
                     : null;
+            // Only Grok Imagine Image 2.0 accepts quality (auto / low / medium).
+            const qualityOptions = imageUi.quality?.options || [];
+            const normalizedXaiQuality = qualityOptions.includes(image_quality) && image_quality !== 'auto'
+                ? image_quality
+                : null;
 
             const hasInputImages = normalizedInputImages.length > 0;
             const xaiEndpoint = hasInputImages
@@ -77,6 +87,7 @@ async function handleXai(ctx) {
                 n: count,
                 ...(normalizedXaiAspectRatio ? { aspect_ratio: normalizedXaiAspectRatio } : {}),
                 ...(normalizedXaiResolution ? { resolution: normalizedXaiResolution } : {}),
+                ...(normalizedXaiQuality ? { quality: normalizedXaiQuality } : {}),
                 ...(hasInputImages && normalizedInputImages.length === 1
                     ? { image: { type: 'image_url', url: normalizedInputImages[0] } }
                     : {}),
@@ -185,10 +196,11 @@ async function handleXai(ctx) {
                     ? xai_video_quality
                     : (videoUi.videoQuality?.default || '720p');
 
-            const normalizedXaiAspectRatio =
-                typeof normalizedAspectRatio === 'string' && normalizedAspectRatio.trim() !== ''
-                    ? normalizedAspectRatio.trim()
-                    : null;
+            const videoRatios = videoUi.aspectRatioOptions?.options || null;
+            const requestedVideoRatio = typeof normalizedAspectRatio === 'string' ? normalizedAspectRatio.trim() : '';
+            const normalizedXaiAspectRatio = requestedVideoRatio && (!videoRatios || videoRatios.includes(requestedVideoRatio))
+                ? requestedVideoRatio
+                : null;
 
             const startPayload = {
                 model,

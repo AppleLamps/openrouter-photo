@@ -16,7 +16,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 - **Multi-Model Support** — 47 catalog-driven models (31 image, 1 edit, 15 video)
 - **Batch Generation** — Create 1–4 images per request (video models produce 1)
-- **Configurable Output** — Aspect ratio, resolution, video length/quality, and model-specific options from the catalog
+- **Configurable Output** — Aspect ratio, resolution, quality, output format, background, exact pixels, video length/quality, and model-specific options from the catalog (seed, planning depth, thinking level, fast mode, image/web search), shown only for models that support them
 - **Video Generation** — Text-to-video via xAI Grok and Evolink Seedance 2.0, Gemini Omni 1.2 Flash, and MiniMax H3 Max Turbo; image-to-video via Evolink Seedance 2.0, HappyHorse 1.0, Gemini Omni 1.2 Flash, and MiniMax H3 Max Turbo
 - **Audio in Videos** — Evolink Seedance 2.0 supports generated audio
 - **Resilient Async Tasks** — Evolink images and all videos poll independently, preserve partial successes, and allow per-task retry
@@ -65,20 +65,79 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 ## Supported Models
 
-All models are defined in `shared/model-catalog.json` — the single source of truth for routing, UI capabilities, and pricing.
+All models are defined in `shared/model-catalog.json`, the single source of truth for routing, settings and pricing. The tables below are generated from it: run `node scripts/model-table.mjs --write` after changing the catalog (`npm test` fails if a model is missing here).
 
-| Provider | Models | Types | API Key |
-| --- | --- | --- | --- |
-| **Black Forest Labs** | Flux 2 Pro / Max / Flex | Image | OpenRouter |
-| **Google** | Gemini 3 Pro Image, Gemini 2.5 Flash Image (OpenRouter); Nano Banana 2.1, Gemini Omni 1.2 Flash (T2V, I2V, video edit / extend / upscale) (Evolink) | Image, Edit, Video | OpenRouter / Evolink |
-| **OpenAI** | GPT-5 Image, GPT-5 Image Mini, GPT-5.4 Image 2 (OpenRouter); GPT Image 2.5 / 2.6 Sunburst, GPT Image 2.5 / 2.6 Flare (Evolink) | Image, Edit | OpenRouter / Evolink |
-| **ByteDance** | Seedream 4.5 (OpenRouter + Evolink), Seedream 4.5 Edit, Seedream 5 Lite, Seedream 5.0 Pro, Seedream 5.0 Flash, Seedream 5.5, Seedance 2.0 and 2.0 Mini (T2V + I2V) | Image, Edit, Video | OpenRouter / Evolink |
-| **MiniMax** | MiniMax H3 Image, MiniMax H3 Max Turbo (T2V + I2V) | Image, Edit, Video | Evolink |
-| **Tongyi** | Z Image Turbo | Image | Evolink |
-| **HappyHorse** | HappyHorse 1.0 | Image-to-Video | Evolink |
-| **xAI** | Grok Image, Grok Image Quality, Grok Video | Image, Video | xAI |
+<!-- models:start -->
+### Evolink (25)
 
-**Totals:** 47 models — 19 OpenRouter (17 image + 2 video), 25 Evolink (13 image + 12 video), 3 xAI. By type: 31 image, 1 edit, 15 video (6 text-to-video, 6 image-to-video, 3 video-to-video).
+Evolink API key. Images and videos run as async tasks.
+
+| Model | Provider | Type | Settings | Price | ID |
+| --- | --- | --- | --- | --- | --- |
+| Seedream 4.5 | Bytedance | Image | aspect ratio, resolution 2K/4K, exact pixels, up to 14 images | ~$0.03/output | `evolink/doubao-seedream-4.5` |
+| Seedream 4.5 Edit | Bytedance | Edit | aspect ratio, resolution 2K/4K, exact pixels, needs 1–14 images | ~$0.03/output | `evolink/doubao-seedream-4.5/edit` |
+| Seedream 5 Lite | Bytedance | Image | aspect ratio, resolution 2K/3K/4K, exact pixels, format png/jpeg, web search, up to 14 images | ~$0.028/output | `evolink/doubao-seedream-5.0-lite` |
+| Seedream 5.0 Pro | Bytedance | Image + Edit | aspect ratio, resolution 1K/1.5K/2K, exact pixels, format png/jpeg, fast mode, up to 10 images | from $0.034/output | `evolink/doubao-seedream-5.0-pro` |
+| Seedream 5.0 Flash | Bytedance | Image + Edit | aspect ratio, resolution 1K/1.5K/2K, exact pixels, format png/jpeg, up to 10 images | ~$0.014/output | `evolink/doubao-seedream-5.0-flash` |
+| Seedream 5.5 | Bytedance | Image + Edit | aspect ratio, resolution 1K/1.5K/2K, exact pixels, format png/jpeg, background auto/transparent/opaque, up to 10 images | from $0.016/output | `evolink/doubao-seedream-5.5` |
+| MiniMax H3 Image | MiniMax | Image + Edit | aspect ratio, resolution 1K/2K/4K, format jpeg/png/webp, up to 16 images | from $0.026/output | `evolink/minimax-h3-image` |
+| Nano Banana 2.1 | Google | Image + Edit | aspect ratio, resolution 1K/2K/4K, web search, thinking level, image search, up to 14 images | from $0.031/output | `evolink/gemini-nano-banana-2.1` |
+| Z Image Turbo | Tongyi | Image | aspect ratio, seed | ~$0.0038/output | `evolink/z-image-turbo` |
+| GPT Image 2.5 Sunburst | OpenAI | Image + Edit | aspect ratio, resolution 1K/2K/4K, quality low/medium/high/xhigh/max, exact pixels, format png/jpeg/webp, background opaque/transparent, up to 16 images | from $0.0053/output | `evolink/gpt-image-2.5-sunburst` |
+| GPT Image 2.5 Flare | OpenAI | Image + Edit | aspect ratio, resolution 1K/2K/4K, quality low/medium/high/xhigh/max, exact pixels, format png/jpeg/webp, background opaque/transparent, up to 16 images | from $0.0053/output | `evolink/gpt-image-2.5-flare` |
+| GPT Image 2.6 Sunburst | OpenAI | Image + Edit | aspect ratio, resolution 1K/2K/4K, quality low/medium/high/xhigh/max, exact pixels, format png/jpeg/webp, background opaque/transparent, planning depth, up to 16 images | from $0.025/output | `evolink/gpt-image-2.6-sunburst` |
+| GPT Image 2.6 Flare | OpenAI | Image + Edit | aspect ratio, resolution 1K/2K/4K, quality low/medium/high/xhigh/max, exact pixels, format png/jpeg/webp, background opaque/transparent, planning depth, up to 16 images | from $0.025/output | `evolink/gpt-image-2.6-flare` |
+| Seedance 2.0 | Bytedance | Image → Video | aspect ratio, 4–15s, 480p/720p/1080p, audio, content filter, needs 1–2 images | from $0.092/sec | `evolink/seedance-2.0/image-to-video` |
+| Seedance 2.0 | Bytedance | Text → Video | aspect ratio, 4–15s, 480p/720p/1080p, audio, content filter, web search | from $0.092/sec | `evolink/seedance-2.0/text-to-video` |
+| Seedance 2.0 Mini | Bytedance | Text → Video | aspect ratio, 4–15s, 480p/720p, audio, content filter | from $0.046/sec | `evolink/seedance-2.0-mini/text-to-video` |
+| Seedance 2.0 Mini | Bytedance | Image → Video | aspect ratio, 4–15s, 480p/720p, audio, content filter, needs 1–2 images | from $0.046/sec | `evolink/seedance-2.0-mini/image-to-video` |
+| HappyHorse 1.0 | HappyHorse | Image → Video | 3–15s, 720p/1080p, seed, needs 1 image | from $0.14/sec | `evolink/happyhorse-1.0/image-to-video` |
+| Gemini Omni 1.2 Flash | Google | Text → Video | aspect ratio, 3–15s, 360p/720p/1080p/4k, seed | from $0.022/sec | `evolink/gemini-omni-1.2-flash/text-to-video` |
+| Gemini Omni 1.2 Flash | Google | Image → Video | aspect ratio, 3–15s, 360p/720p/1080p/4k, seed, needs 1–2 images | from $0.022/sec | `evolink/gemini-omni-1.2-flash/image-to-video` |
+| Gemini Omni 1.2 Flash Edit | Google | Video → Video | auto/360p/720p/1080p/4k, seed, MP4 input ≤15s, up to 10 images | from $0.032/sec | `evolink/gemini-omni-1.2-flash/video-edit` |
+| Gemini Omni 1.2 Flash Extend | Google | Video → Video | 3–10s, auto/360p/720p/1080p/4k, seed, MP4 input ≤30s, up to 10 images | from $0.032/sec | `evolink/gemini-omni-1.2-flash/video-extend` |
+| Gemini Omni 1.2 Flash Upscale | Google | Video → Video | 720p/1080p/4k, seed, MP4 input ≤15s | from $0.032/sec | `evolink/gemini-omni-1.2-flash/video-upscale` |
+| MiniMax H3 Max Turbo | MiniMax | Text → Video | aspect ratio, 5–15s, 480p/768p | ~$0.038/sec | `evolink/minimax-h3-max-turbo/text-to-video` |
+| MiniMax H3 Max Turbo | MiniMax | Image → Video | 5–15s, 480p/768p, needs 1–2 images | ~$0.038/sec | `evolink/minimax-h3-max-turbo/image-to-video` |
+
+### OpenRouter (19)
+
+OpenRouter API key. Image models use the OpenRouter Image API, falling back to chat completions.
+
+| Model | Provider | Type | Settings | Price | ID |
+| --- | --- | --- | --- | --- | --- |
+| Seedream 4.5 | Bytedance | Image | aspect ratio, resolution 1K/2K/4K, seed, up to 14 images | Usage-priced | `bytedance-seed/seedream-4.5` |
+| Flux 2 Pro | Black Forest Labs | Image | aspect ratio, format png/jpeg, seed, up to 8 images | Usage-priced | `black-forest-labs/flux.2-pro` |
+| Flux 2 Max | Black Forest Labs | Image | aspect ratio, format png/jpeg, seed, up to 8 images | Usage-priced | `black-forest-labs/flux.2-max` |
+| Flux 2 Flex | Black Forest Labs | Image | aspect ratio, format png/jpeg, seed, up to 8 images | Usage-priced | `black-forest-labs/flux.2-flex` |
+| Flux 2 Klein 4B | Black Forest Labs | Image | aspect ratio, format png/jpeg, seed, up to 4 images | Usage-priced | `black-forest-labs/flux.2-klein-4b` |
+| Gemini 3 Pro Image (Stable) | Google | Image | aspect ratio, resolution 1K/2K/4K, up to 14 images | Usage-priced | `google/gemini-3-pro-image` |
+| Gemini 3 Pro Image | Google | Image | aspect ratio, resolution 1K/2K/4K, up to 14 images | Usage-priced | `google/gemini-3-pro-image-preview` |
+| Gemini 3.1 Flash Image | Google | Image | aspect ratio, resolution 512/1K/2K/4K, up to 14 images | Usage-priced | `google/gemini-3.1-flash-image` |
+| Gemini 3.1 Flash Lite Image | Google | Image | aspect ratio, up to 14 images | Usage-priced | `google/gemini-3.1-flash-lite-image` |
+| Gemini 2.5 Flash Image | Google | Image | aspect ratio, up to 3 images | Usage-priced | `google/gemini-2.5-flash-image` |
+| MAI Image 2.5 Pro | Microsoft | Image | aspect ratio, up to 1 image | Usage-priced | `microsoft/mai-image-2.5-pro` |
+| Recraft V4.1 Pro | Recraft | Image | aspect ratio, up to 1 image | Usage-priced | `recraft/recraft-v4.1-pro` |
+| Riverflow V2.5 Pro | Sourceful | Image | aspect ratio, resolution 1K/2K/4K, format png/jpeg/webp, background auto/transparent/opaque, up to 10 images | Usage-priced | `sourceful/riverflow-v2.5-pro` |
+| GPT-5 Image | OpenAI | Image | aspect ratio, quality auto/low/medium/high, background auto/transparent/opaque, up to 16 images | Usage-priced | `openai/gpt-5-image` |
+| GPT-5 Image Mini | OpenAI | Image | aspect ratio, quality auto/low/medium/high, format png/jpeg/webp, background auto/transparent/opaque, up to 16 images | Usage-priced | `openai/gpt-5-image-mini` |
+| GPT-5.4 Image 2 | OpenAI | Image | aspect ratio, quality auto/low/medium/high, format png/jpeg/webp, background auto/opaque, up to 16 images | Usage-priced | `openai/gpt-5.4-image-2` |
+| Grok Imagine Image 2.0 | xAI | Image | aspect ratio, resolution 1K/2K, quality low/medium, up to 3 images | Usage-priced | `x-ai/grok-imagine-image-2.0` |
+| Grok Imagine Video | xAI | Text → Video + Image → Video | aspect ratio, 1–15s, 480p/720p, up to 1 image | from $0.05/sec | `x-ai/grok-imagine-video` |
+| Grok Imagine Video 1.5 | xAI | Image → Video | 1–15s, 480p/720p/1080p, needs 1 image | from $0.08/sec | `x-ai/grok-imagine-video-1.5` |
+
+### xAI (direct) (3)
+
+xAI API key.
+
+| Model | Provider | Type | Settings | Price | ID |
+| --- | --- | --- | --- | --- | --- |
+| Grok Image 2.0 | xAI | Image | aspect ratio, resolution 1K/1.5K/2K, quality auto/low/medium, up to 5 images | ~$0.04/image | `grok-imagine-image-2.0` |
+| Grok Image | xAI | Image | aspect ratio, resolution 1K/2K, up to 5 images | ~$0.02/image | `grok-imagine-image` |
+| Grok Video | xAI | Text → Video | aspect ratio, 1–15s, 480p/720p, up to 3 images | ~$0.05/sec | `grok-imagine-video` |
+
+**Totals:** 47 models (31 Image, 1 Edit, 6 Image → Video, 6 Text → Video, 3 Video → Video). Prices are the app's estimates; Evolink and OpenRouter report the exact charge after each run.
+<!-- models:end -->
 
 ---
 
@@ -98,6 +157,7 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 ├── api/
 │   ├── generate.js           # Generation endpoint — routes to provider modules
 │   ├── generation-routing.js # Shared validation & provider resolution
+│   ├── extra-options.js      # Catalog-driven model options (seed, planning depth, ...)
 │   ├── model-catalog.js      # Backend catalog mirror (CJS)
 │   ├── enhance.js            # Prompt enhancement (xAI)
 │   ├── random-prompt.js      # AI random prompt generation
@@ -105,12 +165,14 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 │   ├── video-status.js       # Backward-compatible status alias
 │   ├── validate-*-key.js     # API key validation handlers
 │   └── providers/            # Provider-specific handlers
-│       ├── openrouter.js
+│       ├── openrouter.js     # OpenRouter Image API, with chat-completions fallback
 │       ├── xai.js
 │       ├── evolink.js        # Evolink image (Seedream, GPT Image, MiniMax, Nano Banana, Z Image Turbo)
-│       ├── evolink-video.js  # Evolink Seedance 2.0 video (T2V + I2V)
+│       ├── evolink-video.js  # Evolink video: Seedance, HappyHorse, Gemini Omni, MiniMax
 │       ├── evolink-task.js   # Shared Evolink task-result helpers
 │       └── format-errors.js
+├── scripts/
+│   └── model-table.mjs       # Generates the README model tables
 ├── shared/
 │   └── model-catalog.json    # Single source of truth for all models
 ├── js/
@@ -122,7 +184,8 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 │   ├── model-capabilities.js # Frontend catalog resolver
 │   ├── models.js             # Model picker exports
 │   ├── settings-keys.js      # Multi-provider API key UI
-│   ├── api.js                # Client-side API wrapper
+│   ├── api.js                # Client-side API wrapper (incl. browser video upload)
+│   ├── video-input.js        # Video attachments for video-to-video models
 │   ├── gallery.js            # Gallery rendering & lightbox
 │   ├── state.js              # State management & persistence
 │   └── ...
@@ -131,6 +194,9 @@ All models are defined in `shared/model-catalog.json` — the single source of t
 │   ├── model-catalog.test.js
 │   ├── generate-routing.test.js
 │   ├── evolink-payload.test.js
+│   ├── extra-options.test.js
+│   ├── evolink-video-input.test.js
+│   ├── readme-models.test.js
 │   ├── generation-status.test.js
 │   ├── generation-polling.test.js
 │   ├── pwa-assets.test.js

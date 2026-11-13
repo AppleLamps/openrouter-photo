@@ -1,12 +1,14 @@
 const { redactKey } = require('../_middleware');
 const {
     getEvolinkConfig,
+    resolveCapabilities,
     getImageOutputPrice,
     getInputImagePrice,
     getResolutionMultiplier,
     evolinkCreditsToUsd,
 } = require('../model-catalog');
 const { formatEvolinkError } = require('./format-errors');
+const { applyExtraOptions } = require('../extra-options');
 const { buildEvolinkProxyUrl } = require('./evolink-task');
 
 const EVOLINK_SEEDREAM_ASPECT_RATIOS = new Set(['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']);
@@ -272,10 +274,17 @@ function buildGptImagePayload({
     uploadedImageUrls = [],
     outputFormat,
     outputFormatOptions,
+    background = null,
+    backgroundOptions = [],
 }) {
     const size = exactImageSize || normalizeGptImageAspectRatio(normalizedAspectRatio);
     const ratioMode = !exactImageSize && size !== 'auto';
-    const normalizedOutputFormat = normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions);
+    const transparent = background === 'transparent' && backgroundOptions.includes('transparent');
+    const requestedFormat = normalizeSeedreamOutputFormat(outputFormat, outputFormatOptions);
+    // A transparent background needs an alpha-capable format (png or webp).
+    const normalizedOutputFormat = transparent && !['png', 'webp'].includes(requestedFormat)
+        ? 'png'
+        : requestedFormat;
 
     return {
         model: apiModel,
@@ -285,6 +294,7 @@ function buildGptImagePayload({
         ...(ratioMode ? { resolution: normalizeGptImageResolution(resolution, resolutionOptions, resolutionDefault) } : {}),
         quality: normalizeGptImageQuality(imageQuality, qualityOptions, qualityDefault),
         ...(normalizedOutputFormat ? { output_format: normalizedOutputFormat } : {}),
+        ...(transparent ? { background: 'transparent' } : {}),
         ...(uploadedImageUrls.length > 0 ? { image_urls: uploadedImageUrls } : {}),
     };
 }
@@ -304,9 +314,11 @@ async function handleEvolink(ctx) {
         normalizedInputImages,
         enable_web_search,
         evolinkKey,
+        extraOptions = {},
     } = ctx;
 
     const evolinkConfig = getEvolinkConfig(model);
+    const extraOptionDefinitions = resolveCapabilities(model).ui?.extraOptions || [];
     if (!evolinkConfig) {
         return res.status(500).json({ error: 'Evolink model configuration is missing' });
     }
@@ -447,6 +459,8 @@ async function handleEvolink(ctx) {
                     uploadedImageUrls,
                     outputFormat: output_format,
                     outputFormatOptions,
+                    background,
+                    backgroundOptions,
                 });
             } else if (variant === 'minimax-image' || variant === 'nano-banana') {
                 const build = variant === 'minimax-image' ? buildMinimaxImagePayload : buildNanoBananaPayload;
@@ -484,6 +498,7 @@ async function handleEvolink(ctx) {
                     backgroundOptions,
                 });
             }
+            applyExtraOptions(payload, extraOptionDefinitions, extraOptions);
             return createTask(payload, index);
         };
 

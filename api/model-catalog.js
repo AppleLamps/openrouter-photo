@@ -4,7 +4,7 @@
 
 const catalog = require('../shared/model-catalog.json');
 
-const { capabilityProfiles, models, legacyRedirects, defaultModelId, defaults, providers } = catalog;
+const { capabilityProfiles, models, legacyRedirects, defaultModelId, defaults, providers, optionPresets } = catalog;
 
 // Evolink bills in credits; the dashboard publishes the credit → USD rate.
 const EVOLINK_CREDIT_USD = Number(providers?.evolink?.creditUsd) || 0.0147;
@@ -21,6 +21,17 @@ function deepMerge(base, override) {
         }
     }
     return out;
+}
+
+/**
+ * Model-specific extra settings (seed, planning depth, thinking level, ...).
+ * Catalog entries may reference a shared preset: `{ "preset": "seed", "max": 4294967295 }`.
+ */
+function expandExtraOptions(options) {
+    if (!Array.isArray(options)) return [];
+    return options
+        .map((option) => (option?.preset ? { ...(optionPresets?.[option.preset] || {}), ...option } : option))
+        .filter((option) => option && typeof option.key === 'string' && typeof option.param === 'string');
 }
 
 function findModel(id) {
@@ -57,6 +68,10 @@ function resolveCapabilities(modelId) {
         merged.pricing = { ...(profile.pricing || {}), ...entry.pricing };
     } else if (profile.pricing) {
         merged.pricing = profile.pricing;
+    }
+
+    if (merged.ui?.extraOptions) {
+        merged.ui = { ...merged.ui, extraOptions: expandExtraOptions(merged.ui.extraOptions) };
     }
 
     merged.modelId = id;
@@ -235,6 +250,7 @@ function getUiCapabilities(modelId) {
         // Models that bill per search (Nano Banana 2.1) start with search off.
         webSearchDefault: ui.webSearchDefault !== false,
         background: ui.background || null,
+        extraOptions: Array.isArray(ui.extraOptions) ? ui.extraOptions : [],
         flashhead: Boolean(ui.flashhead),
         imageToVideoHint: Boolean(ui.imageToVideoHint),
         videoInputHint: Boolean(ui.videoInputHint),

@@ -4,6 +4,7 @@ const {
     resolveXaiApiKey,
     resolveEvolinkApiKey,
 } = require('./_middleware');
+const { sanitizeExtraOptions } = require('./extra-options');
 const {
     normalizeModelId,
     resolveCapabilities,
@@ -88,6 +89,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         image_urls = [],
         video_url,
         video_duration,
+        extra_options,
     } = req.body;
 
     const model = normalizeModelId(requestedModel);
@@ -193,6 +195,7 @@ module.exports = withMiddleware(async function handler(req, res) {
         evolinkKey,
         inputVideoUrl,
         inputVideoDuration,
+        extraOptions: sanitizeExtraOptions(extra_options),
     };
 
     switch (modelCaps.backend) {

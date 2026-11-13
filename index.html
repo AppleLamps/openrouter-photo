@@ -614,7 +614,7 @@
                         <option value="xhigh">Extra High</option>
                         <option value="max">Max</option>
                     </select>
-                    <p class="settings-hint">Rendering effort for GPT Image 2.5. Higher tiers use more output tokens and cost more.</p>
+                    <p class="settings-hint">Rendering effort. Higher tiers take longer and, on token-billed models, cost more.</p>
                 </div>
 
                 <!-- Exact pixel dimensions -->
@@ -649,8 +649,11 @@
                     <select id="setting-background" class="settings-select" aria-label="Background">
                         <option value="auto" selected>Auto</option>
                     </select>
-                    <p class="settings-hint">Transparent outputs a PNG with a real alpha channel.</p>
+                    <p class="settings-hint">Transparent needs PNG or WebP output; JPEG is switched to PNG.</p>
                 </div>
+
+                <!-- Model-specific options (seed, planning depth, thinking level, ...) from the catalog -->
+                <div id="extra-options-container"></div>
 
 
 
@@ -688,7 +691,7 @@
                         <input type="checkbox" id="setting-content-filter-switch" checked>
                         <span>Standard content filter</span>
                     </label>
-                    <p class="settings-hint">Unchecked enables mature mode (relaxed restrictions) at a 10% higher price. Enabled by default for Seedance 2.0 Mini.</p>
+                    <p class="settings-hint">Unchecked relaxes content restrictions at a 10% higher price. Seedance 2.0 Mini starts relaxed; Seedance 2.0 turns off web search while relaxed.</p>
                 </div>
 
                 <!-- Evolink Web Search -->

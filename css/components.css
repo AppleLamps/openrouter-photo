@@ -1711,7 +1711,7 @@ body.is-settings-open {
     margin-bottom: 20px;
 }
 
-.settings-tab-panel[data-settings-panel="generation"] .settings-group:first-child {
+.settings-tab-panel[data-settings-panel="generation"] .settings-group:first-child:not(.settings-group--extra) {
     padding: 14px 15px;
     border: 1px solid rgba(17, 17, 17, 0.14);
     border-radius: 14px;
@@ -1732,6 +1732,12 @@ body.is-settings-open {
 
 .settings-group:last-child {
     margin-bottom: 0;
+}
+
+/* Model-specific options render inside their own container, so keep the
+   normal spacing before the next panel section. */
+.settings-group--extra:last-child {
+    margin-bottom: 20px;
 }
 
 .settings-section-heading {

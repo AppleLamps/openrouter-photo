@@ -72,12 +72,12 @@ describe('generate validation', () => {
         const res = makeRes();
 
         await handler(makeReq({
-            prompt: 'a'.repeat(2001),
+            prompt: 'a'.repeat(4001),
             model: 'evolink/doubao-seedream-5.0-pro',
         }), res);
 
         assert.equal(res.statusCode, 400);
-        assert.match(res.body.error, /2000 characters/);
+        assert.match(res.body.error, /4000 characters/);
     });
 
     it('validates seedream 5 pro exact dimensions before API key validation', async () => {

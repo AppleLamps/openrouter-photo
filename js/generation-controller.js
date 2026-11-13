@@ -25,6 +25,8 @@ import {
 } from './gallery.js';
 import { DEFAULT_MODEL_ID, getOutputConstraints, getUiCapabilities, normalizeModelId, resolveCapabilities } from './models.js';
 import {
+    applyExtraOptionValues,
+    readExtraOptionValues,
     syncModelDropdownUI,
     syncNumImagesDropdownUI,
     updateSettingsForModel,
@@ -499,6 +501,7 @@ function getGenerationSettings() {
         ...(ui.quality ? { image_quality: imageQualitySelect?.value || undefined } : {}),
         output_format: outputFormatSelect?.value || undefined,
         ...(ui.background ? { background: document.getElementById('setting-background')?.value || undefined } : {}),
+        ...(ui.extraOptions.length > 0 ? { extra_options: readExtraOptionValues(model) } : {}),
         xai_video_length: xaiVideoLength,
         xai_video_quality: xaiVideoQualitySelect?.value || '720p',
         generate_audio_switch: generateAudioSwitch instanceof HTMLInputElement ? generateAudioSwitch.checked : true,
@@ -560,6 +563,8 @@ export function restoreSettings(settings) {
 
     const outputFormatSelect = document.getElementById('setting-output-format');
     setSelectIfValid(outputFormatSelect, settings.output_format, ui.outputFormat?.options || null);
+
+    if (settings.extra_options) applyExtraOptionValues(model, settings.extra_options);
 
     const backgroundSelect = document.getElementById('setting-background');
     if (ui.background && backgroundSelect instanceof HTMLSelectElement) {
