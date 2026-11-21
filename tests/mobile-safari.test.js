@@ -108,3 +108,20 @@ describe('touch affordances', () => {
         }
     });
 });
+
+describe('page scrolling', () => {
+    // body is its own (never-scrolling) scroll container because of
+    // overflow-x, so overscroll-behavior on it swallows mouse-wheel scrolls
+    // before they reach the page. The rubber-band guard belongs on <html>.
+    const rule = (css, selector) => {
+        const match = css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([^}]*)\\}`));
+        assert.ok(match, `${selector} rule is missing from css/base.css`);
+        return match[1];
+    };
+
+    it('keeps overscroll-behavior off <body> so wheel scrolling reaches the page', () => {
+        const css = read('css/base.css');
+        assert.doesNotMatch(rule(css, 'body'), /overscroll-behavior/);
+        assert.match(rule(css, 'html'), /overscroll-behavior-y:\s*contain/);
+    });
+});

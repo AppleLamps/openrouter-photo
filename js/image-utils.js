@@ -4,14 +4,23 @@
 
 /**
  * Convert a data URI to a Blob (saves ~33% space vs base64)
- * @param {string} dataUri - Base64 data URI (e.g., "data:image/png;base64,...")
+ * Handles both base64 ("data:image/png;base64,...") and plain/percent-encoded
+ * ("data:image/svg+xml;utf8,<svg...") payloads.
+ * @param {string} dataUri
  * @returns {Blob}
  */
 export function dataUriToBlob(dataUri) {
-    const [header, base64] = dataUri.split(',');
-    const mimeMatch = header.match(/:(.*?);/);
+    const commaIndex = dataUri.indexOf(',');
+    const header = dataUri.slice(0, commaIndex);
+    const payload = dataUri.slice(commaIndex + 1);
+    const mimeMatch = header.match(/^data:([^;,]+)/i);
     const mime = mimeMatch ? mimeMatch[1] : 'image/png';
-    const binary = atob(base64);
+
+    if (!/;base64$/i.test(header)) {
+        return new Blob([decodeURIComponent(payload)], { type: mime });
+    }
+
+    const binary = atob(payload);
     const array = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
         array[i] = binary.charCodeAt(i);
