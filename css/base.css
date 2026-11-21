@@ -97,6 +97,11 @@ html {
     /* Dynamic viewport: avoids 100vh bugs when iOS toolbars show/hide */
     min-height: 100vh;
     min-height: 100dvh;
+    /* Stop the page rubber-banding behind the fixed composer. This has to sit
+       on <html>, the element that actually scrolls: <body> is its own (non-
+       scrolling) scroll container because of overflow-x, and `contain` there
+       stops mouse-wheel scrolls from ever reaching the page. */
+    overscroll-behavior-y: contain;
 }
 
 body {
@@ -112,8 +117,6 @@ body {
     overflow-x: hidden;
     /* Reduce accidental horizontal panning on iOS while scrolling vertically */
     touch-action: pan-y pinch-zoom;
-    /* Stop the page rubber-banding behind the fixed composer */
-    overscroll-behavior-y: contain;
 }
 
 img {
