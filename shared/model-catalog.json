@@ -311,7 +311,7 @@
         "supportsGenerateAudio": true,
         "defaultGenerateAudio": true,
         "supportsContentFilter": true,
-        "defaultContentFilter": true
+        "defaultContentFilter": false
       }
     },
     "evolink-video-seedance2-t2v": {
@@ -323,6 +323,7 @@
         "videoQuality": {"options": ["480p", "720p", "1080p"], "default": "720p"},
         "generateAudio": true,
         "webSearch": true,
+        "webSearchDefault": false,
         "contentFilter": true
       },
       "output": {"maxImages": 1, "defaultImages": 1},
@@ -337,7 +338,7 @@
         "defaultGenerateAudio": true,
         "supportsWebSearch": true,
         "supportsContentFilter": true,
-        "defaultContentFilter": true
+        "defaultContentFilter": false
       }
     },
     "evolink-video-seedance2-mini-t2v": {

@@ -74,8 +74,23 @@ describe('evolink video cost estimation', () => {
         });
 
         assert.equal(res.statusCode, 202);
-        assert.equal(res.body.estimated_cost.toFixed(4), '2.9760');
-        assert.equal(res.body.meta.total_usage.toFixed(4), '2.9760');
+        // Seedance starts with relaxed filtering: 6 s x $0.496 x 1.1.
+        assert.equal(res.body.estimated_cost.toFixed(4), '3.2736');
+        assert.equal(res.body.meta.total_usage.toFixed(4), '3.2736');
+
+        const standard = makeRes();
+        await handleEvolinkVideo({
+            res: standard,
+            model: 'evolink/seedance-2.0/image-to-video',
+            prompt: 'a cat',
+            normalizedInputImages: ['data:image/jpeg;base64,AA=='],
+            normalizedAspectRatio: '16:9',
+            xai_video_length: 6,
+            xai_video_quality: '1080p',
+            content_filter_switch: true,
+            evolinkKey: 'test-key',
+        });
+        assert.equal(standard.body.estimated_cost.toFixed(4), '2.9760');
     });
 
     it('prefers the credits Evolink reserves over the catalog estimate', async () => {

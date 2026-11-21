@@ -12,7 +12,7 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 
 ### Image & Video Generation
 
-- **Seedance 2.0 Mini I2V** — In the model picker's Video tab, select Seedance 2.0 Mini labeled Image → Video and attach one start frame or two start/end frames. Supports 4–15 seconds, 480p/720p, and audio. Relaxed filtering is on by default (+10%); re-enable Standard content filter in Settings to turn it off.
+- **Seedance 2.0 Mini I2V** — In the model picker's Video tab, select Seedance 2.0 Mini labeled Image → Video and attach one start frame or two start/end frames. Supports 4–15 seconds, 480p/720p, and audio. Relaxed filtering is on by default for all Seedance models (+10%); check Standard content filter in Settings for the normal price. Seedance 2.0 cannot use web search while relaxed, so its web search starts off.
 
 - **Multi-Model Support** — 47 catalog-driven models (31 image, 1 edit, 15 video)
 - **Batch Generation** — Create 1–4 images per request (video models produce 1)
