@@ -23,7 +23,7 @@ import {
     removePlaceholder,
     showErrorCard,
 } from './gallery.js';
-import { DEFAULT_MODEL_ID, getOutputConstraints, getUiCapabilities, normalizeModelId, resolveCapabilities } from './models.js';
+import { DEFAULT_MODEL_ID, getOutputConstraints, getUiCapabilities, isExactSizeAllowed, normalizeModelId, resolveCapabilities } from './models.js';
 import {
     applyExtraOptionValues,
     readExtraOptionValues,
@@ -575,9 +575,12 @@ export function restoreSettings(settings) {
 
     const exactMatch = typeof settings.image_size === 'string' && settings.image_size.match(/^(\d+)x(\d+)$/);
     const sizeModeSelect = document.getElementById('setting-size-mode');
+    // A saved size can fall outside limits the model has since tightened; restore
+    // the aspect-ratio mode instead so the request is not rejected with a 400.
+    const exactAllowed = exactMatch && isExactSizeAllowed(ui.exactSize, Number(exactMatch[1]), Number(exactMatch[2]));
     if (ui.exactSize && sizeModeSelect instanceof HTMLSelectElement) {
-        sizeModeSelect.value = exactMatch ? 'exact' : 'ratio';
-        if (exactMatch) {
+        sizeModeSelect.value = exactAllowed ? 'exact' : 'ratio';
+        if (exactAllowed) {
             setNumberInput(document.getElementById('setting-exact-width'), exactMatch[1], ui.exactSize.defaultWidth, 1, Number.MAX_SAFE_INTEGER);
             setNumberInput(document.getElementById('setting-exact-height'), exactMatch[2], ui.exactSize.defaultHeight, 1, Number.MAX_SAFE_INTEGER);
         }

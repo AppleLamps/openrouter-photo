@@ -15,6 +15,24 @@ describe('spend tracker metrics', () => {
         assert.equal(stored.byModel.m.generations, 1);
         assert.equal(stored.byModel.m.images, 1);
     });
+
+    it('keeps only the newest task keys so storage does not grow forever', async () => {
+        const data = new Map();
+        global.localStorage = { getItem: key => data.get(key), setItem: (key, value) => data.set(key, value) };
+        global.document = { getElementById: () => null };
+        const { recordSpend } = await import('../js/spend-tracker.js');
+        for (let i = 0; i < 520; i++) {
+            recordSpend({ recovery_key: `evolink:t${i}`, requests: [{ model: 'm', usage: 0.01, delivered_count: 1 }] }, 1);
+        }
+        const stored = JSON.parse(data.get('openrouter_spend_v1'));
+        assert.equal(stored.recordedTasks.length, 500);
+        assert.equal(stored.recordedTasks.at(-1), 'evolink:t519');
+        assert.equal(stored.byModel.m.generations, 520);
+        // A recent task replayed after reload is still recognised.
+        recordSpend({ recovery_key: 'evolink:t519', requests: [{ model: 'm', usage: 0.01, delivered_count: 1 }] }, 1);
+        assert.equal(JSON.parse(data.get('openrouter_spend_v1')).byModel.m.generations, 520);
+    });
+
     it('keeps positive fractional image counts from rounding to zero', async () => {
         const { getSpendBreakdownMetrics } = await import('../js/spend-tracker.js');
 

@@ -82,6 +82,28 @@ export function generateVideoPoster(blob) {
 }
 
 /**
+ * Whether any pixel drawn on the canvas is not fully opaque. Used before a
+ * JPEG fallback, which would paint transparent areas black (Safari has no
+ * canvas WebP encoder, so it always takes that fallback).
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} width
+ * @param {number} height
+ * @returns {boolean}
+ */
+function canvasHasTransparency(ctx, width, height) {
+    try {
+        const { data } = ctx.getImageData(0, 0, width, height);
+        for (let i = 3; i < data.length; i += 4) {
+            if (data[i] < 255) return true;
+        }
+        return false;
+    } catch {
+        // Unreadable pixels: assume alpha so we never flatten it to black.
+        return true;
+    }
+}
+
+/**
  * Generate a thumbnail from an image blob
  * @param {Blob} imageBlob - Original image
  * @param {number} maxSize - Max dimension (default 512 for good gallery quality)
@@ -122,6 +144,9 @@ export async function generateThumbnail(imageBlob, maxSize = 512) {
                     (blob) => {
                         // Browsers without a WebP encoder return a PNG instead of null.
                         if (blob && blob.type === 'image/webp') {
+                            resolve(blob);
+                        } else if (blob && canvasHasTransparency(ctx, width, height)) {
+                            // Keep the browser's PNG so transparency survives.
                             resolve(blob);
                         } else {
                             // Fallback to JPEG if WebP not supported
@@ -180,6 +205,10 @@ export async function compressFullImage(imageBlob, quality = 0.92) {
                 (webpBlob) => {
                     if (webpBlob && webpBlob.type === 'image/webp' && webpBlob.size < imageBlob.size) {
                         resolve(webpBlob);
+                    } else if (canvasHasTransparency(ctx, canvas.width, canvas.height)) {
+                        // JPEG would flatten alpha to black (Safari has no WebP
+                        // encoder, and WebP can also lose on size), so keep the original.
+                        resolve(imageBlob);
                     } else {
                         canvas.toBlob(
                             (jpegBlob) => {

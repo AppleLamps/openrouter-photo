@@ -5,6 +5,9 @@
 import { findModelById } from './models.js';
 
 const SPEND_STORAGE_KEY = 'openrouter_spend_v1';
+// Task keys only guard against counting a recovered task twice, which happens
+// within the 24-hour recovery window, so the newest few hundred are enough.
+const MAX_RECORDED_TASKS = 500;
 
 function safeParseJson(text) {
     try {
@@ -131,6 +134,9 @@ export function recordSpend(meta, imagesReturned) {
 
     if (hasPending) {
         spend.pending = true;
+    }
+    if (spend.recordedTasks.length > MAX_RECORDED_TASKS) {
+        spend.recordedTasks = spend.recordedTasks.slice(-MAX_RECORDED_TASKS);
     }
 
     saveSpendState(spend);

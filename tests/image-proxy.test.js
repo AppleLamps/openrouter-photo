@@ -219,3 +219,88 @@ describe('image proxy allowlist', () => {
         assert.equal(res.statusCode, 413);
     });
 });
+
+describe('image proxy streaming', () => {
+    const imageUrl = 'https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream/big.png';
+
+    function streamingUpstream(chunks) {
+        return {
+            ok: true,
+            status: 200,
+            headers: {
+                get(name) {
+                    return name.toLowerCase() === 'content-type' ? 'image/png' : null;
+                },
+            },
+            body: new ReadableStream({
+                start(controller) {
+                    for (const chunk of chunks) controller.enqueue(chunk);
+                    controller.close();
+                },
+            }),
+        };
+    }
+
+    function makeStreamingRes() {
+        const res = makeRes();
+        res.written = [];
+        res.headersSent = false;
+        res.ended = false;
+        res.destroyed = false;
+        res.write = function write(chunk) {
+            this.headersSent = true;
+            this.written.push(Buffer.from(chunk));
+            return true;
+        };
+        res.end = function end() {
+            this.ended = true;
+            return this;
+        };
+        res.destroy = function destroy() {
+            this.destroyed = true;
+        };
+        res.removeHeader = function removeHeader(name) {
+            delete this.headers[name.toLowerCase()];
+        };
+        return res;
+    }
+
+    it('streams the body in chunks instead of buffering it, so large PNGs pass Vercel limits', async () => {
+        const chunks = [new Uint8Array(3 * 1024 * 1024).fill(1), new Uint8Array(3 * 1024 * 1024).fill(2)];
+        global.fetch = async () => streamingUpstream(chunks);
+
+        const res = makeStreamingRes();
+        await handler(makeReq(imageUrl), res);
+
+        assert.equal(res.statusCode, 200);
+        assert.equal(res.headers['content-type'], 'image/png');
+        assert.equal(res.body, null, 'should not buffer through res.send');
+        assert.equal(res.written.length, 2);
+        assert.equal(Buffer.concat(res.written).byteLength, 6 * 1024 * 1024);
+        assert.equal(res.ended, true);
+    });
+
+    it('returns 413 when a stream with no content-length goes over the limit before any bytes are sent', async () => {
+        global.fetch = async () => streamingUpstream([new Uint8Array(MAX_IMAGE_PROXY_BYTES + 1)]);
+
+        const res = makeStreamingRes();
+        await handler(makeReq(imageUrl), res);
+
+        assert.equal(res.statusCode, 413);
+        assert.equal(res.written.length, 0);
+        assert.equal(res.headers['content-type'], undefined);
+    });
+
+    it('cuts the connection when the limit is crossed after bytes were already sent', async () => {
+        global.fetch = async () => streamingUpstream([
+            new Uint8Array(MAX_IMAGE_PROXY_BYTES - 10),
+            new Uint8Array(20),
+        ]);
+
+        const res = makeStreamingRes();
+        await handler(makeReq(imageUrl), res);
+
+        assert.equal(res.destroyed, true);
+        assert.equal(res.ended, false);
+    });
+});

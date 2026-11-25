@@ -114,6 +114,52 @@ async function readBodyWithLimit(upstream, maxBytes = MAX_IMAGE_PROXY_BYTES) {
     return Buffer.concat(chunks, totalBytes);
 }
 
+function tooLargeError() {
+    const error = new Error('Image is too large to proxy');
+    error.code = 'IMAGE_PROXY_TOO_LARGE';
+    return error;
+}
+
+function waitForDrain(res) {
+    return new Promise((resolve, reject) => {
+        const onDrain = () => { cleanup(); resolve(); };
+        const onClose = () => { cleanup(); reject(new Error('Client closed the image proxy response')); };
+        const cleanup = () => {
+            res.off('drain', onDrain);
+            res.off('close', onClose);
+        };
+        res.on('drain', onDrain);
+        res.on('close', onClose);
+    });
+}
+
+/**
+ * Pipe the upstream body to `res` chunk by chunk, honouring backpressure and
+ * stopping once `maxBytes` is exceeded (content-length can be absent or wrong).
+ */
+async function streamBodyWithLimit(upstream, res, maxBytes = MAX_IMAGE_PROXY_BYTES) {
+    const reader = upstream.body.getReader();
+    let totalBytes = 0;
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            totalBytes += value.byteLength;
+            if (totalBytes > maxBytes) {
+                await reader.cancel('Image proxy byte limit exceeded').catch(() => {});
+                throw tooLargeError();
+            }
+            if (!res.write(value) && typeof res.on === 'function') await waitForDrain(res);
+        }
+    } catch (error) {
+        await reader.cancel().catch(() => {});
+        throw error;
+    } finally {
+        reader.releaseLock();
+    }
+    return totalBytes;
+}
+
 module.exports = withMiddleware(async function handler(req, res) {
     const rawUrl = normalizeProxyUrl(req.query?.url);
     if (!rawUrl) {
@@ -158,11 +204,33 @@ module.exports = withMiddleware(async function handler(req, res) {
         return res.status(415).json({ error: 'Unsupported proxied content type' });
     }
 
-    let bytes;
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+
+    const canStream = typeof upstream.body?.getReader === 'function' && typeof res.write === 'function';
     try {
-        bytes = await readBodyWithLimit(upstream);
+        if (canStream) {
+            // Streamed, not buffered: Vercel caps a buffered function response
+            // at 4.5 MB, which a 2K PNG easily exceeds, while streamed responses
+            // have no such cap. This also starts the download sooner.
+            res.status(200);
+            await streamBodyWithLimit(upstream, res);
+            return res.end();
+        }
+        const bytes = await readBodyWithLimit(upstream);
+        return res.status(200).send(bytes);
     } catch (error) {
-        clearTimeout(timeout);
+        if (res.headersSent) {
+            // Bytes already went out with a 200, so cut the connection: the
+            // client then sees a failed download rather than a truncated image.
+            res.destroy?.(error);
+            return undefined;
+        }
+        for (const header of ['Content-Type', 'Content-Security-Policy', 'Cache-Control']) {
+            res.removeHeader?.(header);
+        }
         if (error?.code === 'IMAGE_PROXY_TOO_LARGE') {
             return res.status(413).json({ error: 'Image is too large to proxy' });
         }
@@ -170,21 +238,14 @@ module.exports = withMiddleware(async function handler(req, res) {
             return res.status(504).json({ error: 'Image proxy request timed out' });
         }
         return res.status(502).json({ error: 'Failed to read image' });
+    } finally {
+        clearTimeout(timeout);
     }
-    clearTimeout(timeout);
-    if (bytes.byteLength > MAX_IMAGE_PROXY_BYTES) {
-        return res.status(413).json({ error: 'Image is too large to proxy' });
-    }
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
-    res.setHeader('Cache-Control', 'private, max-age=86400');
-    return res.status(200).send(bytes);
 }, { methods: ['GET'], skipBodyParse: true });
 
 module.exports.isAllowedImageProxyUrl = isAllowedImageProxyUrl;
 module.exports.fetchAllowedImage = fetchAllowedImage;
 module.exports.readBodyWithLimit = readBodyWithLimit;
+module.exports.streamBodyWithLimit = streamBodyWithLimit;
 module.exports.isAllowedImageContentType = isAllowedImageContentType;
 module.exports.MAX_IMAGE_PROXY_BYTES = MAX_IMAGE_PROXY_BYTES;
