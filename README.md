@@ -68,6 +68,8 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 All models are defined in `shared/model-catalog.json`, the single source of truth for routing, settings and pricing. The tables below are generated from it: run `node scripts/model-table.mjs --write` after changing the catalog (`npm test` fails if a model is missing here).
 
 <!-- models:start -->
+**Default model:** Seedream 5.5 (`evolink/doubao-seedream-5.5`), selected on first load; needs an Evolink API key.
+
 ### Evolink (25)
 
 Evolink API key. Images and videos run as async tasks.
@@ -79,7 +81,7 @@ Evolink API key. Images and videos run as async tasks.
 | Seedream 5 Lite | Bytedance | Image | aspect ratio, resolution 2K/3K/4K, exact pixels, format png/jpeg, web search, up to 14 images | ~$0.028/output | `evolink/doubao-seedream-5.0-lite` |
 | Seedream 5.0 Pro | Bytedance | Image + Edit | aspect ratio, resolution 1K/1.5K/2K, exact pixels, format png/jpeg, fast mode, up to 10 images | from $0.034/output | `evolink/doubao-seedream-5.0-pro` |
 | Seedream 5.0 Flash | Bytedance | Image + Edit | aspect ratio, resolution 1K/1.5K/2K, exact pixels, format png/jpeg, up to 10 images | ~$0.014/output | `evolink/doubao-seedream-5.0-flash` |
-| Seedream 5.5 | Bytedance | Image + Edit | aspect ratio, resolution 1K/1.5K/2K, exact pixels, format png/jpeg, background auto/transparent/opaque, up to 10 images | from $0.016/output | `evolink/doubao-seedream-5.5` |
+| Seedream 5.5 **(default)** | Bytedance | Image + Edit | aspect ratio, resolution 1K/1.5K/2K, exact pixels, format png/jpeg, background auto/transparent/opaque, up to 10 images | from $0.016/output | `evolink/doubao-seedream-5.5` |
 | MiniMax H3 Image | MiniMax | Image + Edit | aspect ratio, resolution 1K/2K/4K, format jpeg/png/webp, up to 16 images | from $0.026/output | `evolink/minimax-h3-image` |
 | Nano Banana 2.1 | Google | Image + Edit | aspect ratio, resolution 1K/2K/4K, web search, thinking level, image search, up to 14 images | from $0.031/output | `evolink/gemini-nano-banana-2.1` |
 | Z Image Turbo | Tongyi | Image | aspect ratio, seed | ~$0.0038/output | `evolink/z-image-turbo` |
@@ -217,7 +219,7 @@ xAI API key.
 - API key for at least one provider:
   - [OpenRouter](https://openrouter.ai/keys) — FLUX, Gemini, GPT-5, Seedream (OR)
   - [xAI](https://console.x.ai) — Grok image and video models
-  - [Evolink](https://evolink.ai/dashboard/keys) — Seedream, GPT Image, Nano Banana, MiniMax, Z Image Turbo, Seedance, Gemini Omni, and HappyHorse models
+  - [Evolink](https://evolink.ai/dashboard/keys) — Seedream, GPT Image, Nano Banana, MiniMax, Z Image Turbo, Seedance, Gemini Omni, and HappyHorse models (including the default model, Seedream 5.5)
 
 ### Local Development
 

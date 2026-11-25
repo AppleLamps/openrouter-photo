@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { MODELS, TYPE_PILL_LABEL } = await import(path.join(root, 'js/models.js'));
+const { MODELS, TYPE_PILL_LABEL, DEFAULT_MODEL_ID } = await import(path.join(root, 'js/models.js'));
 const { resolveCapabilities, getUiCapabilities, isVisibleInPicker } = await import(path.join(root, 'js/model-capabilities.js'));
 
 const ROUTES = [
@@ -54,6 +54,11 @@ function typeLabel(model) {
 export function buildModelTables() {
     const visible = MODELS.filter((m) => isVisibleInPicker(m.id));
     const lines = [];
+    const defaultModel = visible.find((m) => m.id === DEFAULT_MODEL_ID);
+    if (defaultModel) {
+        const route = ROUTES.find((r) => r.key === defaultModel.apiKey);
+        lines.push(`**Default model:** ${defaultModel.name} (\`${defaultModel.id}\`), selected on first load${route ? `; needs an ${route.title} API key` : ''}.`, '');
+    }
     const typeCounts = {};
     for (const m of visible) typeCounts[m.type] = (typeCounts[m.type] || 0) + 1;
 
@@ -63,7 +68,7 @@ export function buildModelTables() {
         lines.push(`### ${route.title} (${rows.length})`, '', route.note, '');
         lines.push('| Model | Provider | Type | Settings | Price | ID |', '| --- | --- | --- | --- | --- | --- |');
         for (const m of rows) {
-            lines.push(`| ${m.name} | ${m.provider} | ${typeLabel(m)} | ${settingsFor(m.id)} | ${m.costLabel} | \`${m.id}\` |`);
+            lines.push(`| ${m.id === DEFAULT_MODEL_ID ? `${m.name} **(default)**` : m.name} | ${m.provider} | ${typeLabel(m)} | ${settingsFor(m.id)} | ${m.costLabel} | \`${m.id}\` |`);
         }
         lines.push('');
     }
