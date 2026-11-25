@@ -1,5 +1,5 @@
 {
-  "defaultModelId": "evolink/doubao-seedream-5.0-pro",
+  "defaultModelId": "evolink/doubao-seedream-5.5",
   "defaults": {
     "animateModelId": "evolink/seedance-2.0/image-to-video",
     "videoEditModelId": "evolink/gemini-omni-1.2-flash/video-edit"
