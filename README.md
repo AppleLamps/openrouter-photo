@@ -56,8 +56,8 @@ A modern, lightweight AI image and video generator. Built with vanilla JavaScrip
 - **Touch Gestures** — Swipe-to-close lightbox on mobile
 - **PWA Support** — Install as a standalone app and reload the cached application shell offline
 - **Persistent Storage** — IndexedDB with localStorage fallback
-- **Generation Recovery** — Pending tasks resume after reload; status-check retries reuse the existing task and avoid duplicate spend entries.
-- **Storage Quality** — Choose optimized or original-quality storage for new images in Settings → Storage. New videos and preview posters are saved in IndexedDB when space allows; a warning appears when the media file cannot be saved.
+- **Generation Recovery** — Pending tasks resume after reload; status-check retries reuse the existing task and avoid duplicate spend entries. Restored settings are checked against the model's current limits, so an exact size the model no longer accepts falls back to aspect-ratio mode.
+- **Storage Quality** — Choose optimized or original-quality storage for new images in Settings → Storage. Transparent backgrounds are preserved in both modes. New videos and preview posters are saved in IndexedDB when space allows; a warning appears when the media file cannot be saved.
 - **Lazy Media Loading** — Thumbnail bytes load near the viewport; video previews pause and release their source when offscreen.
 - **Zero Build** — No bundlers, transpilers, or build steps required
 
@@ -360,10 +360,11 @@ Output counts are also catalog-driven: image models currently allow up to four o
 | Constraint | Limit |
 | --- | --- |
 | **Request/Response Body** | 4 MB application cap (below Vercel's platform limit) |
+| **Image Proxy** | Evolink results up to 20 MB, streamed to the browser so large PNGs are not cut off by Vercel's 4.5 MB buffered-response limit |
 | **Image Attachments** | 10 images max in the composer; lower per-model limits are enforced from the catalog |
 | **Attachment Size** | 8 MB max per image |
 | **Upload Compression** | Accepted attachments re-encoded to at most 768px, JPEG 75% |
-| **Storage Compression** | Full-res images re-encoded to WebP/JPEG (92% quality) before IndexedDB storage |
+| **Storage Compression** | Full-res images re-encoded to WebP/JPEG (92% quality) before IndexedDB storage; images with transparent pixels never fall back to JPEG, so they stay PNG in browsers without a WebP encoder (Safari) |
 | **Batch Size** | Catalog-driven; currently 1–4 images or exactly 1 video |
 | **Async Polling** | Adaptive 3–15 second delay, 6-minute ceiling, transient retries, shared cancellation |
 
